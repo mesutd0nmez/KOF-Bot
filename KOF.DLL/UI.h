@@ -1,10 +1,7 @@
 #ifndef UI_H
 #define UI_H
 
-#include <Windows.h>
-#include <d3d11.h>
-#include <tchar.h>
-
+#include "pch.h"
 #include "imgui.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);

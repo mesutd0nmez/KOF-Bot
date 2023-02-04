@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "UI.h"
-#include "Bot.h"
+#include "Bootstrap.h"
 
 BOOL APIENTRY DllMain( HMODULE hModule,
                        DWORD  ul_reason_for_call,
@@ -17,14 +17,17 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 #endif
             DisableThreadLibraryCalls(hModule);
 
-            new std::thread([]()
-            {
-                Bot bot;
-                bot.Start();
-            });
+            printf("EntryPoint::Starting Threads\n");
 
             new std::thread([]()
             {
+                printf("EntryPoint::Bootstrap\n");
+
+                Bootstrap bootstrap;
+                bootstrap.Start();
+
+                printf("EntryPoint::UI\n");
+
                 UI ui;
                 ui.Render();
             });
@@ -32,10 +35,24 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         break;
 
         case DLL_THREAD_ATTACH:
+        {
+            printf("EntryPoint::DLL_THREAD_ATTACH\n");
+        }
+        break;
+
         case DLL_THREAD_DETACH:
+        {
+            printf("EntryPoint::DLL_THREAD_DETACH\n");
+        }
+        break;
+
         case DLL_PROCESS_DETACH:
-            break;
+        {
+            printf("EntryPoint::DLL_PROCESS_DETACH\n");
+        }
+        break;
     }
+
     return TRUE;
 }
 

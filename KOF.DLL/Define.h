@@ -9,6 +9,16 @@
 #define CLIENT_EXE			"KnightOnLine.exe"
 #define DATABASE_FILE		".\\KOF.sqlite"
 
+#define LS_VERSION_REQ			0x01
+#define LS_DOWNLOADINFO_REQ		0x02
+#define LS_CRYPTION				0xF2
+#define LS_LOGIN_REQ			0xF3
+#define LS_MGAME_LOGIN			0xF4
+#define LS_SERVERLIST			0xF5
+#define LS_NEWS					0xF6
+#define LS_UNKF7				0xF7
+#define LS_OTP_UNKNOWN			0xFB
+
 #define WIZ_LOGIN				0x01	// Account Login
 #define WIZ_NEW_CHAR			0x02	// Create Character DB
 #define WIZ_DEL_CHAR			0x03	// Delete Character DB
@@ -163,6 +173,22 @@
 
 #define WIZ_XIGNCODE			0xA0
 
+static const int COSP_MAX = 9;              // 9 cospre slots
+static const int SLOT_MAX = 14;             // 14 equipped item slots
+static const int HAVE_MAX = 28;             // 28 inventory slots
+static const int MBAG_COUNT = 2;            // 2 magic bag slots
+static const int MBAG_MAX = 12;             // 12 slots per magic bag
+
+static const int VIP_HAVE_MAX = 48;         // 48 Vip inventory slots
+static const int WAREHOUSE_MAX = 192;       // warehouse slots
+static const int MAX_MERCH_ITEMS = 12;      // merchant slots
+
+static const int INVENTORY_MBAG = SLOT_MAX + HAVE_MAX + COSP_MAX;   // 14 + 28 + 9 = 51
+static const int INVENTORY_MBAG1 = INVENTORY_MBAG;
+static const int INVENTORY_MBAG2 = INVENTORY_MBAG + MBAG_MAX;       // 51 + 12 = 63
+static const int INVENTORY_TOTAL = INVENTORY_MBAG2 + MBAG_MAX;      // 63 + 12 = 75
+
+
 enum Platform
 {
 	USKO,
@@ -188,3 +214,249 @@ enum SkillTargetType
 	TARGET_DEAD_FRIEND_ONLY = 25,
 	TARGET_UNKNOWN = 0xffffffff
 };
+
+enum LoginError
+{
+	AUTH_SUCCESS = 1,
+	AUTH_NOT_FOUND = 2,
+	AUTH_INVALID = 3,
+	AUTH_BANNED = 4,
+	AUTH_IN_GAME = 5,
+	AUTH_ERROR = 6,
+	AUTH_AGREEMENT = 15,
+	AUTH_OTP = 16,
+	AUTH_FAILED = 255
+};
+
+enum e_PlayerType 
+{ 
+	PLAYER_BASE = 0, PLAYER_NPC = 1, PLAYER_OTHER = 2, PLAYER_MYSELF = 3 
+};
+
+enum e_Race 
+{
+	RACE_ALL = 0,
+	RACE_KA_ARKTUAREK = 1, RACE_KA_TUAREK = 2, RACE_KA_WRINKLETUAREK = 3, RACE_KA_PURITUAREK = 4,
+	RACE_EL_BABARIAN = 11, RACE_EL_MAN = 12, RACE_EL_WOMEN = 13,
+	//RACE_KA_NORMAL = 11, RACE_KA_WARRIOR = 12, RACE_KA_ROGUE = 13, RACE_KA_MAGE = 14,
+	RACE_NPC = 100,
+	RACE_UNKNOWN = 0xffffffff
+};
+
+enum e_Class 
+{
+	CLASS_KINDOF_WARRIOR = 1, CLASS_KINDOF_ROGUE, CLASS_KINDOF_WIZARD, CLASS_KINDOF_PRIEST,
+	CLASS_KINDOF_ATTACK_WARRIOR, CLASS_KINDOF_DEFEND_WARRIOR, CLASS_KINDOF_ARCHER, CLASS_KINDOF_ASSASSIN,
+	CLASS_KINDOF_ATTACK_WIZARD, CLASS_KINDOF_PET_WIZARD, CLASS_KINDOF_HEAL_PRIEST, CLASS_KINDOF_CURSE_PRIEST,
+
+	CLASS_KA_WARRIOR = 101, CLASS_KA_ROGUE, CLASS_KA_WIZARD, CLASS_KA_PRIEST,
+	CLASS_KA_BERSERKER = 105, CLASS_KA_GUARDIAN, CLASS_KA_HUNTER = 107, CLASS_KA_PENETRATOR,
+	CLASS_KA_SORCERER = 109, CLASS_KA_NECROMANCER, CLASS_KA_SHAMAN = 111, CLASS_KA_DARKPRIEST,
+
+	CLASS_EL_WARRIOR = 201, CLASS_EL_ROGUE, CLASS_EL_WIZARD, CLASS_EL_PRIEST,
+	CLASS_EL_BLADE = 205, CLASS_EL_PROTECTOR, CLASS_EL_RANGER = 207, CLASS_EL_ASSASIN,
+	CLASS_EL_MAGE = 209, CLASS_EL_ENCHANTER, CLASS_EL_CLERIC = 211, CLASS_EL_DRUID,
+
+	CLASS_UNKNOWN = 0xffffffff
+};
+
+enum e_Nation 
+{ 
+	NATION_NOTSELECTED = 0, NATION_KARUS, NATION_ELMORAD, NATION_UNKNOWN = 0xffffffff 
+};
+
+enum e_KnightsDuty 
+{
+	KNIGHTS_DUTY_UNKNOWN = 0,
+	KNIGHTS_DUTY_CHIEF = 1,
+	KNIGHTS_DUTY_VICECHIEF = 2,
+	KNIGHTS_DUTY_PUNISH = 3,
+	KNIGHTS_DUTY_TRAINEE = 4,
+	KNIGHTS_DUTY_KNIGHT = 5,
+	KNIGHTS_DUTY_OFFICER = 6
+};
+
+enum State
+{
+	LOST = 0,
+	BOOTSTRAP = 1,
+	LOGIN = 2,
+	SERVER_SELECT = 3,
+	CHARACTER_SELECT = 4,
+	GAME = 5
+};
+
+enum InOut
+{
+	INOUT_IN = 1,
+	INOUT_OUT = 2,
+	INOUT_RESPAWN = 3,
+	INOUT_WARP = 4,
+	INOUT_SUMMON = 5
+};
+
+enum e_StateAction 
+{
+	PSA_BASIC = 0,	
+	PSA_ATTACK,
+	PSA_GUARD,
+	PSA_STRUCK,
+	PSA_DYING,
+	PSA_DEATH,
+	PSA_SPELLMAGIC,
+	PSA_SITDOWN, 
+	PSA_COUNT
+};
+
+enum e_AttackResult
+{
+	ATTACK_FAIL = 0,
+	ATTACK_SUCCESS = 1,
+	ATTACK_TARGET_DEAD = 2,
+	ATTACK_TARGET_DEAD_OK = 3,
+	MAGIC_ATTACK_TARGET_DEAD = 4
+};
+
+enum LoyaltyType
+{
+	LOYALTY_NATIONAL_POINTS = 1,
+	LOYALTY_MANNER_POINTS = 2
+};
+
+enum e_SubPacket_ClassChange_Main 
+{
+	N3_SP_CLASS_CHANGE_PURE = 0x01,
+	N3_SP_CLASS_CHANGE_REQ = 0x02,
+	N3_SP_CLASS_ALL_POINT = 0x03,
+	N3_SP_CLASS_SKILL_POINT = 0x04,
+	N3_SP_CLASS_POINT_CHANGE_PRICE_QUERY = 0x05,
+	N3_SP_CLASS_PROMOTION = 0x06
+};
+
+enum e_SubPacket_ClassChange 
+{
+	N3_SP_CLASS_CHANGE_SUCCESS = 0x01,
+	N3_SP_CLASS_CHANGE_NOT_YET = 0x02,
+	N3_SP_CLASS_CHANGE_ALREADY = 0x03,
+	N3_SP_CLASS_CHANGE_ITEM_IN_SLOT = 0x04,	
+	N3_SP_CLASS_CHANGE_FAILURE = 0x00
+};
+
+typedef struct SInventory
+{
+	int32_t				iPos;
+	uint32_t			iItemID;
+	uint16_t			iDurability;
+	uint16_t			iCount;
+	uint8_t				iFlag;
+	int16_t				iRentalTime;
+	uint32_t			iSerial;
+	uint32_t			iExpirationTime;
+} TInventory;
+
+typedef struct SPlayer
+{
+	int32_t			iID;
+	std::string		szName;
+	float			fX;
+	float			fY;
+	float			fZ;
+	e_Nation		eNation;
+	e_Race			eRace;
+	e_Class			eClass;
+	uint8_t			iLevel;
+	int16_t			iHPMax;
+	int16_t			iHP;
+	int32_t			iAuthority;
+	uint16_t		iBonusPointRemain;
+
+	uint8_t			iFace;
+	int32_t			iHair;
+
+	uint8_t			iRank;
+	uint8_t			iTitle;
+
+	uint8_t			iUnknown1;
+	uint8_t			iUnknown2;
+
+	uint8_t			iCity;
+	int16_t			iKnightsID;
+	std::string		szKnights;
+	uint8_t			iKnightsGrade;
+	uint8_t			iKnightsRank;
+
+	int16_t			iMSPMax;
+	int16_t			iMSP;
+
+	uint32_t		iGold;
+	uint64_t		iExpNext;
+	uint64_t		iExp;
+	uint32_t		iRealmPoint;
+	uint32_t		iRealmPointMonthly;
+	e_KnightsDuty	eKnightsDuty;
+	uint32_t		iWeightMax;
+	uint32_t		iWeight;
+
+	uint8_t			iStrength;
+	uint8_t			iStrength_Delta;
+	uint8_t			iStamina;
+	uint8_t			iStamina_Delta;
+	uint8_t			iDexterity;
+	uint8_t			iDexterity_Delta;
+	uint8_t			iIntelligence;
+	uint8_t			iIntelligence_Delta;
+	uint8_t 		iMagicAttak;
+	uint8_t 		iMagicAttak_Delta;
+
+	int16_t 		iAttack;
+	int16_t 		iGuard;
+
+	uint8_t 		iRegistFire;
+	uint8_t 		iRegistCold;
+	uint8_t 		iRegistLight;
+	uint8_t 		iRegistMagic;
+	uint8_t 		iRegistCurse;
+	uint8_t 		iRegistPoison;
+
+	uint8_t			iSkillInfo[9];
+
+	e_StateAction	eState;
+
+	TInventory		tInventory[INVENTORY_TOTAL];
+} TPlayer;
+
+typedef struct SNpc
+{
+	int32_t			iID;
+	uint16_t		iProtoID;
+	uint8_t			iMonsterOrNpc;
+	uint16_t		iPictureId;
+	uint32_t		iUnknown1;
+	uint8_t			iFamilyType;
+	uint32_t		iSellingGroup;
+	uint16_t		iModelsize;
+	uint32_t		iWeapon1;
+	uint32_t		iWeapon2;
+
+	std::string		szPetOwnerName;
+	std::string		szPetName;
+
+	uint8_t			iModelGroup;
+	uint8_t			iLevel;
+
+	float			fX;
+	float			fY;
+	float			fZ;
+
+	uint32_t		iStatus;
+
+	uint8_t			iUnknown2;
+	uint32_t		iUnknown3;
+	int16_t			iRotation;
+
+	e_StateAction	eState;
+
+	int16_t			iHPMax;
+	int16_t			iHP;
+
+} TNpc;

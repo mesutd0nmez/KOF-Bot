@@ -2,7 +2,6 @@
 #define DRAWING_H
 
 #include "pch.h"
-
 #include "imgui.h"
 
 class Drawing

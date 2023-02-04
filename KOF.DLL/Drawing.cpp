@@ -1,10 +1,9 @@
 #include "pch.h"
 #include "Drawing.h"
 #include "Memory.h"
-#include "Bot.h"
-#include "ConfigHandler.h"
+#include "Ini.h"
 #include "Client.h"
-#include "Define.h"
+#include "Bootstrap.h"
 
 LPCSTR Drawing::lpWindowName = APP_TITLE;
 ImVec2 Drawing::vWindowSize = { 600, 600 };
@@ -16,7 +15,9 @@ std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 void Drawing::Draw()
 {
-    m_UserConfig = ConfigHandler::GetUserConfig(Client::GetName());
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    m_UserConfig = Client::GetUserConfig(Client::GetName());
 
     bool bRender = Client::IsCharacterLoaded() && m_UserConfig;
 
@@ -63,21 +64,14 @@ void Drawing::DrawGameController()
         ImGui::TextUnformatted(Client::GetName().c_str());
         ImGui::SameLine();
         ImGui::NextColumn();
-
-        std::stringstream strLevel;
-        strLevel << "Lv " << Client::GetLevel();
-
-        RightText(strLevel.str());
+        RightText("Lv " + std::to_string(Client::GetLevel()));
         ImGui::Separator();
 
         ImGui::Spacing();
         {
             ImGui::PushItemWidth(207);
             {
-                std::stringstream strHpValue;
-                strHpValue << Client::GetHp() << " / " << Client::GetMaxHp();
-
-                CenteredText(strHpValue.str());
+                CenteredText(std::to_string(Client::GetHp()) + " / " + std::to_string(Client::GetMaxHp()));
 
                 float fHpProgress = (((float)Client::GetHp() / (float)Client::GetMaxHp()) * 100.f) / 100.0f;
 
@@ -85,10 +79,7 @@ void Drawing::DrawGameController()
                 ImGui::ProgressBar(fHpProgress, ImVec2(0.0f, 0.0f));
                 ImGui::PopStyleColor(1);
 
-                std::stringstream strMpValue;
-                strMpValue << Client::GetMp() << " / " << Client::GetMaxMp();
-
-                CenteredText(strMpValue.str());
+                CenteredText(std::to_string(Client::GetMp()) + " / " + std::to_string(Client::GetMaxMp()));
 
                 float fMpProgress = (((float)Client::GetMp() / (float)Client::GetMaxMp()) * 100.f) / 100.0f;
 
@@ -344,9 +335,12 @@ void Drawing::DrawMainFeaturesArea()
 
 void Drawing::LoadSkillData()
 {
+    if (m_vecAvailableSkill.size() > 0)
+        return;
+
     m_vecAvailableSkill.clear();
 
-    auto pSkillList = TableHandler::GetSkillTable().GetData();
+    auto pSkillList = Bootstrap::GetSkillTable().GetData();
 
     for (const auto& [key, value] : pSkillList)
     {
@@ -394,7 +388,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
 
     std::stringstream strTreeText;
 
-    if (TableHandler::GetSkillTable().GetDataSize() == 0)
+    if (Bootstrap::GetSkillTable().GetDataSize() == 0)
         strTreeText << "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3] << " ";
 
     strTreeText << "Automated attack skills";
@@ -437,7 +431,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
 
     std::stringstream strTreeText;
 
-    if (TableHandler::GetSkillTable().GetDataSize() == 0)
+    if (Bootstrap::GetSkillTable().GetDataSize() == 0)
         strTreeText << "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3] << " ";
 
     strTreeText << "Automated character skills";

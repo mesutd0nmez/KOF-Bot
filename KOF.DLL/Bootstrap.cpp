@@ -1,47 +1,70 @@
 #include "pch.h"
-#include "Bot.h"
-#include "Define.h"
+#include "Bootstrap.h"
 #include "Client.h"
 
-Bot::Bot()
+Bootstrap::Bootstrap()
 {
+	printf("Bootstrap::Initialize\n");
+
 	InitializeStaticData();
 }
 
-Bot::~Bot()
+Bootstrap::~Bootstrap()
 {
+	printf("Bootstrap::Destroy\n");
 }
 
-void Bot::InitializeStaticData()
+void Bootstrap::InitializeStaticData()
 {
+	printf("Bootstrap::InitializeStaticData\n");
+
 	InitializeAddress();
+
+	printf("Bootstrap::InitializeStaticData: Starting Table Load Thread\n");
+
+	new std::thread([]() 
+	{ 
+		m_bTableLoaded = false;
+
+		m_pTbl_Texts.Load(".\\Data\\texts_nc.tbl");
+		m_pTbl_Skill.Load(".\\Data\\skill_magic_main_us.tbl");
+		m_pTbl_Items_Basic.Load(".\\Data\\item_org_nc.tbl");
+
+		m_bTableLoaded = true;
+
+		printf("Bootstrap::InitializeStaticData: Ended Table Load Thread\n");
+	});
 }
 
-void Bot::InitializeAddress()
+void Bootstrap::InitializeAddress()
 {
+	printf("Bootstrap::InitializeAddress\n");
+
 	m_AddressConfig = new Ini(ADDRESS_INI_FILE);
 
 	Ini *ini = m_AddressConfig;
 
-	ini->GetString("Address", "KO_PTR_PUSH_PHASE_CALL", "0x6A29C0");
-	ini->GetString("Address", "KO_PTR_INTRO", "0xF7E365");
-	ini->GetString("Address", "KO_PTR_LOGIN", "0xF7E344");
-	ini->GetString("Address", "KO_PTR_LOGIN_CALL1", "0x6B0BB0");
-	ini->GetString("Address", "KO_PTR_LOGIN_CALL2", "0x6AE6E0");
-	ini->GetString("Address", "KO_PTR_LOGIN_SERVER_CALL", "0x6B14A0");
-	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT", "0xF7E350");
-	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT_CALL", "0x6B2890");
-	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT_ENTER_CALL", "0x6B73A0");
-	ini->GetString("Address", "KO_PTR_DLG", "0xF7E36C");
-	ini->GetString("Address", "KO_PTR_CHR", "0xF7E2F4");
-	ini->GetString("Address", "KO_PTR_PKT", "0xF7E32C");
-	ini->GetString("Address", "KO_SND_FNC", "0x5ED620");
-	ini->GetString("Address", "KO_PTR_PLAYER_OTHER", "0xF7E2F0");
+	ini->GetString("Address", "KO_PTR_PUSH_PHASE", "0x6A3750");
+	ini->GetString("Address", "KO_PTR_INTRO", "0xF7F370");
+	ini->GetString("Address", "KO_PTR_LOGIN", "0xF7F34C");
+	ini->GetString("Address", "KO_PTR_LOGIN1", "0x6B1940");
+	ini->GetString("Address", "KO_PTR_LOGIN2", "0x6AF480");
+	ini->GetString("Address", "KO_PTR_LOGIN_DC", "0x6AF8D0");
+	ini->GetString("Address", "KO_PTR_SERVER_SELECT", "0x6B2230");
+	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT", "0xF7F358");
+	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT_SKIP", "0x6B8120");
+	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT_ENTER", "0x6B3610");
+	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT_RIGHT", "0x6BB9D0");
+	ini->GetString("Address", "KO_PTR_CHARACTER_SELECT_LEFT", "0x6BB920");
+	ini->GetString("Address", "KO_PTR_DLG", "0xF7F374");
+	ini->GetString("Address", "KO_PTR_CHR", "0xF7F2FC");
+	ini->GetString("Address", "KO_PTR_PKT", "0xF7F334");
+	ini->GetString("Address", "KO_SND_FNC", "0x5EE3D0");
+	ini->GetString("Address", "KO_PTR_FLDB", "0xF7F2F8");
 	ini->GetString("Address", "KO_PTR_ROUTE_START_CALL", "0x7D8440");
 
 	ini->GetString("Address", "KO_OFF_DISCONNECT", "0xA0");
 	ini->GetString("Address", "KO_OFF_LOGIN_SERVER_INDEX", "0x410");
-	ini->GetString("Address", "KO_OFF_LOGIN_SERVER_LIST_READY", "0x268");
 	ini->GetString("Address", "KO_OFF_UI_LOGIN_INTRO", "0x2C");
 	ini->GetString("Address", "KO_OFF_UI_LOGIN_INTRO_ID", "0x10C");
 	ini->GetString("Address", "KO_OFF_UI_LOGIN_INTRO_ID_INPUT", "0x140");
@@ -69,8 +92,6 @@ void Bot::InitializeAddress()
 	ini->GetString("Address", "KO_OFF_X", "0xD0");
 	ini->GetString("Address", "KO_OFF_Y", "0xD8");
 	ini->GetString("Address", "KO_OFF_Z", "0xD4");
-
-
 	ini->GetString("Address", "KO_OFF_SKILL_TREE_BASE", "0x1DC");
 	ini->GetString("Address", "KO_OFF_SKILL_TREE_POINT_BASE", "0x158");
 
@@ -82,26 +103,16 @@ void Bot::InitializeAddress()
 		m_Client.SetAddress(address.first, std::strtoul(address.second.c_str(), NULL, 16));
 }
 
-void Bot::Start()
+void Bootstrap::Start()
 {
-	m_Client.Start();
+	printf("Bootstrap::Start\n");
 
-	m_ConfigHandler.Start();
-	m_TableHandler.Start();
-	m_AttackHandler.Start();
-	m_HookHandler.Start();
-	//m_LoginHandler.Start();
-	m_ProtectionHandler.Start();
+	m_Client.Start();
 }
 
-void Bot::Stop()
+void Bootstrap::Stop()
 {
-	m_Client.Stop();
+	printf("Bootstrap::Stop\n");
 
-	m_ConfigHandler.Stop();
-	m_TableHandler.Stop();
-	m_AttackHandler.Stop();
-	m_HookHandler.Stop();
-	//m_LoginHandler.Stop();
-	m_ProtectionHandler.Stop();
+	m_Client.Stop();
 }
