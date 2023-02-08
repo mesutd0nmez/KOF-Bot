@@ -8,7 +8,8 @@ public:
 	static void Start();
 	static void Stop();
 
-	static void MainProcess();
+	static void AttackProcess();
+	static void SearchTargetProcess();
 
 protected:
 	inline static bool m_bWorking;

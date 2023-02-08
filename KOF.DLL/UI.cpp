@@ -5,10 +5,13 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 
+
 ID3D11Device* UI::pd3dDevice = nullptr;
 ID3D11DeviceContext* UI::pd3dDeviceContext = nullptr;
 IDXGISwapChain* UI::pSwapChain = nullptr;
 ID3D11RenderTargetView* UI::pMainRenderTargetView = nullptr;
+
+using Path = std::filesystem::path;
 
 bool UI::CreateDeviceD3D(HWND hWnd)
 {
@@ -146,6 +149,7 @@ void UI::Render()
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
 
     ImGui::StyleColorsDark();
 

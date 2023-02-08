@@ -53,7 +53,7 @@ void Drawing::RightText(std::string strValue)
 {
     auto windowWidth = ImGui::GetWindowSize().x;
     auto textWidth = ImGui::CalcTextSize(strValue.c_str()).x;
-    ImGui::SetCursorPosX((windowWidth - textWidth) * 0.97f);
+    ImGui::SetCursorPosX((windowWidth - textWidth) * 0.93f);
     ImGui::TextUnformatted(strValue.c_str());
 }
 
@@ -96,14 +96,30 @@ void Drawing::DrawGameController()
             ImGui::TextUnformatted("Quick Action");
             ImGui::Separator();
 
-            if (ImGui::Button("Town", ImVec2(100.0f, 0.0f)))
+            bool bLegalStatus = m_UserConfig->GetBool("Bot", "Legal", false);
+
+            if (bLegalStatus)
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+            else
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+
+            if (ImGui::Button("Legal", ImVec2(100.0f, 0.0f)))
             {
-                Client::Town();
+                bLegalStatus = !bLegalStatus;
+                m_UserConfig->SetInt("Bot", "Legal", bLegalStatus);
             }
 
-            if (ImGui::Button("Test", ImVec2(100.0f, 0.0f)))
+            ImGui::PopStyleColor(1);
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Town", ImVec2(100.0f, 0.0f)))
             {
-                Client::RouteStart(1621, 438);
+                Client::SendTownPacket();
+            }
+
+            if (ImGui::Button("Use Skill", ImVec2(100.0f, 0.0f)))
+            {
             }
         }
 
@@ -182,23 +198,96 @@ void Drawing::DrawGameController()
 
             if (ImGui::BeginTabItem("Attack"))
             {
+                ImGui::TextUnformatted("Configure Automated Attack");
+                ImGui::Separator();
+
+                ImGui::Spacing();
+                {
+                    bool bAutoTarget = m_UserConfig->GetInt("Attack", "AutoTarget", true);
+
+                    if (ImGui::Checkbox("##AutoTargetCheckbox", &bAutoTarget))
+                        m_UserConfig->SetInt("Attack", "AutoTarget", bAutoTarget ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text("Auto Target");
+
+                    ImGui::SameLine();
+
+                    bool bRangeLimit = m_UserConfig->GetBool("Attack", "RangeLimit", false);
+
+                    if (ImGui::Checkbox("##RangeLimitCheckbox", &bRangeLimit))
+                        m_UserConfig->SetInt("Attack", "RangeLimit", bRangeLimit ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text("Range Limit");
+
+                    ImGui::SameLine();
+
+                    ImGui::PushItemWidth(50);
+
+                    int iRangeLimitValue = m_UserConfig->GetInt("Attack", "RangeLimitValue", MAX_ATTACK_RANGE);
+
+                    if (ImGui::DragInt("##RangeLimitValue", &iRangeLimitValue, 1, 0, 100))
+                        m_UserConfig->SetInt("Attack", "RangeLimitValue", iRangeLimitValue);
+
+                    ImGui::PopItemWidth();
+                }
+
+                ImGui::Spacing();
+                {
+                    bool bAttackSpeed = m_UserConfig->GetBool("Attack", "AttackSpeed", false);
+
+                    if (ImGui::Checkbox("##AttackSpeedCheckbox", &bAttackSpeed))
+                        m_UserConfig->SetInt("Attack", "AttackSpeed", bAttackSpeed ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text("Attack Speed");
+
+                    ImGui::SameLine();
+
+                    ImGui::PushItemWidth(75);
+
+                    int iAttackSpeedValue = m_UserConfig->GetInt("Attack", "AttackSpeedValue", 1250);
+
+                    if (ImGui::DragInt("##AttackSpeedValue", &iAttackSpeedValue, 1, 0, 65535))
+                        m_UserConfig->SetInt("Attack", "AttackSpeedValue", iAttackSpeedValue);
+
+                    ImGui::PopItemWidth();
+                }
+
+                ImGui::Spacing();
+                {
+                    bool bBasicAttack = m_UserConfig->GetInt("Attack", "BasicAttack", true);
+
+                    if (ImGui::Checkbox("##BasicAttackCheckbox", &bBasicAttack))
+                        m_UserConfig->SetInt("Attack", "BasicAttack", bBasicAttack ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text("Basic Attack (R)");
+
+                    ImGui::SameLine();
+
+                    bool bMoveToTarget = m_UserConfig->GetInt("Attack", "MoveToTarget", false);
+
+                    if (ImGui::Checkbox("##MoveToTargetCheckbox", &bMoveToTarget))
+                        m_UserConfig->SetInt("Attack", "MoveToTarget", bMoveToTarget ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text("Move To Target");
+                }
+
+                ImGui::Spacing();
+
+                DrawMonsterListTree();
+
                 ImGui::EndTabItem();
             }
 
-            if (ImGui::BeginTabItem("Party"))
-            {
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Action"))
-            {
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem("Tool"))
-            {
-                ImGui::EndTabItem();
-            }
             ImGui::EndTabBar();
         }
     }
@@ -384,6 +473,9 @@ void Drawing::LoadSkillData()
 
 void Drawing::DrawAutomatedAttackSkillTree()
 {
+    ImGui::TextUnformatted("Select automated attack or character skill");
+    ImGui::Separator();
+
     std::vector<int> vecAttackList = m_UserConfig->GetInt("Automation", "AttackSkillList", std::vector<int>());
 
     std::stringstream strTreeText;
@@ -401,16 +493,16 @@ void Drawing::DrawAutomatedAttackSkillTree()
             if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
                 continue;
 
-            ImGui::PushID(x.dwID);
+            ImGui::PushID(x.iID);
 
-            bool bSelected = std::find(vecAttackList.begin(), vecAttackList.end(), x.dwID) != vecAttackList.end();
+            bool bSelected = std::find(vecAttackList.begin(), vecAttackList.end(), x.iID) != vecAttackList.end();
 
             if (ImGui::Selectable(x.szName.c_str(), &bSelected))
             {
                 if (bSelected)
-                    vecAttackList.push_back(x.dwID);
+                    vecAttackList.push_back(x.iID);
                 else
-                    vecAttackList.erase(std::find(vecAttackList.begin(), vecAttackList.end(), x.dwID));
+                    vecAttackList.erase(std::find(vecAttackList.begin(), vecAttackList.end(), x.iID));
 
                 m_UserConfig->SetInt("Automation", "AttackSkillList", vecAttackList);
             }
@@ -444,16 +536,16 @@ void Drawing::DrawAutomatedCharacterSkillTree()
             if (x.iTarget != SkillTargetType::TARGET_SELF && x.iTarget != SkillTargetType::TARGET_PARTY_ALL && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME)
                 continue;
 
-            ImGui::PushID(x.dwID);
+            ImGui::PushID(x.iID);
 
-            bool bSelected = std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.dwID) != vecCharacterSkillList.end();
+            bool bSelected = std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID) != vecCharacterSkillList.end();
 
             if (ImGui::Selectable(x.szName.c_str(), &bSelected))
             {
                 if (bSelected)
-                    vecCharacterSkillList.push_back(x.dwID);
+                    vecCharacterSkillList.push_back(x.iID);
                 else
-                    vecCharacterSkillList.erase(std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.dwID));
+                    vecCharacterSkillList.erase(std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID));
 
                 m_UserConfig->SetInt("Automation", "CharacterSkillList", vecCharacterSkillList);
             }
@@ -466,4 +558,135 @@ void Drawing::DrawAutomatedCharacterSkillTree()
 
         ImGui::TreePop();
     }
+}
+
+struct SNpcData
+{
+    uint16_t iProtoID;
+    float fDistance;
+};
+
+void Drawing::DrawMonsterListTree()
+{
+    bool bRangeLimit = m_UserConfig->GetBool("Attack", "RangeLimit", false);
+    int iRangeLimitValue = m_UserConfig->GetInt("Attack", "RangeLimitValue", MAX_ATTACK_RANGE);
+    bool bAutoTarget = m_UserConfig->GetInt("Attack", "AutoTarget", true);
+
+    ImGui::TextUnformatted("Select attackable target");
+    ImGui::Separator();
+
+    if(bAutoTarget)
+        ImGui::BeginDisabled();
+
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet;
+    if (ImGui::TreeNodeEx("Target Monster List", flags))
+    {
+        std::vector<SNpcData> vecNpcList;
+     
+        std::vector<int> vecSelectedNpcList = m_UserConfig->GetInt("Attack", "NpcList", std::vector<int>());
+
+        auto mapNpcList = Client::GetNpcList();
+
+        for (const auto& x : vecSelectedNpcList)
+        {
+            SNpcData pNpcData;
+
+            pNpcData.iProtoID = x;
+            pNpcData.fDistance = 0.0f;
+
+            const auto pFindedNpc = std::find_if(mapNpcList.begin(), mapNpcList.end(),
+                [x](const TNpc& a) { return a.iProtoID == x; });
+
+            if(pFindedNpc != mapNpcList.end())
+                pNpcData.fDistance = Client::GetDistance(pFindedNpc->fX, pFindedNpc->fY);
+
+            vecNpcList.push_back(pNpcData);
+        } 
+
+        auto pSort = [](TNpc const& a, TNpc const& b)
+        {
+            return Client::GetDistance(a.fX, a.fY) < Client::GetDistance(b.fX, b.fY);
+        };
+
+        std::sort(mapNpcList.begin(), mapNpcList.end(), pSort);
+
+        for (const auto& x : mapNpcList)
+        {
+            const auto pFindedNpc = std::find_if(vecNpcList.begin(), vecNpcList.end(),
+                [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
+
+            if ((x.iMonsterOrNpc == 1
+                || (x.iProtoID >= 19067 && x.iProtoID <= 19069) //Scarecrow
+                || (x.iProtoID >= 19070 && x.iProtoID <= 19072)) //Scarecrow
+                && x.iProtoID != 9009 //Mine Guard
+                && pFindedNpc == vecNpcList.end())
+            {
+                SNpcData pNpcData;
+
+                pNpcData.iProtoID = x.iProtoID;
+                pNpcData.fDistance = Client::GetDistance(x.fX, x.fY);
+
+                vecNpcList.push_back(pNpcData);
+            }
+        }
+
+        auto pNpcData = Bootstrap::GetNpcTable().GetData();
+        auto pMobData = Bootstrap::GetMobTable().GetData();
+
+        for (const auto& x : vecNpcList)
+        {
+            bool bIsAttackable = false;
+
+            if (bRangeLimit)
+            {
+                if(x.fDistance != 0.0f && x.fDistance <= iRangeLimitValue)
+                    bIsAttackable = true;
+            } 
+            else
+                bIsAttackable = (x.fDistance != 0.0f && x.fDistance <= MAX_ATTACK_RANGE);
+
+            if(bIsAttackable)
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+            else
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
+
+            ImGui::PushID(x.iProtoID);
+
+            bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
+
+            auto pNpcInfo = pNpcData.find(x.iProtoID);
+            auto pMobInfo = pMobData.find(x.iProtoID);
+
+            std::string szNpcName = "~Unknown~";
+
+            if (pNpcInfo != pNpcData.end())
+                szNpcName = pNpcInfo->second.szText;
+
+            if (pMobInfo != pMobData.end())
+                szNpcName = pMobInfo->second.szText;
+
+            if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
+            {
+                if (bSelected)
+                    vecSelectedNpcList.push_back(x.iProtoID);
+                else
+                    vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
+
+                m_UserConfig->SetInt("Attack", "NpcList", vecSelectedNpcList);
+            }
+
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
+            RightText(std::to_string((int)x.fDistance) + "m");
+            ImGui::PopStyleColor();
+            ImGui::PopID();
+
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::TreePop();
+    }
+
+    if (bAutoTarget)
+        ImGui::EndDisabled();
 }

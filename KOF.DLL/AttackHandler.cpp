@@ -1,10 +1,14 @@
 #include "pch.h"
 #include "Client.h"
 #include "AttackHandler.h"
+#include "Bootstrap.h"
 
 void AttackHandler::Start()
 {
-	new std::thread([]() { MainProcess(); });
+	m_bWorking = true;
+
+	new std::thread([]() { SearchTargetProcess(); });
+	new std::thread([]() { AttackProcess(); });
 }
 
 void AttackHandler::Stop()
@@ -12,52 +16,126 @@ void AttackHandler::Stop()
 	m_bWorking = false;
 }
 
-void AttackHandler::MainProcess()
+void AttackHandler::AttackProcess()
 {
-	m_bWorking = true;
-
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 		if (!Client::IsWorking())
 			continue;
 
-		//DWORD dwPlayerOther = Memory::Read4Byte(Client::GetAddress("KO_PTR_PLAYER_OTHER"));
-		//DWORD dwAreaMonsterSize = Memory::Read4Byte(dwPlayerOther + 0x2C);
+		auto pUserConfig = Client::GetUserConfig(Client::GetName());
 
-		//for (size_t i = 0; i < dwAreaMonsterSize; i++)
-		//{
-		//	DWORD dwAreaMonsterBase = Memory::Read4Byte(Memory::Read4Byte(dwPlayerOther + (0x2C - 0x04)) + 0x0C) + 0x14;
+		if (pUserConfig == NULL)
+			continue;
 
-		//	DWORD Base = Memory::Read4Byte(dwAreaMonsterBase);
+		if (Client::GetTarget() == -1)
+			continue;
 
-		//	printf("%u\n", Memory::Read4Byte(Base + Client::GetAddress("KO_OFF_ID")));
+		bool bAttackStatus = pUserConfig->GetBool("Automation", "Attack", false);
 
-		//}
-
-
-
-
-		/*DWORD dwPlayerOther = Memory::Read4Byte(Client::GetAddress("KO_PTR_PLAYER_OTHER"));
-
-		DWORD dwAreaMonsterSize = Memory::Read4Byte(dwPlayerOther + 0x2C);
-
-		std::vector<int> vecMonsterIds;
-
-		for (size_t i = 0; i < dwAreaMonsterSize; i++)
-
-			
+		if (bAttackStatus)
 		{
-			DWORD dwMonsterBase = Memory::Read4Byte(Memory::Read4Byte(dwPlayerOther + 0x2C + 0x4) + 0x14);
+			std::vector<int> vecAttackList = pUserConfig->GetInt("Automation", "AttackSkillList", std::vector<int>());
 
-			printf("%u\n", Memory::Read4Byte(dwMonsterBase + Client::GetAddress("KO_OFF_ID")));
+			for (const auto& x : vecAttackList)
+			{
+				auto pSkillTable = Bootstrap::GetSkillTable().GetData();
+				auto pSkillData = pSkillTable.find(x);
 
-		}*/
+				if (pSkillData != pSkillTable.end())
+				{
+					if (Client::GetMp() >= pSkillData->second.iExhaustMSP)
+					{
+						Client::UseSkill(pSkillData->second, Client::GetTarget());
+					}
+				}
 
+				bool bAttackSpeed = pUserConfig->GetBool("Attack", "AttackSpeed", false);
 
-		//DWORD dwAreaPlayerSize = Memory::Read4Byte(dwPlayerOther + 0x34);
-		//DWORD dwAreaPlayerList = Memory::Read4Byte(dwPlayerOther + 0x34 + 0x4);
+				if (bAttackSpeed)
+				{
+					int iAttackSpeedValue = pUserConfig->GetInt("Attack", "AttackSpeedValue", 1250);
+					std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
+				}
+				else
+					std::this_thread::sleep_for(std::chrono::milliseconds(1250));
+			}
+		}
+		else
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1250));
+		}	
+	}
+}
 
+void AttackHandler::SearchTargetProcess()
+{
+	while (m_bWorking)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+		if (!Client::IsWorking())
+			continue;
+
+		auto pUserConfig = Client::GetUserConfig(Client::GetName());
+
+		if (pUserConfig == NULL)
+			continue;
+
+		auto pNpcList = Client::GetNpcList();
+
+		if (pNpcList.size() == 0)
+			continue;
+
+		if (Client::GetTarget() == -1)
+		{
+			std::vector<TNpc> vecFilteredNpc;
+
+			std::copy_if(pNpcList.begin(), pNpcList.end(),
+				std::back_inserter(vecFilteredNpc),
+				[](const TNpc& c) { return c.eState != PSA_DYING && c.eState != PSA_DEATH; });
+
+			auto pSort = [](TNpc const& a, TNpc const& b)
+			{
+				return Client::GetDistance(a.fX, a.fY) < Client::GetDistance(b.fX, b.fY);
+			};
+
+			std::sort(vecFilteredNpc.begin(), vecFilteredNpc.end(), pSort);
+
+			if (vecFilteredNpc.size() > 0)
+			{
+				auto pFindedTarget = vecFilteredNpc.at(0);
+
+				if ((pFindedTarget.iMonsterOrNpc == 1
+					|| (pFindedTarget.iProtoID >= 19067 && pFindedTarget.iProtoID <= 19069) //Scarecrow
+					|| (pFindedTarget.iProtoID >= 19070 && pFindedTarget.iProtoID <= 19072)) //Scarecrow
+					&& pFindedTarget.iProtoID != 9009) //Mine Guard
+				{
+					printf("SearchTargetProcess:: %d, Target Selected\n", pFindedTarget.iID);
+					Client::SetTarget(pFindedTarget.iID);
+				}
+			}
+		}
+		else
+		{
+			auto it = std::find_if(pNpcList.begin(), pNpcList.end(),
+				[](const TNpc& a) { return a.iID == Client::GetTarget(); });
+
+			if (it != pNpcList.end())
+			{
+				if (it->eState == PSA_DYING || it->eState == PSA_DEATH)
+				{
+					printf("SearchTargetProcess:: %d, Target Dead\n", it->iID);
+					Client::SetTarget(-1);
+				}
+			}
+			else
+			{
+				printf("SearchTargetProcess:: %d, Target Lost\n", it->iID);
+				Client::SetTarget(-1);
+			}
+		}
 	}
 }

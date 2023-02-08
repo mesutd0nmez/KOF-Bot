@@ -21,6 +21,10 @@ private:
 	static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 public:
+
+	inline static ImFont* Font14F;
+	inline static ImFont* Font16F;
+
 	static void Render();
 
 };

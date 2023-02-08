@@ -4,6 +4,7 @@
 #include "Memory.h"
 #include "AttackHandler.h"
 #include "ProtectionHandler.h"
+#include "Bootstrap.h"
 
 Client::Client()
 {
@@ -23,6 +24,10 @@ Client::Client()
 
 	m_mapNpc.clear();
 	m_mapPlayer.clear();
+
+	m_iTargetID = -1;
+
+	m_mapActiveBuffList.clear();
 }
 
 Client::~Client()
@@ -43,6 +48,10 @@ Client::~Client()
 
 	m_mapNpc.clear();
 	m_mapPlayer.clear();
+
+	m_iTargetID = -1;
+
+	m_mapActiveBuffList.clear();
 }
 
 void Client::Start()
@@ -78,6 +87,7 @@ void Client::LoadUserConfig(std::string strCharacterName)
 
 	printf("LoadUserConfig: %s loaded\n", Client::GetName().c_str());
 }
+
 
 Ini* Client::GetUserConfig(std::string strCharacterName)
 {
@@ -190,6 +200,26 @@ DWORD Client::GetAddress(std::string strAddressName)
 		return 0;
 
 	return it->second;
+}
+
+float Client::GetDistance(Vector3 v3Position)
+{
+	return GetDistance(m_PlayerMySelf.fX, m_PlayerMySelf.fY, v3Position.m_fX, v3Position.m_fY);
+}
+
+float Client::GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition)
+{
+	return GetDistance(v3SourcePosition.m_fX, v3SourcePosition.m_fY, v3TargetPosition.m_fX, v3TargetPosition.m_fY);
+}
+
+float Client::GetDistance(float fX, float fY)
+{
+	return GetDistance(m_PlayerMySelf.fX, m_PlayerMySelf.fY, fX, fY);
+}
+
+float Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
+{
+	return (float)sqrt(pow(fX2 - fX1, 2.0f) + pow(fY2 - fY1, 2.0f) * 1.0);
 }
 
 bool Client::IsIntroPhase()
@@ -312,6 +342,42 @@ uint8_t Client::GetSkillPoint(int32_t Slot)
 	return m_PlayerMySelf.iSkillInfo[Slot];
 }
 
+void Client::SetTarget(int32_t iTargetID)
+{
+	m_iTargetID = iTargetID;
+}
+
+int32_t Client::GetTarget()
+{
+	return m_iTargetID;
+}
+
+Vector3 Client::GetPosition()
+{
+	return Vector3(m_PlayerMySelf.fX, m_PlayerMySelf.fZ, m_PlayerMySelf.fY);
+}
+
+Vector3 Client::GetTargetPosition()
+{
+	if (m_iTargetID >= 5000)
+	{
+		auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+			[](const TNpc& a) { return a.iID == m_iTargetID; });
+
+		if (it != m_mapNpc.end())
+			return Vector3(it->fX, it->fZ, it->fY);
+	}
+	else
+	{
+		auto it = m_mapPlayer.find(m_iTargetID);
+
+		if (it != m_mapPlayer.end())
+			return Vector3(it->second.fX, it->second.fZ, it->second.fY);
+	}
+
+	return Vector3(0.0f, 0.0f, 0.0f);
+}
+
 void Client::PushPhase(DWORD address)
 {
 	PushPhaseCall pPushPhaseCallFnc = (PushPhaseCall)GetAddress("KO_PTR_PUSH_PHASE");
@@ -370,28 +436,11 @@ void Client::SelectCharacter(BYTE byCharacterIndex)
 	pCharacterSelectCallFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
 }
 
-void Client::SendPacket(Packet vecBuffer)
-{
-	Send pSendFnc = (Send)GetAddress("KO_SND_FNC");
-	pSendFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
-}
-
 void Client::RouteStart(float fX, float fY, float fZ)
 {
 	Vector3 *pVector3 = new Vector3(fX, fZ, fY);
 	RouteStartCall pRouteStartCallFnc = (RouteStartCall)GetAddress("KO_PTR_ROUTE_START_CALL");
 	pRouteStartCallFnc(*reinterpret_cast<int*>(GetAddress("KO_PTR_CHR")), pVector3);
-}
-
-void Client::Move(int32_t iX, int32_t iY)
-{
-	MoveCall pMoveCallFnc = (MoveCall)0x654A10;
-	pMoveCallFnc(*reinterpret_cast<int*>(GetAddress("KO_PTR_CHR")), iX, iY);
-}
-
-void Client::Town()
-{
-	SendPacket(Packet(WIZ_HOME));
 }
 
 DWORD Client::GetRecvHookAddress()
@@ -537,7 +586,7 @@ TNpc Client::InitializeNpc(Packet& pkt)
 
 	tNpc.fX = (pkt.read<uint16_t>() / 10.0f);
 	tNpc.fY = (pkt.read<uint16_t>() / 10.0f);
-	tNpc.fZ = (pkt.read<uint16_t>() / 10.0f);
+	tNpc.fZ = (pkt.read<int16_t>() / 10.0f);
 
 	tNpc.iStatus = pkt.read<uint32_t>();
 
@@ -1280,8 +1329,6 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		case WIZ_GAMESTART:
 		{
 			printf("RecvProcess::WIZ_GAMESTART: Started\n");
-
-			Client::SetState(State::GAME);
 		}
 		break;
 
@@ -1297,12 +1344,17 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				auto pNpc = InitializeNpc(pkt);
 
-				auto it = m_mapNpc.find(pNpc.iID);
+				int32_t iNpcID = pNpc.iID;
+
+				auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+					[iNpcID](const TNpc& a) { return a.iID == iNpcID; });
 
 				if (it == m_mapNpc.end())
-					m_mapNpc.insert(std::pair(pNpc.iID, pNpc));
+					m_mapNpc.push_back(pNpc);
 				else
-					it->second = pNpc;
+				{
+					*it = pNpc;
+				}
 			}
 
 			printf("RecvProcess::WIZ_REQ_NPCIN: Size %d\n", iNpcCount);
@@ -1319,12 +1371,17 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					auto pNpc = InitializeNpc(pkt);
 
-					auto it = m_mapNpc.find(pNpc.iID);
+					int32_t iNpcID = pNpc.iID;
+
+					auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+						[iNpcID](const TNpc& a) { return a.iID == iNpcID; });
 
 					if (it == m_mapNpc.end())
-						m_mapNpc.insert(std::pair(pNpc.iID, pNpc));
+						m_mapNpc.push_back(pNpc);
 					else
-						it->second = pNpc;
+					{
+						*it = pNpc;
+					}
 
 					printf("RecvProcess::WIZ_NPC_INOUT: IN %d\n", pNpc.iID);
 				}
@@ -1334,10 +1391,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					int32_t iNpcId = pkt.read<int32_t>();
 
-					auto it = m_mapNpc.find(iNpcId);
-
-					if (it != m_mapNpc.end())
-						m_mapNpc.erase(it->first);
+					m_mapNpc.erase(
+						std::remove_if(m_mapNpc.begin(), m_mapNpc.end(),
+							[iNpcId](const TNpc& a) { return a.iID == iNpcId; }),
+						m_mapNpc.end());
 
 					printf("RecvProcess::WIZ_NPC_INOUT: OUT %d\n", iNpcId);
 				}
@@ -1373,24 +1430,24 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				return;
 			}
 
-			for (auto it = m_mapNpc.begin(); it != m_mapNpc.end();)
-			{
-				auto iNpcId = iSetNpcID.find(it->first);
+			//auto it = m_mapNpc.begin();
+			//while (it != m_mapNpc.end())
+			//{
+			//	auto iNpcId = iSetNpcID.find(it->iID);
 
-				if (iNpcId != iSetNpcID.end())
-				{
-					iSetNpcID.erase(iNpcId);
-
-					++it;
-				}
-				else
-				{
-					if ((PSA_DYING == it->second.eState || PSA_DEATH == it->second.eState))
-						++it; 
-					else
-						m_mapNpc.erase(it++);
-				}
-			}
+			//	if (iNpcId != iSetNpcID.end())
+			//	{
+			//		iSetNpcID.erase(iNpcId);
+			//	}
+			//	else
+			//	{
+			//		if ((PSA_DYING == it->eState || PSA_DEATH == it->eState))
+			//			continue;
+			//		else
+			//			it = m_mapNpc.erase(it);
+			//	}
+			//}
+			
 
 			printf("RecvProcess::WIZ_NPC_REGION: New npc count %d\n", iSetNpcID.size());
 		}
@@ -1410,11 +1467,12 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					auto it = m_mapNpc.find(iID);
+					auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+						[iID](const TNpc& a) { return a.iID == iID; });
 
 					if (it != m_mapNpc.end())
 					{
-						it->second.eState = PSA_DEATH;
+						it->eState = PSA_DEATH;
 
 						printf("RecvProcess::WIZ_DEAD: %d Npc Dead\n", iID);
 					}
@@ -1488,14 +1546,15 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					auto it = m_mapNpc.find(iID);
+					auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+						[iID](const TNpc& a) { return a.iID == iID; });
 
 					if (it != m_mapNpc.end())
 					{
-						it->second.iHPMax = (int16_t)iTargetHPMax;
-						it->second.iHP = (int16_t)iTargetHPCur;
+						it->iHPMax = (int16_t)iTargetHPMax;
+						it->iHP = (int16_t)iTargetHPCur;
 
-						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->second.iHP, it->second.iHPMax);
+						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->iHP, it->iHPMax);
 					}
 				}
 				else
@@ -1514,6 +1573,198 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			}
 		}
 		break;
+
+		case WIZ_MOVE:
+		{
+			int32_t iID = pkt.read<int32_t>();
+
+			float fX = pkt.read<uint16_t>() / 10.0f;
+			float fY = pkt.read<uint16_t>() / 10.0f;
+			float fZ = pkt.read<int16_t>() / 10.0f;
+
+			int16_t iSpeed = pkt.read<int16_t>();
+			uint8_t iMoveType = pkt.read<uint8_t>();
+
+			if (m_PlayerMySelf.iID == iID)
+			{
+				m_PlayerMySelf.fX = fX;
+				m_PlayerMySelf.fY = fY;
+				m_PlayerMySelf.fZ = fZ;
+
+				m_PlayerMySelf.iMoveSpeed = iSpeed;
+				m_PlayerMySelf.iMoveType = iMoveType;
+			}
+			else
+			{
+				auto it = m_mapPlayer.find(iID);
+
+				if (it != m_mapPlayer.end())
+				{
+					it->second.fX = fX;
+					it->second.fY = fY;
+					it->second.fZ = fZ;
+
+					it->second.iMoveSpeed = iSpeed;
+					it->second.iMoveType = iMoveType;
+				}
+				else
+				{
+					printf("RecvProcess::WIZ_MOVE: %d not in m_mapPlayer list, is ghost player\n", iID);
+				}
+			}
+
+			//printf("RecvProcess::WIZ_MOVE: %d,%f,%f,%f,%d,%d\n", 
+			//	iID, fX, fY, fZ, iSpeed, iMoveType);
+		}
+		break;
+
+		case WIZ_NPC_MOVE:
+		{
+			uint8_t iMoveType = pkt.read<uint8_t>();
+
+			int32_t iID = pkt.read<int32_t>();
+
+			float fX = pkt.read<uint16_t>() / 10.0f;
+			float fY = pkt.read<uint16_t>() / 10.0f;
+			float fZ = pkt.read<int16_t>() / 10.0f;
+
+			uint16_t iSpeed = pkt.read<uint16_t>();
+
+			auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+				[iID](const TNpc& a) { return a.iID == iID; });
+
+			if (it != m_mapNpc.end())
+			{
+				it->fX = fX;
+				it->fY = fY;
+				it->fZ = fZ;
+
+				it->iMoveSpeed = iSpeed;
+				it->iMoveType = iMoveType;
+			}
+			else
+			{
+				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_mapNpc list, is ghost npc\n", iID);
+			}
+
+			//printf("RecvProcess::WIZ_NPC_MOVE: %d,%d,%f,%f,%f,%d\n",
+			//	iMoveType, iID, fX, fY, fZ, iSpeed);
+		}
+		break;
+
+		case WIZ_MAGIC_PROCESS:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING:
+				{
+					uint32_t iSkillID = pkt.read<uint32_t>();
+					int32_t iSourceID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+					auto pSkillTable = Bootstrap::GetSkillTable().GetData();
+					auto pSkillData = pSkillTable.find(iSkillID);
+
+					if (pSkillData != pSkillTable.end())
+					{
+						if (pSkillData->second.dw1stTableType == 4)
+						{
+							if (iTargetID == GetID())
+							{
+								auto pSkillExtension4 = Bootstrap::GetSkillExtension4Table().GetData();
+								auto pSkillExtension4Data = pSkillExtension4.find(pSkillData->second.iID);
+
+								if (pSkillExtension4Data != pSkillExtension4.end())
+								{
+									auto it = m_mapActiveBuffList.find(pSkillExtension4Data->second.iBuffType);
+
+									if (it != m_mapActiveBuffList.end())
+										m_mapActiveBuffList.erase(pSkillExtension4Data->second.iBuffType);
+
+									m_mapActiveBuffList.insert(std::pair(pSkillExtension4Data->second.iBuffType, pSkillData->second.iID));
+
+									switch (pSkillData->second.iBaseId)
+									{
+										case 101001:
+										case 107010:
+											m_PlayerMySelf.iMoveSpeed = 67;
+											break;
+
+										case 107725:
+											m_PlayerMySelf.iMoveSpeed = 90;
+											break;
+									}
+
+									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", GetName().c_str(), pSkillData->second.szName.c_str());
+								}
+								else
+									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added but extension not exist\n", GetName().c_str(), pSkillData->second.szName.c_str());
+							}
+							else
+							{
+								if (iTargetID < 5000)
+								{
+									auto it = m_mapPlayer.find(iTargetID);
+
+									if (it != m_mapPlayer.end())
+									{
+										switch (pSkillData->second.iBaseId)
+										{
+											case 101001:
+											case 107010:
+												it->second.iMoveSpeed = 67;
+												break;
+
+											case 107725:
+												it->second.iMoveSpeed = 90;
+												break;
+										}
+
+										printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", it->second.szName.c_str(), pSkillData->second.szName.c_str());
+									}
+								}
+							}
+						}
+					}
+				}
+				break;
+
+				case SkillMagicType::SKILL_MAGIC_TYPE_BUFF:
+				{
+					uint8_t iBuffType = pkt.read<uint8_t>();
+
+					auto it = m_mapActiveBuffList.find(iBuffType);
+
+					if (it != m_mapActiveBuffList.end())
+					{
+						auto pSkillTable = Bootstrap::GetSkillTable().GetData();
+						auto pSkillData = pSkillTable.find(it->second);
+
+						if (pSkillData != pSkillTable.end())
+							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szName.c_str());
+						else
+							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %d buff removed\n", GetName().c_str(), it->second);
+					}
+
+					switch (iBuffType)
+					{
+						case (byte)BuffType::BUFF_TYPE_SPEED:
+							m_PlayerMySelf.iMoveSpeed = 45;
+						break;
+					}
+
+					m_mapActiveBuffList.erase(iBuffType);
+				}
+				break;
+
+			default:
+				printf("RecvProcess::WIZ_MAGIC_PROCESS: %d Type Not Implemented!\n", iType);
+				break;
+			}
+		}
+		break;
 	}
 
 	//fprintf(stdout, "Recv Packet: %s\n", pkt.toHex().c_str());
@@ -1529,13 +1780,307 @@ void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
 
 	uint8_t byHeader = pkt.GetOpcode();
 
-	//switch (byHeader)
-	//{
-	//	default:
-	//		break;
-	//}
+	switch (byHeader)
+	{
+		case WIZ_HOME:
+		{
+			fprintf(stdout, "SendProcess::WIZ_HOME\n");
+			SetTarget(-1);		
+		}
+		break;
 
-	//fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
+		case WIZ_MAGIC_PROCESS:
+		{
+			fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
+		}
+		break;
+	}
+
+	/*fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());*/
 
 
+}
+
+void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
+ {
+	switch (pSkillData.iTarget)
+	{
+
+		case SkillTargetType::TARGET_SELF:
+		case SkillTargetType::TARGET_FRIEND_WITHME:
+		case SkillTargetType::TARGET_FRIEND_ONLY:
+		case SkillTargetType::TARGET_PARTY:
+		case SkillTargetType::TARGET_NPC_ONLY:
+		case SkillTargetType::TARGET_ENEMY_ONLY:
+		case SkillTargetType::TARGET_ALL:
+		case 9: // For God Mode
+		case SkillTargetType::TARGET_AREA_FRIEND:
+		case SkillTargetType::TARGET_AREA_ALL:
+		case SkillTargetType::TARGET_DEAD_FRIEND_ONLY:
+		{
+			if (pSkillData.iCastTime != 0)
+			{
+				if (m_PlayerMySelf.iMoveType != 0)
+				{
+					SendMovePacket(GetPosition(), GetPosition(), 0, 0);
+				}
+
+				SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
+				std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
+			}
+
+			auto pSkillExtension2 = Bootstrap::GetSkillExtension2Table().GetData();
+			auto pSkillExtension2Data = pSkillExtension2.find(pSkillData.iID);
+
+			uint32_t iArrowCount = 0;
+
+			if (pSkillExtension2Data != pSkillExtension2.end())
+				iArrowCount = pSkillExtension2Data->second.iArrowCount;
+
+			Vector3 v3TargetPosition = GetTargetPosition();
+
+			if ((iArrowCount == 0 && pSkillData.iFlyingFX != 0) || iArrowCount == 1)
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
+
+			if (iArrowCount > 1)
+			{
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition, 1);
+
+				float fDistance = GetDistance(GetTargetPosition());
+
+				switch (iArrowCount)
+				{
+					case 3:
+					{
+						iArrowCount = 1;
+
+						if (fDistance <= 3.0f)
+							iArrowCount = 3;
+						else if (fDistance < 16.0f)
+							iArrowCount = 2;
+					};
+					break;
+
+					case 5:
+					{
+						iArrowCount = 1;
+
+						if (fDistance <= 1.0f)
+							iArrowCount = 5;
+						else if (fDistance <= 2.0f)
+							iArrowCount = 4;
+						else if (fDistance <= 3.0f)
+							iArrowCount = 3;
+						else if (fDistance < 16.0f)
+							iArrowCount = 2;
+					}
+					break;
+				}
+
+				for (uint32_t i = 0; i < iArrowCount; i++)
+				{
+					SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, GetPosition(), (i + 1));
+					SendStartMagicAtTarget(pSkillData, iTargetID, GetPosition(), (i + 1));
+				}
+			}
+			else
+				SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
+		}
+		break;
+
+		case SkillTargetType::TARGET_AREA:
+		case SkillTargetType::TARGET_PARTY_ALL:
+		case SkillTargetType::TARGET_AREA_ENEMY:
+		{
+			if (pSkillData.iCastTime != 0)
+			{
+				if (m_PlayerMySelf.iMoveType != 0)
+				{
+					SendMovePacket(GetPosition(), GetPosition(), 0, 0);
+				}
+
+				SendStartSkillCastingAtPosPacket(pSkillData, GetTargetPosition());
+				std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
+			}
+
+			if (pSkillData.iFlyingFX != 0)
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, GetTargetPosition());
+
+			SendStartSkillMagicAtPosPacket(pSkillData, GetTargetPosition());
+		}
+		break;
+	}
+
+ }
+
+void Client::SendPacket(Packet vecBuffer)
+{
+	Send pSendFnc = (Send)GetAddress("KO_SND_FNC");
+	pSendFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
+}
+
+void Client::SendTownPacket()
+{
+	Packet pkt = Packet(WIZ_HOME);
+
+	SendPacket(pkt);
+}
+
+void Client::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDistance)
+{
+	Packet pkt = Packet(WIZ_ATTACK);
+
+	pkt
+		<< uint8_t(1) << uint8_t(1)
+		<< iTargetID
+		<< uint16_t(fInterval * 100.0f)
+		<< uint16_t(fDistance * 10.0f)
+		<< uint8_t(0) << uint8_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt 
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_CASTING)
+		<< pSkillData.iID 
+		<< m_PlayerMySelf.iID 
+		<< iTargetID
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
+		<< int16_t(pSkillData.iReCastTime);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_CASTING)
+		<< pSkillData.iID
+		<< m_PlayerMySelf.iID
+		<< int32_t(-1)
+		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
+		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
+		<< int16_t(pSkillData.iReCastTime);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_FLYING)
+		<< pSkillData.iID
+		<< m_PlayerMySelf.iID
+		<< iTargetID
+		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
+		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< arrowIndex
+		<< uint32_t(0) << uint32_t(0) << int16_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartSkillMagicAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING)
+		<< pSkillData.iID
+		<< m_PlayerMySelf.iID
+		<< iTargetID;
+
+	if (pSkillData.iCastTime == 0)
+		pkt << uint32_t(1) << uint32_t(1) << uint32_t(0);
+	else
+	{
+		pkt
+			<< uint32_t(v3TargetPosition.m_fX * 10.0f)
+			<< int32_t(v3TargetPosition.m_fZ * 10.0f)
+			<< uint32_t(v3TargetPosition.m_fY * 10.0f);
+	}
+
+	pkt << arrowIndex 
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartSkillMagicAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING)
+		<< pSkillData.iID
+		<< m_PlayerMySelf.iID
+		<< int32_t(-1)
+		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
+		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_FAIL)
+		<< pSkillData.iID
+		<< m_PlayerMySelf.iID
+		<< iTargetID
+		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
+		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< int32_t(-101)
+		<< arrowIndex 
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendCancelSkillPacket(TABLE_UPC_SKILL pSkillData)
+{
+	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+	pkt
+		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_CANCEL)
+		<< pSkillData.iID
+		<< m_PlayerMySelf.iID
+		<< m_PlayerMySelf.iID
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0)
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTaragetPosition, int16_t iMoveSpeed, uint8_t iMoveType)
+{
+	Packet pkt = Packet(WIZ_MOVE);
+
+	pkt
+		<< uint16_t(vecStartPosition.m_fX * 10.0f)
+		<< uint16_t(vecStartPosition.m_fY * 10.0f)
+		<< int16_t(vecStartPosition.m_fZ * 10.0f)
+		<< iMoveSpeed
+		<< iMoveType
+		<< uint16_t(vecTaragetPosition.m_fX * 10.0f)
+		<< uint16_t(vecTaragetPosition.m_fY * 10.0f)
+		<< int16_t(vecTaragetPosition.m_fZ * 10.0f);
+
+	SendPacket(pkt);
 }

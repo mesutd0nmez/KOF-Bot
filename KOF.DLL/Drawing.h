@@ -26,6 +26,8 @@ public:
 	static void	LoadSkillData();
 	static void DrawAutomatedAttackSkillTree();
 	static void DrawAutomatedCharacterSkillTree();
+
+	static void DrawMonsterListTree();
 };
 
 #endif

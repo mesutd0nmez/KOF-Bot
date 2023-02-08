@@ -15,6 +15,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <filesystem>
 
 //DirectX
 #include <d3d11.h>

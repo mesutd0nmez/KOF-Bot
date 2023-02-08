@@ -11,10 +11,10 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     {
         case DLL_PROCESS_ATTACH:
         {
-#ifdef _DEBUG
+//#ifdef _DEBUG
             AllocConsole();
             freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-#endif
+//#endif
             DisableThreadLibraryCalls(hModule);
 
             printf("EntryPoint::Starting Threads\n");
