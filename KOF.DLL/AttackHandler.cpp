@@ -33,40 +33,58 @@ void AttackHandler::AttackProcess()
 		if (Client::GetTarget() == -1)
 			continue;
 
+		if (Client::IsBlinking())
+			continue;
+
 		bool bAttackStatus = pUserConfig->GetBool("Automation", "Attack", false);
 
-		if (bAttackStatus)
+		if (!bAttackStatus)
+			continue;
+
+		std::vector<int> vecAttackList = pUserConfig->GetInt("Automation", "AttackSkillList", std::vector<int>());
+
+		for (const auto& x : vecAttackList)
 		{
-			std::vector<int> vecAttackList = pUserConfig->GetInt("Automation", "AttackSkillList", std::vector<int>());
+			auto pSkillTable = Bootstrap::GetSkillTable().GetData();
+			auto pSkillData = pSkillTable.find(x);
 
-			for (const auto& x : vecAttackList)
+			if (pSkillData != pSkillTable.end())
 			{
-				auto pSkillTable = Bootstrap::GetSkillTable().GetData();
-				auto pSkillData = pSkillTable.find(x);
+				uint32_t iNeedItem = pSkillData->second.dwNeedItem;
 
-				if (pSkillData != pSkillTable.end())
+				uint32_t iNeedItemCount = 1;
+				uint32_t iExistItemCount = 0;
+
+				if (iNeedItem != 0)
 				{
-					if (Client::GetMp() >= pSkillData->second.iExhaustMSP)
-					{
-						Client::UseSkill(pSkillData->second, Client::GetTarget());
-					}
+					iExistItemCount = Client::GetInventoryItemCount(pSkillData->second.dwNeedItem);
+
+					auto pSkillExtension2 = Bootstrap::GetSkillExtension2Table().GetData();
+					auto pSkillExtension2Data = pSkillExtension2.find(pSkillData->second.iID);
+
+					if (pSkillExtension2Data != pSkillExtension2.end())
+						iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 				}
 
-				bool bAttackSpeed = pUserConfig->GetBool("Attack", "AttackSpeed", false);
+				if (Client::GetMp() < pSkillData->second.iExhaustMSP)
+					continue;
 
-				if (bAttackSpeed)
-				{
-					int iAttackSpeedValue = pUserConfig->GetInt("Attack", "AttackSpeedValue", 1250);
-					std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
-				}
-				else
-					std::this_thread::sleep_for(std::chrono::milliseconds(1250));
+				if (iNeedItem != 0 && iExistItemCount < iNeedItemCount)
+					continue;
+
+				Client::UseSkill(pSkillData->second, Client::GetTarget());
 			}
 		}
-		else
+
+		bool bAttackSpeed = pUserConfig->GetBool("Attack", "AttackSpeed", false);
+
+		if (bAttackSpeed)
 		{
+			int iAttackSpeedValue = pUserConfig->GetInt("Attack", "AttackSpeedValue", 1250);
+			std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
+		}
+		else
 			std::this_thread::sleep_for(std::chrono::milliseconds(1250));
-		}	
 	}
 }
 
@@ -84,18 +102,58 @@ void AttackHandler::SearchTargetProcess()
 		if (pUserConfig == NULL)
 			continue;
 
+		if (Client::IsBlinking())
+			continue;
+
+		bool bAttackStatus = pUserConfig->GetBool("Automation", "Attack", false);
+
+		if (!bAttackStatus)
+			continue;
+
 		auto pNpcList = Client::GetNpcList();
 
 		if (pNpcList.size() == 0)
 			continue;
 
+		bool bAutoTarget = pUserConfig->GetInt("Attack", "AutoTarget", true);
+
+		std::vector<int> vecSelectedNpcList = pUserConfig->GetInt("Attack", "NpcList", std::vector<int>());
+
 		if (Client::GetTarget() == -1)
 		{
 			std::vector<TNpc> vecFilteredNpc;
 
-			std::copy_if(pNpcList.begin(), pNpcList.end(),
-				std::back_inserter(vecFilteredNpc),
-				[](const TNpc& c) { return c.eState != PSA_DYING && c.eState != PSA_DEATH; });
+			if (bAutoTarget)
+			{
+				std::copy_if(pNpcList.begin(), pNpcList.end(),
+					std::back_inserter(vecFilteredNpc),
+					[](const TNpc& c) 
+					{ 
+						return (c.iMonsterOrNpc == 1
+							|| (c.iProtoID >= 19067 && c.iProtoID <= 19069)
+							|| (c.iProtoID >= 19070 && c.iProtoID <= 19072))
+							&& c.iProtoID != 9009
+							&& c.eState != PSA_DYING 
+							&& c.eState != PSA_DEATH
+							&& Client::GetDistance(c.fX, c.fY) <= 45.0f;
+					});
+			}
+			else
+			{
+				std::copy_if(pNpcList.begin(), pNpcList.end(),
+					std::back_inserter(vecFilteredNpc),
+					[vecSelectedNpcList](const TNpc& c) 
+					{ 
+						return (c.iMonsterOrNpc == 1
+							|| (c.iProtoID >= 19067 && c.iProtoID <= 19069)
+							|| (c.iProtoID >= 19070 && c.iProtoID <= 19072))
+							&& c.iProtoID != 9009
+							&& c.eState != PSA_DYING 
+							&& c.eState != PSA_DEATH 
+							&& std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.iProtoID)
+							&& Client::GetDistance(c.fX, c.fY) <= 45.0f;
+					});
+			}
 
 			auto pSort = [](TNpc const& a, TNpc const& b)
 			{
@@ -107,24 +165,33 @@ void AttackHandler::SearchTargetProcess()
 			if (vecFilteredNpc.size() > 0)
 			{
 				auto pFindedTarget = vecFilteredNpc.at(0);
-
-				if ((pFindedTarget.iMonsterOrNpc == 1
-					|| (pFindedTarget.iProtoID >= 19067 && pFindedTarget.iProtoID <= 19069) //Scarecrow
-					|| (pFindedTarget.iProtoID >= 19070 && pFindedTarget.iProtoID <= 19072)) //Scarecrow
-					&& pFindedTarget.iProtoID != 9009) //Mine Guard
-				{
-					printf("SearchTargetProcess:: %d, Target Selected\n", pFindedTarget.iID);
-					Client::SetTarget(pFindedTarget.iID);
-				}
+				
+				Client::SetTarget(pFindedTarget.iID);
+				printf("SearchTargetProcess:: %d, Target Selected\n", pFindedTarget.iID);
 			}
 		}
 		else
 		{
 			auto it = std::find_if(pNpcList.begin(), pNpcList.end(),
-				[](const TNpc& a) { return a.iID == Client::GetTarget(); });
+				[](const TNpc& a) 
+				{ 
+					return a.iID == Client::GetTarget(); 
+				});
 
 			if (it != pNpcList.end())
 			{
+				if (!bAutoTarget && !std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), it->iProtoID))
+				{
+					printf("SearchTargetProcess:: %d, Target not selected, selecting new target\n", it->iID);
+					Client::SetTarget(-1);
+				}
+
+				if (Client::GetDistance(it->fX, it->fY) > 45.0f)
+				{
+					printf("SearchTargetProcess:: %d, Target out of range, selecting new target\n", it->iID);
+					Client::SetTarget(-1);
+				}
+
 				if (it->eState == PSA_DYING || it->eState == PSA_DEATH)
 				{
 					printf("SearchTargetProcess:: %d, Target Dead\n", it->iID);

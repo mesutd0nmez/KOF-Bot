@@ -27,7 +27,7 @@
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ProtectionHandler.h">
+    <ClInclude Include="CharacterHandler.h">
       <Filter>Header Files\Handlers</Filter>
     </ClInclude>
     <ClInclude Include="AttackHandler.h">
@@ -48,6 +48,9 @@
     <ClInclude Include="Client.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ProtectionHandler.h">
+      <Filter>Header Files\Handlers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -56,7 +59,7 @@
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ProtectionHandler.cpp">
+    <ClCompile Include="CharacterHandler.cpp">
       <Filter>Source Files\Handlers</Filter>
     </ClCompile>
     <ClCompile Include="AttackHandler.cpp">
@@ -73,6 +76,9 @@
     </ClCompile>
     <ClCompile Include="Client.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProtectionHandler.cpp">
+      <Filter>Source Files\Handlers</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

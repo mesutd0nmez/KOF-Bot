@@ -2,7 +2,7 @@
 #include "pch.h"
 #include "Ini.h"
 #include "AttackHandler.h"
-#include "ProtectionHandler.h"
+#include "CharacterHandler.h"
 #include "Client.h"
 
 class Bootstrap

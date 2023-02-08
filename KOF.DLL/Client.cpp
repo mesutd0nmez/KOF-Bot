@@ -3,6 +3,7 @@
 #include "Client.h"
 #include "Memory.h"
 #include "AttackHandler.h"
+#include "CharacterHandler.h"
 #include "ProtectionHandler.h"
 #include "Bootstrap.h"
 
@@ -22,12 +23,14 @@ Client::Client()
 
 	m_bCharacterLoaded = false;
 
-	m_mapNpc.clear();
-	m_mapPlayer.clear();
+	m_vecNpc.clear();
+	m_vecPlayer.clear();
 
 	m_iTargetID = -1;
 
 	m_mapActiveBuffList.clear();
+
+	m_bLunarWarDressUp = false;
 }
 
 Client::~Client()
@@ -46,12 +49,14 @@ Client::~Client()
 
 	m_bCharacterLoaded = false;
 
-	m_mapNpc.clear();
-	m_mapPlayer.clear();
+	m_vecNpc.clear();
+	m_vecPlayer.clear();
 
 	m_iTargetID = -1;
 
 	m_mapActiveBuffList.clear();
+
+	m_bLunarWarDressUp = false;
 }
 
 void Client::Start()
@@ -127,6 +132,7 @@ void Client::MainProcess()
 		SetState(State::GAME);
 
 	AttackHandler::Start();
+	CharacterHandler::Start();
 	ProtectionHandler::Start();
 
 	while (m_bWorking)
@@ -136,7 +142,6 @@ void Client::MainProcess()
 		switch (GetState())
 		{
 			case State::BOOTSTRAP: BootstrapProcess(); break;
-			case State::LOST: LostProcess(); break;
 			case State::GAME: GameProcess(); break;
 		}
 	}
@@ -160,10 +165,6 @@ void Client::BootstrapProcess()
 	Client::ConnectLoginServer();
 
 	Client::SetState(State::LOGIN);
-}
-
-void Client::LostProcess()
-{
 }
 
 void Client::GameProcess()
@@ -220,6 +221,19 @@ float Client::GetDistance(float fX, float fY)
 float Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
 {
 	return (float)sqrt(pow(fX2 - fX1, 2.0f) + pow(fY2 - fY1, 2.0f) * 1.0);
+}
+
+int32_t Client::GetInventoryItemCount(uint32_t iItemID)
+{
+	int32_t iItemCount = 0;
+
+	for (int i = 0; i < INVENTORY_TOTAL; i++)
+	{
+		if (m_PlayerMySelf.tInventory[i].iItemID == iItemID)
+			iItemCount += m_PlayerMySelf.tInventory[i].iCount;
+	}
+
+	return iItemCount;
 }
 
 bool Client::IsIntroPhase()
@@ -342,6 +356,11 @@ uint8_t Client::GetSkillPoint(int32_t Slot)
 	return m_PlayerMySelf.iSkillInfo[Slot];
 }
 
+bool Client::IsBlinking() 
+{
+	return m_PlayerMySelf.bBlinking;
+};
+
 void Client::SetTarget(int32_t iTargetID)
 {
 	m_iTargetID = iTargetID;
@@ -361,18 +380,19 @@ Vector3 Client::GetTargetPosition()
 {
 	if (m_iTargetID >= 5000)
 	{
-		auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+		auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 			[](const TNpc& a) { return a.iID == m_iTargetID; });
 
-		if (it != m_mapNpc.end())
+		if (it != m_vecNpc.end())
 			return Vector3(it->fX, it->fZ, it->fY);
 	}
 	else
 	{
-		auto it = m_mapPlayer.find(m_iTargetID);
+		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+			[](const TPlayer& a) { return a.iID == m_iTargetID; });
 
-		if (it != m_mapPlayer.end())
-			return Vector3(it->second.fX, it->second.fZ, it->second.fY);
+		if (it != m_vecPlayer.end())
+			return Vector3(it->fX, it->fZ, it->fY);
 	}
 
 	return Vector3(0.0f, 0.0f, 0.0f);
@@ -593,9 +613,116 @@ TNpc Client::InitializeNpc(Packet& pkt)
 	tNpc.iUnknown2 = pkt.read<uint8_t>();
 	tNpc.iUnknown3 = pkt.read<uint32_t>();
 
-	tNpc.iRotation = pkt.read<uint16_t>();
+	tNpc.fRotation = pkt.read<int16_t>() / 100.0f;
 
 	return tNpc;
+}
+
+TPlayer Client::InitializePlayer(Packet& pkt)
+{
+	TPlayer tPlayer;
+	memset(&tPlayer, 0, sizeof(tPlayer));
+
+	pkt.SByte();
+
+	tPlayer.iID = pkt.read<int32_t>();
+
+	int iNameLen = pkt.read<uint8_t>();
+	pkt.readString(tPlayer.szName, iNameLen);
+
+	tPlayer.eNation = (e_Nation)pkt.read<uint8_t>();
+
+	uint8_t iUnknown1 = (e_Nation)pkt.read<uint8_t>();
+	uint8_t iUnknown2 = (e_Nation)pkt.read<uint8_t>();
+
+	// KNIGHT DATA START
+
+	tPlayer.iKnightsID = pkt.read<int16_t>();
+	tPlayer.eKnightsDuty = (e_KnightsDuty)pkt.read<uint8_t>();
+
+	int16_t iAllianceID = pkt.read<int16_t>();
+	uint8_t iKnightNameLen = pkt.read<uint8_t>();
+	pkt.readString(tPlayer.szKnights, iKnightNameLen);
+
+	tPlayer.iKnightsGrade = pkt.read<uint8_t>();
+	tPlayer.iKnightsRank = pkt.read<uint8_t>();
+
+	int16_t sMarkVersion = pkt.read<int16_t>();
+	int16_t sCapeID = pkt.read<int16_t>();
+
+	uint8_t iR = pkt.read<uint8_t>();
+	uint8_t iG = pkt.read<uint8_t>();
+	uint8_t iB = pkt.read<uint8_t>();
+
+	uint8_t iUnknown3 = pkt.read<uint8_t>();
+	uint8_t iUnknown4 = pkt.read<uint8_t>();
+
+	// KNIGHT DATA END
+
+	tPlayer.iLevel = pkt.read<uint8_t>();
+
+	tPlayer.eRace = (e_Race)pkt.read<uint8_t>();
+	tPlayer.eClass = (e_Class)pkt.read<int16_t>();
+
+	tPlayer.fX = (pkt.read<uint16_t>()) / 10.0f;
+	tPlayer.fY = (pkt.read<uint16_t>()) / 10.0f;
+	tPlayer.fZ = (pkt.read<int16_t>()) / 10.0f;
+
+	tPlayer.iFace = pkt.read<uint8_t>();
+	tPlayer.iHair = pkt.read<int32_t>();
+
+	uint8_t iResHpType = pkt.read<uint8_t>();
+
+	uint32_t iAbnormalType = pkt.read<uint32_t>();
+
+	switch (iAbnormalType)
+	{
+		case 4:
+			tPlayer.bBlinking = true;
+			break;
+		case 7:
+			tPlayer.bBlinking = false;
+			break;
+	}
+
+	uint8_t iNeedParty = pkt.read<uint8_t>();
+
+	tPlayer.iAuthority = pkt.read<uint8_t>();
+
+	uint8_t iPartyLeader = pkt.read<uint8_t>();
+	uint8_t iInvisibilityType = pkt.read<uint8_t>();
+	uint8_t iTeamColor = pkt.read<uint8_t>();
+	uint8_t iIsHidingHelmet = pkt.read<uint8_t>();
+	uint8_t iIsHidingCospre = pkt.read<uint8_t>();
+	uint8_t iIsDevil = pkt.read<uint8_t>();
+	uint8_t iIsHidingWings = pkt.read<uint8_t>();
+
+	int16_t iDirection = pkt.read<int16_t>();
+
+	uint8_t iIsChicken = pkt.read<uint8_t>();
+	uint8_t iRank = pkt.read<uint8_t>();
+	int8_t iKnightsRank = pkt.read<int8_t>();
+	int8_t iPersonalRank = pkt.read<int8_t>();
+
+	uint8_t iUnknown5 = pkt.read<uint8_t>(); // 2/8/2023 New
+
+	int32_t iLoop = m_bLunarWarDressUp ? 9 : 15;
+
+	for (int32_t i = 0; i < iLoop; i++)
+	{
+		tPlayer.tInventory[i].iPos = i;
+		tPlayer.tInventory[i].iItemID = pkt.read<uint32_t>();
+		tPlayer.tInventory[i].iDurability = pkt.read<uint16_t>();
+		tPlayer.tInventory[i].iFlag = pkt.read<uint8_t>();
+	}
+
+	tPlayer.iCity = pkt.read<uint8_t>();
+
+	//TODO: Parse remaining bytes
+	uint8_t iTempBuffer[16];
+	pkt.read(iTempBuffer,16);
+
+	return tPlayer;
 }
 
 void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
@@ -735,14 +862,13 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			// KNIGHT DATA START
 
 			m_PlayerMySelf.iKnightsID = pkt.read<int16_t>();
-			e_KnightsDuty eKnightsDuty = (e_KnightsDuty)pkt.read<uint8_t>();
+			m_PlayerMySelf.eKnightsDuty = (e_KnightsDuty)pkt.read<uint8_t>();
 
 			int16_t iAllianceID = pkt.read<int16_t>();
 			uint8_t byFlag = pkt.read<uint8_t>();
 
 			uint8_t iKnightNameLen = pkt.read<uint8_t>();
-			std::string szKnightsName;
-			pkt.readString(szKnightsName, iKnightNameLen);
+			pkt.readString(m_PlayerMySelf.szKnights, iKnightNameLen);
 
 			m_PlayerMySelf.iKnightsGrade = pkt.read<uint8_t>();
 			m_PlayerMySelf.iKnightsRank = pkt.read<uint8_t>();
@@ -874,13 +1000,14 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			}
 			else
 			{
-				auto it = m_mapPlayer.find(iID);
+				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+					[iID](const TPlayer& a) { return a.iID == iID; });
 
-				if (it != m_mapPlayer.end())
+				if (it != m_vecPlayer.end())
 				{
-					it->second.iLevel = iLevel;
+					it->iLevel = iLevel;
 
-					printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", it->second.szName.c_str(), iLevel);
+					printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", it->szName.c_str(), iLevel);
 				}
 			}
 		}
@@ -1158,14 +1285,15 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					}
 					else
 					{
-						auto it = m_mapPlayer.find(iID);
+						auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+							[iID](const TPlayer& a) { return a.iID == iID; });
 
-						if (it != m_mapPlayer.end())
+						if (it != m_vecPlayer.end())
 						{
-							it->second.eClass = (e_Class)iClass;
+							it->eClass = (e_Class)iClass;
 
 							printf("RecvProcess::WIZ_CLASS_CHANGE: %s class changed to %d\n",
-								it->second.szName.c_str(), it->second.eClass);
+								it->szName.c_str(), it->eClass);
 						}
 					}
 				}
@@ -1346,18 +1474,43 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 				int32_t iNpcID = pNpc.iID;
 
-				auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+				auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 					[iNpcID](const TNpc& a) { return a.iID == iNpcID; });
 
-				if (it == m_mapNpc.end())
-					m_mapNpc.push_back(pNpc);
+				if (it == m_vecNpc.end())
+					m_vecNpc.push_back(pNpc);
 				else
-				{
 					*it = pNpc;
-				}
 			}
 
 			printf("RecvProcess::WIZ_REQ_NPCIN: Size %d\n", iNpcCount);
+		}
+		break;
+
+		case WIZ_REQ_USERIN:
+		{
+			int16_t iUserCount = pkt.read<int16_t>();
+
+			if (0 == iUserCount)
+			if (iUserCount < 0 || iUserCount >= 1000)
+				return;
+
+			for (int16_t i = 0; i < iUserCount; i++)
+			{
+				uint8_t iUnknown0 = pkt.read<uint8_t>();
+
+				auto pUser = InitializePlayer(pkt);
+
+				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+					[pUser](const TPlayer& a) { return a.iID == pUser.iID; });
+
+				if (it == m_vecPlayer.end())
+					m_vecPlayer.push_back(pUser);
+				else
+					*it = pUser;
+			}
+
+			printf("RecvProcess::WIZ_REQ_USERIN: Size %d\n", iUserCount);
 		}
 		break;
 
@@ -1371,37 +1524,78 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					auto pNpc = InitializeNpc(pkt);
 
-					int32_t iNpcID = pNpc.iID;
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+						[pNpc](const TNpc& a) { return a.iID == pNpc.iID; });
 
-					auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
-						[iNpcID](const TNpc& a) { return a.iID == iNpcID; });
-
-					if (it == m_mapNpc.end())
-						m_mapNpc.push_back(pNpc);
+					if (it == m_vecNpc.end())
+						m_vecNpc.push_back(pNpc);
 					else
-					{
 						*it = pNpc;
-					}
 
-					printf("RecvProcess::WIZ_NPC_INOUT: IN %d\n", pNpc.iID);
+					printf("RecvProcess::WIZ_NPC_INOUT: %d,%d\n", iType, pNpc.iID);
 				}
 				break;
 
 				case InOut::INOUT_OUT:
 				{
-					int32_t iNpcId = pkt.read<int32_t>();
+					int32_t iNpcID = pkt.read<int32_t>();
 
-					m_mapNpc.erase(
-						std::remove_if(m_mapNpc.begin(), m_mapNpc.end(),
-							[iNpcId](const TNpc& a) { return a.iID == iNpcId; }),
-						m_mapNpc.end());
+					m_vecNpc.erase(
+						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
+							[iNpcID](const TNpc& a) { return a.iID == iNpcID; }),
+						m_vecNpc.end());
 
-					printf("RecvProcess::WIZ_NPC_INOUT: OUT %d\n", iNpcId);
+					printf("RecvProcess::WIZ_NPC_INOUT: %d,%d\n", iType, iNpcID);
 				}
 				break;
 
 				default:
-					printf("WIZ_NPC_INOUT: %d not implemented\n", iType);
+					printf("RecvProcess::WIZ_NPC_INOUT: %d not implemented\n", iType);
+					break;
+			}
+		}
+		break;
+
+		case WIZ_USER_INOUT:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+			uint8_t iUnknown0 = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case InOut::INOUT_IN:
+				case InOut::INOUT_RESPAWN:
+				case InOut::INOUT_WARP:
+				{
+					auto pPlayer = InitializePlayer(pkt);
+
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[pPlayer](const TPlayer& a) { return a.iID == pPlayer.iID; });
+
+					if (it == m_vecPlayer.end())
+						m_vecPlayer.push_back(pPlayer);
+					else
+						*it = pPlayer;
+
+					printf("RecvProcess::WIZ_USER_INOUT: %d,%d\n", iType, pPlayer.iID);
+				}
+				break;
+
+				case InOut::INOUT_OUT:
+				{
+					int32_t iPlayerID = pkt.read<int32_t>();
+
+					m_vecPlayer.erase(
+						std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+							[iPlayerID](const TPlayer& a) { return a.iID == iPlayerID; }),
+						m_vecPlayer.end());
+
+					printf("RecvProcess::WIZ_USER_INOUT: %d,%d\n", iType, iPlayerID);
+				}
+				break;
+
+				default:
+					printf("RecvProcess::WIZ_USER_INOUT: %d not implemented\n", iType);
 					break;
 			}
 		}
@@ -1426,12 +1620,12 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			if (iSetNpcID.empty())
 			{
 				printf("RecvProcess::WIZ_NPC_REGION: All npc cleared\n");
-				m_mapNpc.clear();
+				m_vecNpc.clear();
 				return;
 			}
 
-			//auto it = m_mapNpc.begin();
-			//while (it != m_mapNpc.end())
+			//auto it = m_vecNpc.begin();
+			//while (it != m_vecNpc.end())
 			//{
 			//	auto iNpcId = iSetNpcID.find(it->iID);
 
@@ -1444,12 +1638,50 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			//		if ((PSA_DYING == it->eState || PSA_DEATH == it->eState))
 			//			continue;
 			//		else
-			//			it = m_mapNpc.erase(it);
+			//			it = m_vecNpc.erase(it);
 			//	}
 			//}
 			
 
 			printf("RecvProcess::WIZ_NPC_REGION: New npc count %d\n", iSetNpcID.size());
+		}
+		break;
+
+		case WIZ_REGIONCHANGE:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case 1:
+				{
+					int16_t iUserCount = pkt.read<int16_t>();
+
+					if (0 == iUserCount)
+						if (iUserCount < 0 || iUserCount >= 1000)
+							return;
+
+					std::set<int32_t> iSetUserID;
+
+					for (int16_t i = 0; i < iUserCount; i++)
+					{
+						int32_t iID = pkt.read<int32_t>();
+						iSetUserID.insert(iID);
+					}
+
+					if (iSetUserID.empty())
+					{
+						printf("RecvProcess::WIZ_REGIONCHANGE: All users cleared\n");
+						m_vecPlayer.clear();
+						return;
+					}
+				}
+				break;
+
+				default:
+					printf("RecvProcess::WIZ_REGIONCHANGE: Type %d not implemented!\n", iType);
+					break;
+			}
 		}
 		break;
 
@@ -1467,10 +1699,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[iID](const TNpc& a) { return a.iID == iID; });
 
-					if (it != m_mapNpc.end())
+					if (it != m_vecNpc.end())
 					{
 						it->eState = PSA_DEATH;
 
@@ -1479,11 +1711,12 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				else
 				{
-					auto it = m_mapPlayer.find(iID);
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[iID](const TPlayer& a) { return a.iID == iID; });
 
-					if (it != m_mapPlayer.end())
+					if (it != m_vecPlayer.end())
 					{
-						it->second.eState = PSA_DEATH;
+						it->eState = PSA_DEATH;
 
 						printf("RecvProcess::WIZ_DEAD: %d Player Dead\n", iID);
 					}
@@ -1501,20 +1734,52 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				case ATTACK_FAIL:
 				{
-					printf("RecvProcess::WIZ_ATTACK: FAIL\n");
+					int32_t iAttackID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+					printf("RecvProcess::WIZ_ATTACK: %d,%d FAIL\n", iAttackID, iTargetID);
 				}
 				break;
 
 				case ATTACK_SUCCESS:
 				{
-					printf("RecvProcess::WIZ_ATTACK: SUCCESS\n");
+					int32_t iAttackID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+					printf("RecvProcess::WIZ_ATTACK: %d,%d SUCCESS\n", iAttackID, iTargetID);
 				}
 				break;
 
 				case ATTACK_TARGET_DEAD:
 				case ATTACK_TARGET_DEAD_OK:
 				{
-					printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK\n");
+					int32_t iAttackID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+					if (iTargetID >= 5000)
+					{
+						auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+							[iTargetID](const TNpc& a) { return a.iID == iTargetID; });
+
+						if (it != m_vecNpc.end())
+						{
+							it->eState = PSA_DEATH;
+
+							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Npc Dead\n", iTargetID);
+						}
+					}
+					else
+					{
+						auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+							[iTargetID](const TPlayer& a) { return a.iID == iTargetID; });
+
+						if (it != m_vecPlayer.end())
+						{
+							it->eState = PSA_DEATH;
+
+							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Player Dead\n", iTargetID);
+						}
+					}
 				}
 				break;
 
@@ -1539,6 +1804,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				m_PlayerMySelf.iHPMax = (int16_t)iTargetHPMax;
 				m_PlayerMySelf.iHP = (int16_t)iTargetHPCur;
 
+				if (m_PlayerMySelf.iHPMax > 0 && m_PlayerMySelf.iHP <= 0)
+					m_PlayerMySelf.eState = PSA_DEATH;
+
 				printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n", 
 					m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
 			}
@@ -1546,28 +1814,35 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[iID](const TNpc& a) { return a.iID == iID; });
 
-					if (it != m_mapNpc.end())
+					if (it != m_vecNpc.end())
 					{
 						it->iHPMax = (int16_t)iTargetHPMax;
 						it->iHP = (int16_t)iTargetHPCur;
+
+						if (it->iHPMax > 0 && it->iHP <= 0)
+							it->eState = PSA_DEATH;
 
 						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->iHP, it->iHPMax);
 					}
 				}
 				else
 				{
-					auto it = m_mapPlayer.find(iID);
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[iID](const TPlayer& a) { return a.iID == iID; });
 
-					if (it != m_mapPlayer.end())
+					if (it != m_vecPlayer.end())
 					{
-						it->second.iHPMax = (int16_t)iTargetHPMax;
-						it->second.iHP = (int16_t)iTargetHPCur;
+						it->iHPMax = (int16_t)iTargetHPMax;
+						it->iHP = (int16_t)iTargetHPCur;
+
+						if (it->iHPMax > 0 && it->iHP <= 0)
+							it->eState = PSA_DEATH;
 
 						printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n", 
-							it->second.szName.c_str(), it->second.iHP, it->second.iHPMax);
+							it->szName.c_str(), it->iHP, it->iHPMax);
 					}
 				}
 			}
@@ -1596,21 +1871,20 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			}
 			else
 			{
-				auto it = m_mapPlayer.find(iID);
+				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+					[iID](const TPlayer& a) { return a.iID == iID; });
 
-				if (it != m_mapPlayer.end())
+				if (it != m_vecPlayer.end())
 				{
-					it->second.fX = fX;
-					it->second.fY = fY;
-					it->second.fZ = fZ;
+					it->fX = fX;
+					it->fY = fY;
+					it->fZ = fZ;
 
-					it->second.iMoveSpeed = iSpeed;
-					it->second.iMoveType = iMoveType;
+					it->iMoveSpeed = iSpeed;
+					it->iMoveType = iMoveType;
 				}
 				else
-				{
-					printf("RecvProcess::WIZ_MOVE: %d not in m_mapPlayer list, is ghost player\n", iID);
-				}
+					printf("RecvProcess::WIZ_MOVE: %d not in m_vecPlayer list, is ghost player\n", iID);
 			}
 
 			//printf("RecvProcess::WIZ_MOVE: %d,%f,%f,%f,%d,%d\n", 
@@ -1630,10 +1904,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			uint16_t iSpeed = pkt.read<uint16_t>();
 
-			auto it = std::find_if(m_mapNpc.begin(), m_mapNpc.end(),
+			auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 				[iID](const TNpc& a) { return a.iID == iID; });
 
-			if (it != m_mapNpc.end())
+			if (it != m_vecNpc.end())
 			{
 				it->fX = fX;
 				it->fY = fY;
@@ -1643,9 +1917,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				it->iMoveType = iMoveType;
 			}
 			else
-			{
-				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_mapNpc list, is ghost npc\n", iID);
-			}
+				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_vecNpc list, is ghost npc\n", iID);
 
 			//printf("RecvProcess::WIZ_NPC_MOVE: %d,%d,%f,%f,%f,%d\n",
 			//	iMoveType, iID, fX, fY, fZ, iSpeed);
@@ -1697,32 +1969,33 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 											break;
 									}
 
-									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", GetName().c_str(), pSkillData->second.szName.c_str());
+									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
 								}
 								else
-									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added but extension not exist\n", GetName().c_str(), pSkillData->second.szName.c_str());
+									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added but extension not exist\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
 							}
 							else
 							{
 								if (iTargetID < 5000)
 								{
-									auto it = m_mapPlayer.find(iTargetID);
+									auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+										[iTargetID](const TPlayer& a) { return a.iID == iTargetID; });
 
-									if (it != m_mapPlayer.end())
+									if (it != m_vecPlayer.end())
 									{
 										switch (pSkillData->second.iBaseId)
 										{
 											case 101001:
 											case 107010:
-												it->second.iMoveSpeed = 67;
+												it->iMoveSpeed = 67;
 												break;
 
 											case 107725:
-												it->second.iMoveSpeed = 90;
+												it->iMoveSpeed = 90;
 												break;
 										}
 
-										printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", it->second.szName.c_str(), pSkillData->second.szName.c_str());
+										printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", it->szName.c_str(), pSkillData->second.szEngName.c_str());
 									}
 								}
 							}
@@ -1743,7 +2016,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						auto pSkillData = pSkillTable.find(it->second);
 
 						if (pSkillData != pSkillTable.end())
-							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szName.c_str());
+							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
 						else
 							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %d buff removed\n", GetName().c_str(), it->second);
 					}
@@ -1762,6 +2035,279 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			default:
 				printf("RecvProcess::WIZ_MAGIC_PROCESS: %d Type Not Implemented!\n", iType);
 				break;
+			}
+		}
+		break;
+
+		case WIZ_STATE_CHANGE:
+		{
+			int32_t iID = pkt.read<int32_t>();
+			uint8_t iType = pkt.read<uint8_t>();
+			uint64_t iBuff = pkt.read<uint64_t>();
+
+			switch (iType)
+			{
+				case 3: //Abnormal Type - Blinking
+				{
+					switch (iBuff)
+					{
+						case 4:
+						{
+							if (m_PlayerMySelf.iID == iID)
+							{
+								fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", m_PlayerMySelf.szName.c_str());
+
+								m_PlayerMySelf.bBlinking = true;
+							}
+							else
+							{
+
+								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[iID](const TPlayer& a) { return a.iID == iID; });
+
+								if (it != m_vecPlayer.end())
+								{
+									fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", it->szName.c_str());
+
+									it->bBlinking = true;
+								}
+							}
+						}
+						break;
+
+						case 7:
+						{
+							if (m_PlayerMySelf.iID == iID)
+							{
+								fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", m_PlayerMySelf.szName.c_str());
+
+								m_PlayerMySelf.bBlinking = false;
+							}
+							else
+							{
+								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[iID](const TPlayer& a) { return a.iID == iID; });
+
+								if (it != m_vecPlayer.end())
+								{
+									fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", it->szName.c_str());
+
+									it->bBlinking = false;
+								}
+							}
+						}
+						break;
+
+						default:
+							fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: Abnormal Type - %llu Buff not implemented\n", iBuff);
+							break;
+					}
+				}
+				break;
+
+				default:
+					fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: Type %d not implemented\n", iType);
+					break;
+			}		
+		}
+		break;
+
+		case WIZ_SHOPPING_MALL:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case ShoppingMallType::STORE_CLOSE:
+				{
+					for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+					{
+						m_PlayerMySelf.tInventory[i].iPos = i;
+						m_PlayerMySelf.tInventory[i].iItemID = pkt.read<uint32_t>();
+						m_PlayerMySelf.tInventory[i].iDurability = pkt.read<uint16_t>();
+						m_PlayerMySelf.tInventory[i].iCount = pkt.read<uint16_t>();
+						m_PlayerMySelf.tInventory[i].iFlag = pkt.read<uint8_t>();
+						m_PlayerMySelf.tInventory[i].iRentalTime = pkt.read<int16_t>();
+						m_PlayerMySelf.tInventory[i].iSerial = pkt.read<uint32_t>();
+					}
+
+					fprintf(stdout, "RecvProcess::WIZ_SHOPPING_MALL: STORE_CLOSE\n");
+				}
+				break;
+				default:
+					fprintf(stdout, "RecvProcess::WIZ_SHOPPING_MALL: Type %d not implemented\n", iType);
+					break;
+			}
+		}
+		break;
+
+		case WIZ_ITEM_TRADE:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case 0:
+				{
+					uint8_t iErrorCode = pkt.read<uint8_t>();
+					fprintf(stdout, "RecvProcess::WIZ_ITEM_TRADE: Error Code: %d\n", iErrorCode);
+				}
+				break;
+
+				case 1:
+				{
+					uint32_t iGold = pkt.read<uint32_t>();
+					uint32_t iTransactionFee = pkt.read<uint32_t>();
+					uint8_t iSellingGroup = pkt.read<uint8_t>();
+
+					SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+
+					fprintf(stdout, "RecvProcess::WIZ_ITEM_TRADE: %d,%d,%d\n", iGold, iTransactionFee, iSellingGroup);
+				}
+				break;
+
+				default:
+					fprintf(stdout, "RecvProcess::WIZ_ITEM_TRADE: Type %d not implemented\n", iType);
+					break;
+			}
+		}
+		break;
+
+		case WIZ_MAP_EVENT:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case 9:
+				{
+					m_bLunarWarDressUp = pkt.read<uint8_t>();
+				}
+				break;
+
+				default:
+					fprintf(stdout, "RecvProcess::WIZ_MAP_EVENT: Type %d not implemented\n", iType);
+					break;
+			}
+		}
+		break;
+
+		case WIZ_EXCHANGE:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case TradeSubPacket::TRADE_REQUEST:
+				{
+				}
+				break;
+
+				case TradeSubPacket::TRADE_AGREE:
+				{
+				}
+				break;
+
+				case TradeSubPacket::TRADE_ADD:
+				{
+				}
+				break;
+
+				case TradeSubPacket::TRADE_OTHER_ADD:
+				{
+				}
+				break;
+
+				case TradeSubPacket::TRADE_DECIDE:
+				{
+				}
+				break;
+
+				case TradeSubPacket::TRADE_OTHER_DECIDE:
+				{
+				}
+				break;
+
+				case TradeSubPacket::TRADE_DONE:
+				{
+					uint8_t iResult = pkt.read<uint8_t>();
+
+					if (iResult == 1)
+					{
+						m_PlayerMySelf.iGold = pkt.read<uint32_t>();
+
+						int16_t iItemCount = pkt.read<int16_t>();
+
+						for (int32_t i = 0; i < iItemCount; i++)
+						{
+							uint8_t iItemPos = pkt.read<uint8_t>();
+
+							m_PlayerMySelf.tInventory[14 + iItemPos].iItemID = pkt.read<uint32_t>();
+							m_PlayerMySelf.tInventory[14 + iItemPos].iCount = pkt.read<int16_t>();
+							m_PlayerMySelf.tInventory[14 + iItemPos].iDurability = pkt.read<int16_t>();
+
+							printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Item - %d,%d,%d \n", 
+								m_PlayerMySelf.tInventory[14 + iItemPos].iItemID, 
+								m_PlayerMySelf.tInventory[14 + iItemPos].iCount,
+								m_PlayerMySelf.tInventory[14 + iItemPos].iDurability);
+						}
+
+						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Success - %d,%d \n", m_PlayerMySelf.iGold, iItemCount);
+					}
+					else
+						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Failed\n");
+				}
+				break;
+
+				case TradeSubPacket::TRADE_CANCEL:
+				{
+				}
+				break;
+
+				default:
+					fprintf(stdout, "RecvProcess::WIZ_EXCHANGE: Type %d not implemented\n", iType);
+					break;
+			}
+		}
+		break;
+
+		case WIZ_ROTATE:
+		{
+			int32_t iID = pkt.read<int32_t>();
+			float fRotation = pkt.read<int16_t>() / 100.0f;
+
+			if (m_PlayerMySelf.iID == iID)
+			{
+				m_PlayerMySelf.fRotation = fRotation;
+
+				printf("RecvProcess::WIZ_ROTATE: %s MySelf Rotate %f\n", m_PlayerMySelf.szName.c_str(), fRotation);
+			}
+			else
+			{
+				if (iID >= 5000)
+				{
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+						[iID](const TNpc& a) { return a.iID == iID; });
+
+					if (it != m_vecNpc.end())
+					{
+						it->fRotation = fRotation;
+
+						printf("RecvProcess::WIZ_ROTATE: %d Npc Rotate %f\n", iID, fRotation);
+					}
+				}
+				else
+				{
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[iID](const TPlayer& a) { return a.iID == iID; });
+
+					if (it != m_vecPlayer.end())
+					{
+						it->fRotation = fRotation;
+
+						printf("RecvProcess::WIZ_ROTATE: %s Player Rotate %f\n", it->szName.c_str(), fRotation);
+					}
+				}
 			}
 		}
 		break;
@@ -1789,9 +2335,16 @@ void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
+		case WIZ_SHOPPING_MALL:
+		{
+			fprintf(stdout, "SendProcess::WIZ_SHOPPING_MALL\n");
+			SetTarget(-1);
+		}
+		break;
+
 		case WIZ_MAGIC_PROCESS:
 		{
-			fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
+			//fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
 		}
 		break;
 	}
@@ -2081,6 +2634,25 @@ void Client::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTaragetPosition
 		<< uint16_t(vecTaragetPosition.m_fX * 10.0f)
 		<< uint16_t(vecTaragetPosition.m_fY * 10.0f)
 		<< int16_t(vecTaragetPosition.m_fZ * 10.0f);
+
+	SendPacket(pkt);
+}
+
+void Client::SendShoppingMall(ShoppingMallType eType)
+{
+	Packet pkt = Packet(WIZ_SHOPPING_MALL);
+
+	switch (eType)
+	{
+		case ShoppingMallType::STORE_CLOSE:
+			pkt << uint8_t(eType);
+			break;
+
+		case ShoppingMallType::STORE_PROCESS:
+		case ShoppingMallType::STORE_LETTER:
+			pkt << uint8_t(eType) << uint8_t(1);
+			break;
+	}
 
 	SendPacket(pkt);
 }

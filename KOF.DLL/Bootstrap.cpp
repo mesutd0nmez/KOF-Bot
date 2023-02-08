@@ -41,11 +41,6 @@ void Bootstrap::InitializeTable()
 		* Load Skill Table
 		*/
 		m_pTbl_Skill.Load(".\\Data\\skill_magic_main_us.tbl");
-
-		for (const auto& x : m_pTbl_Skill.GetData())
-		{
-			printf("%d - %s - %s\n", x.second.iID, x.second.szName.c_str(), x.second.szEngName.c_str());
-		}
 		m_pTbl_Skill_Extension1.Load(".\\Data\\skill_magic_1.tbl");
 		m_pTbl_Skill_Extension2.Load(".\\Data\\skill_magic_2.tbl");
 		m_pTbl_Skill_Extension3.Load(".\\Data\\skill_magic_3.tbl");

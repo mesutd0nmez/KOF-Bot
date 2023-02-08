@@ -34,23 +34,23 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         }
         break;
 
-        case DLL_THREAD_ATTACH:
-        {
-            printf("EntryPoint::DLL_THREAD_ATTACH\n");
-        }
-        break;
+        //case DLL_THREAD_ATTACH:
+        //{
+        //    printf("EntryPoint::DLL_THREAD_ATTACH\n");
+        //}
+        //break;
 
-        case DLL_THREAD_DETACH:
-        {
-            printf("EntryPoint::DLL_THREAD_DETACH\n");
-        }
-        break;
+        //case DLL_THREAD_DETACH:
+        //{
+        //    printf("EntryPoint::DLL_THREAD_DETACH\n");
+        //}
+        //break;
 
-        case DLL_PROCESS_DETACH:
-        {
-            printf("EntryPoint::DLL_PROCESS_DETACH\n");
-        }
-        break;
+        //case DLL_PROCESS_DETACH:
+        //{
+        //    printf("EntryPoint::DLL_PROCESS_DETACH\n");
+        //}
+        //break;
     }
 
     return TRUE;

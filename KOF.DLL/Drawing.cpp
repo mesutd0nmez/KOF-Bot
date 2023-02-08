@@ -147,6 +147,21 @@ void Drawing::DrawGameController()
 
             ImGui::PopStyleColor(1);
 
+            bool bCharacterStatus = m_UserConfig->GetBool("Automation", "Character", false);
+
+            if (bCharacterStatus)
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+            else
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+
+            if (ImGui::Button("Character", ImVec2(100.0f, 0.0f)))
+            {
+                bCharacterStatus = !bCharacterStatus;
+                m_UserConfig->SetInt("Automation", "Character", bCharacterStatus);
+            }
+
+            ImGui::PopStyleColor(1);
+
             ImGui::SameLine();
 
             bool bProtectionStatus = m_UserConfig->GetBool("Automation", "Protection", false);
@@ -388,6 +403,18 @@ void Drawing::DrawMainProtectionArea()
 
         ImGui::PopItemWidth();
     }
+
+    ImGui::Spacing();
+    {
+        bool bGodMode = m_UserConfig->GetBool("Protection", "GodMode", false);
+
+        if (ImGui::Checkbox("##GodMode", &bGodMode))
+            m_UserConfig->SetInt("Protection", "GodMode", bGodMode ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text("God Mode");
+    }
 }
 
 void Drawing::DrawMainFeaturesArea()
@@ -399,17 +426,6 @@ void Drawing::DrawMainFeaturesArea()
 
         ImGui::Spacing();
         {
-            bool bGodMode = m_UserConfig->GetBool("Feature", "GodMode", false);
-
-            if (ImGui::Checkbox("##GodMode", &bGodMode))
-                m_UserConfig->SetInt("Feature", "GodMode", bGodMode ? 1 : 0);
-
-            ImGui::SameLine();
-
-            ImGui::Text("God Mode");
-
-            ImGui::SameLine();
-
             bool bHyperNoah = m_UserConfig->GetBool("Feature", "HyperNoah", false);
 
             if (ImGui::Checkbox("##HyperNoah", &bHyperNoah))
