@@ -5,6 +5,7 @@
 #include "AttackHandler.h"
 #include "CharacterHandler.h"
 #include "ProtectionHandler.h"
+#include "AutoLootHandler.h"
 #include "Bootstrap.h"
 
 Client::Client()
@@ -21,25 +22,34 @@ Client::Client()
 
 	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
 
-	m_bCharacterLoaded = false;
-
 	m_vecNpc.clear();
 	m_vecPlayer.clear();
 
 	m_iTargetID = -1;
 
 	m_mapActiveBuffList.clear();
+	m_mapSkillUseTime.clear();
 
 	m_bLunarWarDressUp = false;
+
+	m_vecAvailableSkill.clear();
+
+	m_vecLootList.clear();
+
+	m_bIsMovingToLoot = false;
+
+	printf("Client::Initialized\n");
 }
 
 Client::~Client()
 {
 	printf("Client::Destroy\n");
 
+	Stop();
+
 	m_mapAddressList.clear();
 
-	m_byState = BOOTSTRAP;
+	m_byState = LOST;
 	m_bWorking = false;
 
 	m_dwRecvHookAddress = 0;
@@ -47,33 +57,64 @@ Client::~Client()
 
 	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
 
-	m_bCharacterLoaded = false;
-
 	m_vecNpc.clear();
 	m_vecPlayer.clear();
 
 	m_iTargetID = -1;
 
 	m_mapActiveBuffList.clear();
+	m_mapSkillUseTime.clear();
 
 	m_bLunarWarDressUp = false;
+
+	m_vecAvailableSkill.clear();
+
+	m_vecLootList.clear();
+
+	printf("Client::Destroyed\n");
 }
 
 void Client::Start()
 {
-	printf("Client::Start\n");
+	printf("Client::Starting\n");
 
 	m_bWorking = true;
 
 	new std::thread([]() { MainProcess(); });
 	new std::thread([]() { HookProcess(); });
+
+	printf("Client::Started\n");
 }
 
 void Client::Stop()
 {
-	printf("Client::Stop\n");
+	printf("Client::Stoping\n");
 
 	m_bWorking = false;
+
+	StopHandler();
+
+	printf("Client::Stopped\n");
+}
+
+void Client::StartHandler()
+{
+	printf("Client::StartHandler\n");
+
+	AttackHandler::Start();
+	CharacterHandler::Start();
+	ProtectionHandler::Start();
+	AutoLootHandler::Start();
+}
+
+void Client::StopHandler()
+{
+	printf("Client::StopHandler\n");
+
+	AttackHandler::Stop();
+	CharacterHandler::Stop();
+	ProtectionHandler::Stop();
+	AutoLootHandler::Stop();
 }
 
 void Client::LoadUserConfig(std::string strCharacterName)
@@ -128,16 +169,9 @@ void Client::MainProcess()
 
 	HookSendAddress();
 
-	if (Client::IsCharacterLoaded())
-		SetState(State::GAME);
-
-	AttackHandler::Start();
-	CharacterHandler::Start();
-	ProtectionHandler::Start();
-
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		switch (GetState())
 		{
@@ -150,14 +184,14 @@ void Client::MainProcess()
 void Client::BootstrapProcess()
 {
 	while (!Client::IsIntroPhase())
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	Client::PushPhase(Client::GetAddress("KO_PTR_LOGIN"));
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 	while (!Client::IsLoginPhase())
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -175,16 +209,6 @@ void Client::GameProcess()
 	{
 		fprintf(stdout, "%s Connection lost\n", strCharacterName.c_str());
 		Client::SetState(State::LOST);
-	}
-	else
-	{
-		if (Client::IsCharacterLoaded())
-		{
-			std::string strCharacterName = GetName();
-
-			if (!IsUserConfigLoaded(strCharacterName))
-				LoadUserConfig(strCharacterName);
-		}
 	}
 }
 
@@ -205,7 +229,8 @@ DWORD Client::GetAddress(std::string strAddressName)
 
 float Client::GetDistance(Vector3 v3Position)
 {
-	return GetDistance(m_PlayerMySelf.fX, m_PlayerMySelf.fY, v3Position.m_fX, v3Position.m_fY);
+	Vector3 v3MyPosition = GetPosition();
+	return GetDistance(v3MyPosition.m_fX, v3MyPosition.m_fY, v3Position.m_fX, v3Position.m_fY);
 }
 
 float Client::GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition)
@@ -215,7 +240,8 @@ float Client::GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition)
 
 float Client::GetDistance(float fX, float fY)
 {
-	return GetDistance(m_PlayerMySelf.fX, m_PlayerMySelf.fY, fX, fY);
+	Vector3 v3MyPosition = GetPosition();
+	return GetDistance(v3MyPosition.m_fX, v3MyPosition.m_fY, fX, fY);
 }
 
 float Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
@@ -227,13 +253,32 @@ int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 {
 	int32_t iItemCount = 0;
 
-	for (int i = 0; i < INVENTORY_TOTAL; i++)
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
 		if (m_PlayerMySelf.tInventory[i].iItemID == iItemID)
 			iItemCount += m_PlayerMySelf.tInventory[i].iCount;
 	}
 
 	return iItemCount;
+}
+
+TInventory* Client::GetInventoryItem(uint32_t iItemID)
+{
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		if (m_PlayerMySelf.tInventory[i].iItemID == iItemID)
+			return &m_PlayerMySelf.tInventory[i];
+	}
+
+	return NULL;
+}
+
+TInventory* Client::GetInventoryItemSlot(uint8_t iSlotPosition)
+{
+	if (m_PlayerMySelf.tInventory[iSlotPosition].iItemID != 0)
+		return &m_PlayerMySelf.tInventory[iSlotPosition];
+
+	return NULL;
 }
 
 bool Client::IsIntroPhase()
@@ -249,11 +294,6 @@ bool Client::IsLoginPhase()
 bool Client::IsDisconnect()
 {
 	return Memory::Read4Byte(Memory::Read4Byte(GetAddress("KO_PTR_PKT")) + GetAddress("KO_OFF_DISCONNECT")) == 0;
-};
-
-bool Client::IsCharacterLoaded()
-{
-	return m_bCharacterLoaded;
 };
 
 DWORD Client::GetRecvAddress()
@@ -326,29 +366,39 @@ uint64_t Client::GetMaxExp()
 	return m_PlayerMySelf.iExpNext;
 }
 
-DWORD Client::GetGoX()
+float Client::GetGoX()
 {
-	return Memory::Read4Byte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"));
+	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"));
 }
 
-DWORD Client::GetGoY()
+float Client::GetGoY()
 {
-	return Memory::Read4Byte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"));
+	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"));
+}
+
+float Client::GetGoZ()
+{
+	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"));
 }
 
 float Client::GetX()
 {
-	return m_PlayerMySelf.fX;
-}
-
-float Client::GetY()
-{
-	return m_PlayerMySelf.fY;
+	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"));
 }
 
 float Client::GetZ()
 {
-	return m_PlayerMySelf.fZ;
+	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"));
+}
+
+float Client::GetY()
+{
+	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"));
+}
+
+uint8_t Client::GetAuthority()
+{
+	return Memory::ReadByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"));
 }
 
 uint8_t Client::GetSkillPoint(int32_t Slot)
@@ -373,7 +423,7 @@ int32_t Client::GetTarget()
 
 Vector3 Client::GetPosition()
 {
-	return Vector3(m_PlayerMySelf.fX, m_PlayerMySelf.fZ, m_PlayerMySelf.fY);
+	return Vector3(GetX(), GetZ(), GetY());
 }
 
 Vector3 Client::GetTargetPosition()
@@ -398,10 +448,145 @@ Vector3 Client::GetTargetPosition()
 	return Vector3(0.0f, 0.0f, 0.0f);
 }
 
+std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
+{
+	auto it = m_mapSkillUseTime.find(iSkillID);
+
+	if (it != m_mapSkillUseTime.end())
+		return it->second;
+
+	return (std::chrono::milliseconds)0;
+}
+
+void Client::SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime)
+{
+	auto it = m_mapSkillUseTime.find(iSkillID);
+
+	if (it == m_mapSkillUseTime.end())
+		m_mapSkillUseTime.insert(std::pair(iSkillID, iSkillUseTime));
+	else
+		it->second = iSkillUseTime;
+}
+
+void Client::LoadSkillData()
+{
+	printf("Client::LoadSkillData: Start Load Character Skill Data\n");
+
+	m_vecAvailableSkill.clear();
+
+	auto pSkillList = Bootstrap::GetSkillTable().GetData();
+
+	for (const auto& [key, value] : pSkillList)
+	{
+		if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(Client::GetClass())))
+			continue;
+
+		if (value.iTarget != SkillTargetType::TARGET_SELF && value.iTarget != SkillTargetType::TARGET_PARTY_ALL && value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME &&
+			value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+			continue;
+
+		if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
+			continue;
+
+		switch (value.iNeedSkill % 10)
+		{
+		case 0:
+			if (value.iNeedLevel > Client::GetLevel())
+				continue;
+			break;
+		case 5:
+			if (value.iNeedLevel > Client::GetSkillPoint(5))
+				continue;
+			break;
+		case 6:
+			if (value.iNeedLevel > Client::GetSkillPoint(6))
+				continue;
+			break;
+		case 7:
+			if (value.iNeedLevel > Client::GetSkillPoint(7))
+				continue;
+			break;
+		case 8:
+			if (value.iNeedLevel > Client::GetSkillPoint(8))
+				continue;
+			break;
+		}
+
+		m_vecAvailableSkill.push_back(value);
+	}
+}
+
+bool Client::UseItem(uint32_t iItemID)
+{
+	auto pItemTable = Bootstrap::GetItemTable().GetData();
+	auto pSkillTable = Bootstrap::GetSkillTable().GetData();
+
+	auto pItemData = pItemTable.find(iItemID);
+
+	if (pItemData != pItemTable.end())
+	{
+		auto pSkillData = pSkillTable.find(pItemData->second.dwEffectID1);
+
+		if (pSkillData != pSkillTable.end())
+		{
+			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+				);
+
+			std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(pSkillData->second.iID);
+
+			if (pSkillData->second.iCooldown > 0 && msLastSkillUseItem.count() > 0)
+			{
+				int64_t iSkillCooldownTime = static_cast<int64_t>(pSkillData->second.iCooldown) * 100;
+
+				if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+					return false;
+			}
+
+			UseSkill(pSkillData->second, GetID());
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+DWORD Client::GetRecvHookAddress()
+{
+	return m_dwRecvHookAddress;
+};
+
+DWORD Client::GetSendHookAddress()
+{
+	return m_dwSendHookAddress;
+};
+
+void Client::SetPosition(Vector3 v3Position)
+{
+	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"), v3Position.m_fX);
+	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"), v3Position.m_fY);
+	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"), v3Position.m_fZ);
+}
+
+void Client::SetMovePosition(Vector3 v3MovePosition)
+{
+	Memory::WriteByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MOVE_TYPE"), 2);
+	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"), v3MovePosition.m_fX);
+	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"), v3MovePosition.m_fY);
+	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"), v3MovePosition.m_fZ);
+	Memory::WriteByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MOVE"), 1);
+}
+
+void Client::SetAuthority(uint8_t iAuthority)
+{
+	Memory::WriteByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"), iAuthority);
+}
+
 void Client::PushPhase(DWORD address)
 {
-	PushPhaseCall pPushPhaseCallFnc = (PushPhaseCall)GetAddress("KO_PTR_PUSH_PHASE");
-	pPushPhaseCallFnc(*reinterpret_cast<int*>(address));
+	PushPhaseFunction pPushPhaseFunction = (PushPhaseFunction)GetAddress("KO_PTR_PUSH_PHASE");
+	pPushPhaseFunction(*reinterpret_cast<int*>(address));
 }
 
 void Client::SetLoginInformation(std::string strAccountId, std::string strAccountPassword)
@@ -422,15 +607,15 @@ void Client::ConnectLoginServer(bool bDisconnect)
 {
 	if (bDisconnect)
 	{
-		LoginCall1 pLoginCallFnc1 = (LoginCall1)GetAddress("KO_PTR_LOGIN_DC");
-		pLoginCallFnc1(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
+		DisconnectFunction pDisconnectFunction = (DisconnectFunction)GetAddress("KO_PTR_LOGIN_DC");
+		pDisconnectFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
 	}
 
-	LoginCall1 pLoginCallFnc1 = (LoginCall1)GetAddress("KO_PTR_LOGIN1");
-	pLoginCallFnc1(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
+	Login1Function pLogin1Function = (Login1Function)GetAddress("KO_PTR_LOGIN1");
+	pLogin1Function(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
 
-	LoginCall2 pLoginCallFnc2 = (LoginCall2)GetAddress("KO_PTR_LOGIN2");
-	pLoginCallFnc2(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
+	Login2Function pLogin2Function = (Login2Function)GetAddress("KO_PTR_LOGIN2");
+	pLogin2Function(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
 }
 
 void Client::ConnectGameServer(BYTE byServerId)
@@ -440,38 +625,44 @@ void Client::ConnectGameServer(BYTE byServerId)
 
 	Memory::Write4Byte(dwCUILoginIntro + GetAddress("KO_OFF_LOGIN_SERVER_INDEX"), byServerId);
 
-	LoginServerCall pLoginServerCallFnc = (LoginServerCall)GetAddress("KO_PTR_SERVER_SELECT");
-	pLoginServerCallFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
+	LoginServerFunction pLoginServerFunction = (LoginServerFunction)GetAddress("KO_PTR_SERVER_SELECT");
+	pLoginServerFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_LOGIN")));
 }
 
 void Client::SelectCharacterSkip()
 {
-	CharacterSelectSkipCall pCharacterSelectEnterCallFnc = (CharacterSelectSkipCall)GetAddress("KO_PTR_CHARACTER_SELECT_SKIP");
-	pCharacterSelectEnterCallFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
+	CharacterSelectSkipFunction pCharacterSelectEnterFunction = (CharacterSelectSkipFunction)GetAddress("KO_PTR_CHARACTER_SELECT_SKIP");
+	pCharacterSelectEnterFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
 }
 
 void Client::SelectCharacter(BYTE byCharacterIndex)
 {
-	CharacterSelectCall pCharacterSelectCallFnc = (CharacterSelectCall)GetAddress("KO_PTR_CHARACTER_SELECT_ENTER");
-	pCharacterSelectCallFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
+	CharacterSelectFunction pCharacterSelectFunction = (CharacterSelectFunction)GetAddress("KO_PTR_CHARACTER_SELECT_ENTER");
+	pCharacterSelectFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
 }
 
-void Client::RouteStart(float fX, float fY, float fZ)
+void Client::RouteStart(Vector3 vec3MovePosition)
 {
-	Vector3 *pVector3 = new Vector3(fX, fZ, fY);
-	RouteStartCall pRouteStartCallFnc = (RouteStartCall)GetAddress("KO_PTR_ROUTE_START_CALL");
-	pRouteStartCallFnc(*reinterpret_cast<int*>(GetAddress("KO_PTR_CHR")), pVector3);
+	RouteStartFunction pRouteStartFunction = (RouteStartFunction)GetAddress("KO_PTR_ROUTE_START_CALL");
+	pRouteStartFunction(*reinterpret_cast<int*>(GetAddress("KO_PTR_CHR")), &vec3MovePosition);
 }
 
-DWORD Client::GetRecvHookAddress()
+void Client::EquipOreads(int32_t iItemID)
 {
-	return m_dwRecvHookAddress;
-};
+	EquipOreadsFunction pEquipOreadsFunction = (EquipOreadsFunction)GetAddress("KO_PTR_EQUIP_ITEM");
+	pEquipOreadsFunction(*reinterpret_cast<int*>(GetAddress("KO_PTR_CHR")), iItemID, 0);
+}
 
-DWORD Client::GetSendHookAddress()
+void Client::SetOreads(bool bValue)
 {
-	return m_dwSendHookAddress;
-};
+	Memory::Write4Byte(Memory::Read4Byte(0xF7F35C) + GetAddress("KO_OFF_LOOT"), bValue ? 1 : 0);
+}
+
+void Client::SendPacket(Packet vecBuffer)
+{
+	SendFunction pSendFunction = (SendFunction)GetAddress("KO_SND_FNC");
+	pSendFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
+}
 
 void Client::HookRecvAddress()
 {
@@ -635,8 +826,6 @@ TPlayer Client::InitializePlayer(Packet& pkt)
 	uint8_t iUnknown1 = (e_Nation)pkt.read<uint8_t>();
 	uint8_t iUnknown2 = (e_Nation)pkt.read<uint8_t>();
 
-	// KNIGHT DATA START
-
 	tPlayer.iKnightsID = pkt.read<int16_t>();
 	tPlayer.eKnightsDuty = (e_KnightsDuty)pkt.read<uint8_t>();
 
@@ -656,8 +845,6 @@ TPlayer Client::InitializePlayer(Packet& pkt)
 
 	uint8_t iUnknown3 = pkt.read<uint8_t>();
 	uint8_t iUnknown4 = pkt.read<uint8_t>();
-
-	// KNIGHT DATA END
 
 	tPlayer.iLevel = pkt.read<uint8_t>();
 
@@ -859,8 +1046,6 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			m_PlayerMySelf.iRealmPoint = pkt.read<uint32_t>();
 			m_PlayerMySelf.iRealmPointMonthly = pkt.read<uint32_t>();
 
-			// KNIGHT DATA START
-
 			m_PlayerMySelf.iKnightsID = pkt.read<int16_t>();
 			m_PlayerMySelf.eKnightsDuty = (e_KnightsDuty)pkt.read<uint8_t>();
 
@@ -881,8 +1066,6 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			uint8_t iB = pkt.read<uint8_t>();
 
 			uint8_t iUnknown1 = pkt.read<uint8_t>();
-
-			// KNIGHT DATA END
 
 			uint8_t iUnknown2 = pkt.read<uint8_t>();
 			uint8_t iUnknown3 = pkt.read<uint8_t>();
@@ -942,11 +1125,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				m_PlayerMySelf.tInventory[i].iExpirationTime = pkt.read<uint32_t>();
 			}
 
-			m_bCharacterLoaded = true;
+			m_PlayerMySelf.bBlinking = true;
 
 			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
-
-			Client::SetState(State::GAME);
 		}
 		break;
 
@@ -1398,65 +1579,36 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
-		case WIZ_ITEM_GET:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-
-			switch (iType)
-			{
-				case 0x00:
-				{
-					uint32_t iBundleID = pkt.read<uint32_t>();
-					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
-				}
-				break;
-
-				case 0x01:
-				case 0x02:
-				case 0x05:
-				{
-					uint32_t iBundleID = pkt.read<uint32_t>();
-					uint8_t iPos = pkt.read<uint8_t>();
-					uint32_t iItemID = pkt.read<uint32_t>();
-
-					uint16_t iItemCount = 0;
-
-					if (iType == 1 || iType == 5)
-						iItemCount = pkt.read<uint16_t>();
-
-					uint32_t iGold = pkt.read<uint32_t>();
-
-					m_PlayerMySelf.tInventory[14 + iPos].iItemID = iItemID;
-					m_PlayerMySelf.tInventory[14 + iPos].iCount = iItemCount;
-
-					m_PlayerMySelf.iGold = iGold;
-
-					printf("RecvProcess::WIZ_ITEM_GET: %d,%d,%d,%d,%d,%d\n", iType, iBundleID, iPos, iItemID, iItemCount, iGold);
-				}
-				break;
-
-				case 0x03:
-				{
-					uint32_t iBundleID = pkt.read<uint32_t>();
-					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
-				}
-				break;
-
-				case 0x06:
-				{
-					printf("RecvProcess::WIZ_ITEM_GET: Inventory Full\n");
-				}
-				break;
-			default:
-				printf("RecvProcess::WIZ_ITEM_GET: %d Type Not Implemented\n", iType);
-				break;
-			}
-		}
-		break;
-
 		case WIZ_GAMESTART:
 		{
 			printf("RecvProcess::WIZ_GAMESTART: Started\n");
+
+			std::string strCharacterName = GetName();
+
+			if (!IsUserConfigLoaded(strCharacterName))
+				LoadUserConfig(strCharacterName);
+
+			auto pUserConfig = Client::GetUserConfig(Client::GetName());
+
+			if (pUserConfig != NULL)
+			{
+				bool bWallHack = pUserConfig->GetBool("Feature", "WallHack", false);
+
+				if (bWallHack)
+					SetAuthority(0);
+
+				bool bOreads = pUserConfig->GetBool("Feature", "Oreads", false);
+
+				if (bOreads)
+				{
+					Client::EquipOreads(700039000);
+					Client::SetOreads(bOreads);
+				}
+			}
+
+			StartHandler();
+
+			Client::SetState(State::GAME);
 		}
 		break;
 
@@ -1609,41 +1761,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			if (iNpcCount < 0 || iNpcCount >= 1000)
 				return;
 
-			std::set<int32_t> iSetNpcID;
-
-			for (int16_t i = 0; i < iNpcCount; i++)
-			{
-				int32_t iID = pkt.read<int32_t>();
-				iSetNpcID.insert(iID);
-			}
-
-			if (iSetNpcID.empty())
-			{
-				printf("RecvProcess::WIZ_NPC_REGION: All npc cleared\n");
-				m_vecNpc.clear();
-				return;
-			}
-
-			//auto it = m_vecNpc.begin();
-			//while (it != m_vecNpc.end())
-			//{
-			//	auto iNpcId = iSetNpcID.find(it->iID);
-
-			//	if (iNpcId != iSetNpcID.end())
-			//	{
-			//		iSetNpcID.erase(iNpcId);
-			//	}
-			//	else
-			//	{
-			//		if ((PSA_DYING == it->eState || PSA_DEATH == it->eState))
-			//			continue;
-			//		else
-			//			it = m_vecNpc.erase(it);
-			//	}
-			//}
-			
-
-			printf("RecvProcess::WIZ_NPC_REGION: New npc count %d\n", iSetNpcID.size());
+			printf("RecvProcess::WIZ_NPC_REGION: New npc count %d\n", iNpcCount);
 		}
 		break;
 
@@ -1661,20 +1779,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						if (iUserCount < 0 || iUserCount >= 1000)
 							return;
 
-					std::set<int32_t> iSetUserID;
-
-					for (int16_t i = 0; i < iUserCount; i++)
-					{
-						int32_t iID = pkt.read<int32_t>();
-						iSetUserID.insert(iID);
-					}
-
-					if (iSetUserID.empty())
-					{
-						printf("RecvProcess::WIZ_REGIONCHANGE: All users cleared\n");
-						m_vecPlayer.clear();
-						return;
-					}
+					printf("RecvProcess::WIZ_REGIONCHANGE: New user count %d\n", iUserCount);
 				}
 				break;
 
@@ -1795,14 +1900,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		{
 			int32_t iID = pkt.read<int32_t>();
 			uint8_t iUpdateImmediately = pkt.read<uint8_t>();
-			uint32_t iTargetHPMax = pkt.read<uint32_t>();
-			uint32_t iTargetHPCur = pkt.read<uint32_t>();
+
+			int32_t iTargetHPMax = pkt.read<int32_t>();
+			int32_t iTargetHPCur = pkt.read<int32_t>();
+
 			int16_t iTargetHPChange = pkt.read<int16_t>();
 
 			if (m_PlayerMySelf.iID == iID)
 			{
-				m_PlayerMySelf.iHPMax = (int16_t)iTargetHPMax;
-				m_PlayerMySelf.iHP = (int16_t)iTargetHPCur;
+				m_PlayerMySelf.iHPMax = iTargetHPMax;
+				m_PlayerMySelf.iHP = iTargetHPCur;
 
 				if (m_PlayerMySelf.iHPMax > 0 && m_PlayerMySelf.iHP <= 0)
 					m_PlayerMySelf.eState = PSA_DEATH;
@@ -1819,8 +1926,8 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					if (it != m_vecNpc.end())
 					{
-						it->iHPMax = (int16_t)iTargetHPMax;
-						it->iHP = (int16_t)iTargetHPCur;
+						it->iHPMax = iTargetHPMax;
+						it->iHP = iTargetHPCur;
 
 						if (it->iHPMax > 0 && it->iHP <= 0)
 							it->eState = PSA_DEATH;
@@ -1835,8 +1942,8 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					if (it != m_vecPlayer.end())
 					{
-						it->iHPMax = (int16_t)iTargetHPMax;
-						it->iHP = (int16_t)iTargetHPCur;
+						it->iHPMax = iTargetHPMax;
+						it->iHP = iTargetHPCur;
 
 						if (it->iHPMax > 0 && it->iHP <= 0)
 							it->eState = PSA_DEATH;
@@ -2004,6 +2111,25 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				break;
 
+				case SkillMagicType::SKILL_MAGIC_TYPE_FAIL:
+				{
+					uint32_t iSkillID = pkt.read<uint32_t>();
+					int32_t iSourceID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+					int32_t iData[6];
+
+					for (size_t i = 0; i < 6; i++)
+						iData[i] = pkt.read<int32_t>();
+
+					if (iData[3] == -100 || iData[3] == -103)
+					{
+						printf("RecvProcess::WIZ_MAGIC_PROCESS: %d - Skill failed %d\n", iSkillID, iData[3]);
+						Client::SetSkillUseTime(iSkillID, (std::chrono::milliseconds)0);
+					}
+				}
+				break;
+
 				case SkillMagicType::SKILL_MAGIC_TYPE_BUFF:
 				{
 					uint8_t iBuffType = pkt.read<uint8_t>();
@@ -2031,7 +2157,6 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					m_mapActiveBuffList.erase(iBuffType);
 				}
 				break;
-
 			default:
 				printf("RecvProcess::WIZ_MAGIC_PROCESS: %d Type Not Implemented!\n", iType);
 				break;
@@ -2047,7 +2172,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			switch (iType)
 			{
-				case 3: //Abnormal Type - Blinking
+				case 3:
 				{
 					switch (iBuff)
 					{
@@ -2311,6 +2436,154 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			}
 		}
 		break;
+
+		case WIZ_ITEM_DROP:
+		{
+			TLoot tLoot;
+			memset(&tLoot, 0, sizeof(tLoot));
+
+			tLoot.iNpcID = pkt.read<int32_t>();
+			tLoot.iBundleID = pkt.read<uint32_t>();
+			tLoot.iItemCount = pkt.read<uint8_t>();
+	
+			tLoot.msDropTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+
+			tLoot.iRequestedOpen = false;
+
+			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
+				[tLoot](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
+
+			if (pLoot == m_vecLootList.end())
+				m_vecLootList.push_back(tLoot);
+			else
+				*pLoot = tLoot;
+
+			printf("RecvProcess::WIZ_ITEM_DROP: %d,%d,%d,%lld\n", 
+				tLoot.iNpcID, 
+				tLoot.iBundleID, 
+				tLoot.iItemCount, 
+				tLoot.msDropTime.count());
+		}
+		break;
+
+		case WIZ_BUNDLE_OPEN_REQ:
+		{
+			uint32_t iBundleID = pkt.read<uint32_t>();
+			uint8_t iResult = pkt.read<uint8_t>();
+
+			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
+				[iBundleID](const TLoot a) { return a.iBundleID == iBundleID; });
+
+			if (pLoot != m_vecLootList.end())
+			{
+				switch (iResult)
+				{
+					case 0:
+					{
+						fprintf(stdout, "RecvProcess::WIZ_BUNDLE_OPEN_REQ: Bundle open req failed\n");
+					}
+					break;
+
+					case 1:
+					{
+						for (size_t i = 0; i < pLoot->iItemCount; i++)
+						{
+							uint32_t iItemID = pkt.read<uint32_t>();
+							uint32_t iItemCount = pkt.read<int16_t>();
+
+							SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+
+							fprintf(stdout, "RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
+						}
+					}
+					break;
+
+					default:
+						fprintf(stdout, "RecvProcess::WIZ_BUNDLE_OPEN_REQ: Result %d not implemented\n", iResult);
+					break;
+				}
+
+				m_vecLootList.erase(
+					std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+						[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+					m_vecLootList.end());
+			}
+		}
+		break;
+
+		case WIZ_ITEM_GET:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case 0x00:
+				{
+					uint32_t iBundleID = pkt.read<uint32_t>();
+
+					m_vecLootList.erase(
+						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+						m_vecLootList.end());
+
+					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
+				}
+				break;
+
+				case 0x01:
+				case 0x02:
+				case 0x05:
+				{
+					uint32_t iBundleID = pkt.read<uint32_t>();
+					uint8_t iPos = pkt.read<uint8_t>();
+					uint32_t iItemID = pkt.read<uint32_t>();
+
+					uint16_t iItemCount = 0;
+
+					if (iType == 1 || iType == 5)
+						iItemCount = pkt.read<uint16_t>();
+
+					uint32_t iGold = pkt.read<uint32_t>();
+
+					m_PlayerMySelf.tInventory[14 + iPos].iItemID = iItemID;
+					m_PlayerMySelf.tInventory[14 + iPos].iCount = iItemCount;
+
+					m_PlayerMySelf.iGold = iGold;
+
+					m_vecLootList.erase(
+						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+						m_vecLootList.end());
+
+					printf("RecvProcess::WIZ_ITEM_GET: %d,%d,%d,%d,%d,%d\n", iType, iBundleID, iPos, iItemID, iItemCount, iGold);
+				}
+				break;
+
+				case 0x03:
+				{
+					uint32_t iBundleID = pkt.read<uint32_t>();
+
+					m_vecLootList.erase(
+						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+						m_vecLootList.end());
+
+					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
+				}
+				break;
+
+				case 0x06:
+				{
+					printf("RecvProcess::WIZ_ITEM_GET: Inventory Full\n");
+				}
+				break;
+
+				default:
+					printf("RecvProcess::WIZ_ITEM_GET: %d Type Not Implemented\n", iType);
+					break;
+			}
+		}
+		break;
 	}
 
 	//fprintf(stdout, "Recv Packet: %s\n", pkt.toHex().c_str());
@@ -2321,10 +2594,12 @@ void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
 	if (!m_bWorking)
 		return;
 
-	auto pkt = Packet(byBuffer[0], (size_t)dwLength);
+	Packet pkt = Packet(byBuffer[0], (size_t)dwLength);
 	pkt.append(&byBuffer[1], dwLength - 1);
 
-	uint8_t byHeader = pkt.GetOpcode();
+	uint8_t byHeader;
+
+	pkt >> byHeader;
 
 	switch (byHeader)
 	{
@@ -2335,30 +2610,74 @@ void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
-		case WIZ_SHOPPING_MALL:
+		case WIZ_ITEM_MOVE:
 		{
-			fprintf(stdout, "SendProcess::WIZ_SHOPPING_MALL\n");
-			SetTarget(-1);
-		}
-		break;
+			uint8_t iType = pkt.read<uint8_t>();
 
-		case WIZ_MAGIC_PROCESS:
-		{
-			//fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
+			switch (iType)
+			{
+				case 1:
+				{
+					uint8_t iDirection = pkt.read<uint8_t>();
+
+					uint32_t iItemID = pkt.read<uint32_t>();
+
+					uint8_t iCurrentPosition = pkt.read<uint8_t>();
+					uint8_t iTargetPosition = pkt.read<uint8_t>();
+
+					switch (iDirection)
+					{
+						case ITEM_INVEN_SLOT:
+							break;
+						case ITEM_SLOT_INVEN:
+							break;
+						case ITEM_INVEN_INVEN:
+							break;
+						case ITEM_SLOT_SLOT:
+							break;
+						case ITEM_INVEN_ZONE:
+							break;
+						case ITEM_ZONE_INVEN:
+							break;
+						case ITEM_INVEN_TO_COSP:
+							break;
+						case ITEM_COSP_TO_INVEN:
+							break;
+						case ITEM_INVEN_TO_MBAG:
+							break;
+						case ITEM_MBAG_TO_INVEN:
+							break;
+						case ITEM_MBAG_TO_MBAG:
+							break;
+						default:
+							fprintf(stdout, "SendProcess::WIZ_ITEM_MOVE: Direction %d not implemented\n", iDirection);
+							break;
+					}
+
+					fprintf(stdout, "SendProcess::WIZ_ITEM_MOVE: iDirection(%d), iItemID(%d), iCurrentPosition(%d), iTargetPosition(%d)\n",
+						iDirection,
+						iItemID,
+						iCurrentPosition,
+						iTargetPosition
+					);
+				}
+				break;
+
+				default:
+					fprintf(stdout, "SendProcess::WIZ_ITEM_MOVE: Type %d not implemented\n", iType);
+				break;
+			}
 		}
 		break;
 	}
 
-	/*fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());*/
-
-
+	//fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
 }
 
 void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
  {
 	switch (pSkillData.iTarget)
 	{
-
 		case SkillTargetType::TARGET_SELF:
 		case SkillTargetType::TARGET_FRIEND_WITHME:
 		case SkillTargetType::TARGET_FRIEND_ONLY:
@@ -2371,7 +2690,7 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 		case SkillTargetType::TARGET_AREA_ALL:
 		case SkillTargetType::TARGET_DEAD_FRIEND_ONLY:
 		{
-			if (pSkillData.iCastTime != 0)
+			if (pSkillData.iReCastTime != 0)
 			{
 				if (m_PlayerMySelf.iMoveType != 0)
 				{
@@ -2397,7 +2716,7 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 
 			if (iArrowCount > 1)
 			{
-				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition, 1);
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), 1);
 
 				float fDistance = GetDistance(GetTargetPosition());
 
@@ -2407,7 +2726,7 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 					{
 						iArrowCount = 1;
 
-						if (fDistance <= 3.0f)
+						if (fDistance <= 5.0f)
 							iArrowCount = 3;
 						else if (fDistance < 16.0f)
 							iArrowCount = 2;
@@ -2418,11 +2737,11 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 					{
 						iArrowCount = 1;
 
-						if (fDistance <= 1.0f)
+						if (fDistance <= 5.0f)
 							iArrowCount = 5;
-						else if (fDistance <= 2.0f)
+						else if (fDistance <= 6.0f)
 							iArrowCount = 4;
-						else if (fDistance <= 3.0f)
+						else if (fDistance <= 8.0f)
 							iArrowCount = 3;
 						else if (fDistance < 16.0f)
 							iArrowCount = 2;
@@ -2432,8 +2751,8 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 
 				for (uint32_t i = 0; i < iArrowCount; i++)
 				{
-					SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, GetPosition(), (i + 1));
-					SendStartMagicAtTarget(pSkillData, iTargetID, GetPosition(), (i + 1));
+					SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), (i + 1));
+					SendStartMagicAtTarget(pSkillData, iTargetID, v3TargetPosition, (i + 1));
 				}
 			}
 			else
@@ -2445,7 +2764,7 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 		case SkillTargetType::TARGET_PARTY_ALL:
 		case SkillTargetType::TARGET_AREA_ENEMY:
 		{
-			if (pSkillData.iCastTime != 0)
+			if (pSkillData.iReCastTime != 0)
 			{
 				if (m_PlayerMySelf.iMoveType != 0)
 				{
@@ -2464,13 +2783,10 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 		break;
 	}
 
+	Client::SetSkillUseTime(pSkillData.iID, 
+		duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+	);
  }
-
-void Client::SendPacket(Packet vecBuffer)
-{
-	Send pSendFnc = (Send)GetAddress("KO_SND_FNC");
-	pSendFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
-}
 
 void Client::SendTownPacket()
 {
@@ -2653,6 +2969,42 @@ void Client::SendShoppingMall(ShoppingMallType eType)
 			pkt << uint8_t(eType) << uint8_t(1);
 			break;
 	}
+
+	SendPacket(pkt);
+}
+
+void Client::SendRotation(float fRotation)
+{
+	Packet pkt = Packet(WIZ_ROTATE);
+
+	pkt << int16_t(fRotation * 100.f);
+
+	SendPacket(pkt);
+}
+
+void Client::SendRequestBundleOpen(uint32_t iBundleID)
+{
+	Packet pkt = Packet(WIZ_BUNDLE_OPEN_REQ);
+
+	pkt << uint32_t(iBundleID);
+
+	SendPacket(pkt);
+}
+
+void Client::SendBundleItemGet(uint32_t iBundleID, uint32_t iItemID, int16_t iIndex)
+{
+	Packet pkt = Packet(WIZ_ITEM_GET);
+
+	pkt << uint32_t(iBundleID) << uint32_t(iItemID) << int16_t(iIndex);
+
+	SendPacket(pkt);
+}
+
+void Client::SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition)
+{
+	Packet pkt = Packet(WIZ_ITEM_MOVE);
+
+	pkt << uint8_t(iType) << uint8_t(iDirection) << uint32_t(iItemID) << uint8_t(iCurrentPosition) << uint8_t(iTargetPosition);
 
 	SendPacket(pkt);
 }

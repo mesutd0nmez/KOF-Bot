@@ -51,6 +51,9 @@
     <ClInclude Include="ProtectionHandler.h">
       <Filter>Header Files\Handlers</Filter>
     </ClInclude>
+    <ClInclude Include="AutoLootHandler.h">
+      <Filter>Header Files\Handlers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -78,6 +81,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ProtectionHandler.cpp">
+      <Filter>Source Files\Handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="AutoLootHandler.cpp">
       <Filter>Source Files\Handlers</Filter>
     </ClCompile>
   </ItemGroup>

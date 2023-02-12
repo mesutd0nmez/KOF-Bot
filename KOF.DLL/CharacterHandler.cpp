@@ -5,6 +5,8 @@
 
 void CharacterHandler::Start()
 {
+	printf("CharacterHandler::Started\n");
+
 	m_bWorking = true;
 
 	new std::thread([]() { CharacterProcess(); });
@@ -13,13 +15,17 @@ void CharacterHandler::Start()
 void CharacterHandler::Stop()
 {
 	m_bWorking = false;
+
+	printf("CharacterHandler::Stopped\n");
 }
 
 void CharacterHandler::CharacterProcess()
 {
+	printf("CharacterHandler::CharacterProcess Started\n");
+
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (!Client::IsWorking())
 			continue;
@@ -37,6 +43,13 @@ void CharacterHandler::CharacterProcess()
 		if (bCharacterStatus)
 		{
 			std::vector<int> vecCharacterSkillList = pUserConfig->GetInt("Automation", "CharacterSkillList", std::vector<int>());
+
+			auto pSort = [](int& a, int& b)
+			{
+				return a > b;
+			};
+
+			std::sort(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), pSort);
 
 			for (const auto& x : vecCharacterSkillList)
 			{
@@ -67,6 +80,20 @@ void CharacterHandler::CharacterProcess()
 					if (iNeedItem != 0 && iExistItemCount < iNeedItemCount)
 						continue;
 
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(pSkillData->second.iID);
+
+					if (pSkillData->second.iCooldown > 0 && msLastSkillUseItem.count() > 0)
+					{
+						int64_t iSkillCooldownTime = static_cast<int64_t>(pSkillData->second.iCooldown) * 100;
+
+						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							continue;
+					}
+
 					auto pSkillExtension4 = Bootstrap::GetSkillExtension4Table().GetData();
 					auto pSkillExtension4Data = pSkillExtension4.find(pSkillData->second.iID);
 
@@ -80,7 +107,7 @@ void CharacterHandler::CharacterProcess()
 				}
 			}
 		}
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(1250));
 	}
+
+	printf("CharacterHandler::CharacterProcess Stopped\n");
 }

@@ -2,17 +2,14 @@
 
 #include "pch.h"
 
-class AttackHandler
+class AutoLootHandler
 {
 public:
 	static void Start();
 	static void Stop();
 
-	static void BasicAttackProcess();
-	static void AttackProcess();
-	static void SearchTargetProcess();
+	static void AutoLootProcess();
 
 protected:
 	inline static bool m_bWorking;
 };
-

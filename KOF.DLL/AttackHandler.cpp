@@ -5,22 +5,29 @@
 
 void AttackHandler::Start()
 {
+	printf("AttackHandler::Started\n");
+
 	m_bWorking = true;
 
-	new std::thread([]() { SearchTargetProcess(); });
+	new std::thread([]() { BasicAttackProcess(); });
 	new std::thread([]() { AttackProcess(); });
+	new std::thread([]() { SearchTargetProcess(); });
 }
 
 void AttackHandler::Stop()
 {
 	m_bWorking = false;
+
+	printf("AttackHandler::Stopped\n");
 }
 
-void AttackHandler::AttackProcess()
+void AttackHandler::BasicAttackProcess()
 {
+	printf("AttackHandler::BasicAttackProcess Started\n");
+
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (!Client::IsWorking())
 			continue;
@@ -33,6 +40,9 @@ void AttackHandler::AttackProcess()
 		if (Client::GetTarget() == -1)
 			continue;
 
+		if (Client::IsMovingToLoot())
+			continue;
+
 		if (Client::IsBlinking())
 			continue;
 
@@ -41,9 +51,107 @@ void AttackHandler::AttackProcess()
 		if (!bAttackStatus)
 			continue;
 
-		std::vector<int> vecAttackList = pUserConfig->GetInt("Automation", "AttackSkillList", std::vector<int>());
+		bool bBasicAttack = pUserConfig->GetBool("Attack", "BasicAttack", true);
 
-		for (const auto& x : vecAttackList)
+		if (!bBasicAttack)
+			continue;
+
+		bool bMoveToTarget = pUserConfig->GetBool("Attack", "MoveToTarget", false);
+
+		if (bMoveToTarget && Client::GetDistance(Client::GetTargetPosition()) > 1.0f)
+			Client::SetMovePosition(Client::GetTargetPosition());
+
+		bool bRangeLimit = pUserConfig->GetBool("Attack", "RangeLimit", false);
+		int iRangeLimitValue = pUserConfig->GetInt("Attack", "RangeLimitValue", (int)MAX_ATTACK_RANGE);
+
+		if (bRangeLimit && Client::GetDistance(Client::GetTargetPosition()) > (float)iRangeLimitValue)
+			continue;
+
+		auto pItemTable = Bootstrap::GetItemTable().GetData();
+
+		auto iLeftHandWeapon = Client::GetInventoryItemSlot(6);
+
+		uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon->iItemID / 1000 * 1000;
+		auto pLeftHandWeaponItemData = pItemTable.find(iLeftHandWeaponBaseID);
+
+		if (pLeftHandWeaponItemData != pItemTable.end())
+		{
+			if (pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
+				|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
+				|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_CROSS)
+				continue;
+		}
+
+		auto iRightHandWeapon = Client::GetInventoryItemSlot(8);
+		uint32_t iRightHandWeaponBaseID = iRightHandWeapon->iItemID / 1000 * 1000;
+		auto pRightHandWeaponItemData = pItemTable.find(iRightHandWeaponBaseID);
+
+		if (pRightHandWeaponItemData != pItemTable.end())
+		{
+			if (pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
+				|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
+				|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_CROSS)
+				continue;
+		}
+
+		Client::SendBasicAttackPacket(Client::GetTarget(), 1.10f, 1.0f);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1110));
+	}
+
+	printf("AttackHandler::BasicAttackProcess Stopped\n");
+}
+
+void AttackHandler::AttackProcess()
+{
+	printf("AttackHandler::AttackProcess Started\n");
+
+	while (m_bWorking)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		if (!Client::IsWorking())
+			continue;
+
+		auto pUserConfig = Client::GetUserConfig(Client::GetName());
+
+		if (pUserConfig == NULL)
+			continue;
+
+		if (Client::GetTarget() == -1)
+			continue;
+
+		if (Client::IsMovingToLoot())
+			continue;
+
+		if (Client::IsBlinking())
+			continue;
+
+		bool bAttackStatus = pUserConfig->GetBool("Automation", "Attack", false);
+
+		if (!bAttackStatus)
+			continue;
+
+		bool bMoveToTarget = pUserConfig->GetInt("Attack", "MoveToTarget", false);
+
+		if (bMoveToTarget && Client::GetDistance(Client::GetTargetPosition()) > 1.0f)
+			Client::SetMovePosition(Client::GetTargetPosition());
+
+		bool bRangeLimit = pUserConfig->GetBool("Attack", "RangeLimit", false);
+		int iRangeLimitValue = pUserConfig->GetInt("Attack", "RangeLimitValue", (int)MAX_ATTACK_RANGE);
+
+		if (bRangeLimit && Client::GetDistance(Client::GetTargetPosition()) > (float)iRangeLimitValue)
+			continue;
+
+		std::vector<int> vecAttackSkillList = pUserConfig->GetInt("Automation", "AttackSkillList", std::vector<int>());
+
+		auto pSort = [](int& a, int& b)
+		{
+			return a > b;
+		};
+
+		std::sort(vecAttackSkillList.begin(), vecAttackSkillList.end(), pSort);
+
+		for (const auto& x : vecAttackSkillList)
 		{
 			auto pSkillTable = Bootstrap::GetSkillTable().GetData();
 			auto pSkillData = pSkillTable.find(x);
@@ -66,6 +174,22 @@ void AttackHandler::AttackProcess()
 						iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 				}
 
+				std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+					std::chrono::system_clock::now().time_since_epoch()
+				);
+
+				std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(pSkillData->second.iID);
+
+				if (pSkillData->second.iCooldown > 0 && msLastSkillUseItem.count() > 0)
+				{
+					int64_t iSkillCooldownTime = static_cast<int64_t>(pSkillData->second.iCooldown) * 100;
+
+					if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+					{
+						continue;
+					}
+				}
+
 				if (Client::GetMp() < pSkillData->second.iExhaustMSP)
 					continue;
 
@@ -74,25 +198,33 @@ void AttackHandler::AttackProcess()
 
 				Client::UseSkill(pSkillData->second, Client::GetTarget());
 			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(750));
 		}
 
 		bool bAttackSpeed = pUserConfig->GetBool("Attack", "AttackSpeed", false);
 
 		if (bAttackSpeed)
 		{
-			int iAttackSpeedValue = pUserConfig->GetInt("Attack", "AttackSpeedValue", 1250);
-			std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
+			int iAttackSpeedValue = pUserConfig->GetInt("Attack", "AttackSpeedValue", 1000);
+
+			if(iAttackSpeedValue > 0)
+				std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
 		}
 		else
-			std::this_thread::sleep_for(std::chrono::milliseconds(1250));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
+
+	printf("AttackHandler::AttackProcess Stopped\n");
 }
 
 void AttackHandler::SearchTargetProcess()
 {
+	printf("AttackHandler::SearchTargetProcess Started\n");
+
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (!Client::IsWorking())
 			continue;
@@ -103,6 +235,9 @@ void AttackHandler::SearchTargetProcess()
 			continue;
 
 		if (Client::IsBlinking())
+			continue;
+
+		if (Client::IsMovingToLoot())
 			continue;
 
 		bool bAttackStatus = pUserConfig->GetBool("Automation", "Attack", false);
@@ -135,7 +270,7 @@ void AttackHandler::SearchTargetProcess()
 							&& c.iProtoID != 9009
 							&& c.eState != PSA_DYING 
 							&& c.eState != PSA_DEATH
-							&& Client::GetDistance(c.fX, c.fY) <= 45.0f;
+							&& Client::GetDistance(c.fX, c.fY) <= (float)MAX_ATTACK_RANGE;
 					});
 			}
 			else
@@ -151,7 +286,7 @@ void AttackHandler::SearchTargetProcess()
 							&& c.eState != PSA_DYING 
 							&& c.eState != PSA_DEATH 
 							&& std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.iProtoID)
-							&& Client::GetDistance(c.fX, c.fY) <= 45.0f;
+							&& Client::GetDistance(c.fX, c.fY) <= (float)MAX_ATTACK_RANGE;
 					});
 			}
 
@@ -186,7 +321,7 @@ void AttackHandler::SearchTargetProcess()
 					Client::SetTarget(-1);
 				}
 
-				if (Client::GetDistance(it->fX, it->fY) > 45.0f)
+				if (Client::GetDistance(it->fX, it->fY) > (float)MAX_ATTACK_RANGE)
 				{
 					printf("SearchTargetProcess:: %d, Target out of range, selecting new target\n", it->iID);
 					Client::SetTarget(-1);
@@ -205,4 +340,6 @@ void AttackHandler::SearchTargetProcess()
 			}
 		}
 	}
+
+	printf("AttackHandler::SearchTargetProcess Stopped\n");
 }

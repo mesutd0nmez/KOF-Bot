@@ -22,8 +22,8 @@ public:
 
 	static void DrawMainProtectionArea();
 	static void DrawMainFeaturesArea();
+	static void DrawMainAutoLootArea();
 
-	static void	LoadSkillData();
 	static void DrawAutomatedAttackSkillTree();
 	static void DrawAutomatedCharacterSkillTree();
 

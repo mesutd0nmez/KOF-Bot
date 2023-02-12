@@ -87,6 +87,8 @@ void Bootstrap::InitializeTable()
 
 		m_bTableLoaded = true;
 
+		Client::LoadSkillData();
+
 		printf("Bootstrap::InitializeTable: Ended Table Load Thread\n");
 	});
 }
@@ -115,8 +117,8 @@ void Bootstrap::InitializeAddress()
 	ini->GetString("Address", "KO_PTR_CHR", "0xF7F2FC");
 	ini->GetString("Address", "KO_PTR_PKT", "0xF7F334");
 	ini->GetString("Address", "KO_SND_FNC", "0x5EE3D0");
-	ini->GetString("Address", "KO_PTR_FLDB", "0xF7F2F8");
 	ini->GetString("Address", "KO_PTR_ROUTE_START_CALL", "0x7D8440");
+	ini->GetString("Address", "KO_PTR_EQUIP_ITEM", "0x7C1F10");
 
 	ini->GetString("Address", "KO_OFF_DISCONNECT", "0xA0");
 	ini->GetString("Address", "KO_OFF_LOGIN_SERVER_INDEX", "0x410");
@@ -127,28 +129,17 @@ void Bootstrap::InitializeAddress()
 	ini->GetString("Address", "KO_OFF_UI_LOGIN_INTRO_PW", "0x110");
 	ini->GetString("Address", "KO_OFF_UI_LOGIN_INTRO_PW_INPUT", "0x128");
 	ini->GetString("Address", "KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH", "0x138");
-	ini->GetString("Address", "KO_OFF_UI_CHARACTER_SELECT_TIMER", "0x2C");
-	ini->GetString("Address", "KO_OFF_ID", "0x648");
-	ini->GetString("Address", "KO_OFF_MAX_HP", "0x67C");
-	ini->GetString("Address", "KO_OFF_MAX_MP", "0xB24");
-	ini->GetString("Address", "KO_OFF_HP", "0x680");
-	ini->GetString("Address", "KO_OFF_MP", "0xB28");
-	ini->GetString("Address", "KO_OFF_NAME_LEN", "0x65C");
-	ini->GetString("Address", "KO_OFF_NAME", "0x64C");
-	ini->GetString("Address", "KO_OFF_ZONE", "0xBD0");
-	ini->GetString("Address", "KO_OFF_GOLD", "0xB38");
-	ini->GetString("Address", "KO_OFF_LEVEL", "0x678");
-	ini->GetString("Address", "KO_OFF_NATION", "0x684");
-	ini->GetString("Address", "KO_OFF_CLASS", "0x674");
-	ini->GetString("Address", "KO_OFF_MAXEXP", "0xB40");
-	ini->GetString("Address", "KO_OFF_EXP", "0xB48");
+	ini->GetString("Address", "KO_OFF_MOVE_TYPE", "0x3B8");
+	ini->GetString("Address", "KO_OFF_MOVE", "0xF30");
 	ini->GetString("Address", "KO_OFF_GOX", "0xF3C");
 	ini->GetString("Address", "KO_OFF_GOY", "0xF44");
+	ini->GetString("Address", "KO_OFF_GOZ", "0xF40");
 	ini->GetString("Address", "KO_OFF_X", "0xD0");
 	ini->GetString("Address", "KO_OFF_Y", "0xD8");
 	ini->GetString("Address", "KO_OFF_Z", "0xD4");
-	ini->GetString("Address", "KO_OFF_SKILL_TREE_BASE", "0x1DC");
-	ini->GetString("Address", "KO_OFF_SKILL_TREE_POINT_BASE", "0x158");
+
+	ini->GetString("Address", "KO_OFF_AUTHORITY", "0x684");
+	ini->GetString("Address", "KO_OFF_LOOT", "0x948");
 
 	auto configMap = ini->GetConfigMap();
 

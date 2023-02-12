@@ -168,6 +168,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="AttackHandler.h" />
+    <ClInclude Include="AutoLootHandler.h" />
     <ClInclude Include="Bootstrap.h" />
     <ClInclude Include="Client.h" />
     <ClInclude Include="Define.h" />
@@ -180,6 +181,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AttackHandler.cpp" />
+    <ClCompile Include="AutoLootHandler.cpp" />
     <ClCompile Include="Bootstrap.cpp" />
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="dllmain.cpp" />

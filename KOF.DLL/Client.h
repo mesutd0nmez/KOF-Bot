@@ -30,8 +30,10 @@ typedef struct SPlayer
 	e_Race			eRace;
 	e_Class			eClass;
 	uint8_t			iLevel;
-	int16_t			iHPMax;
-	int16_t			iHP;
+	int32_t			iHPMax;
+	int32_t			iHP;
+	int32_t			iMSPMax;
+	int32_t			iMSP;
 	int32_t			iAuthority;
 	uint16_t		iBonusPointRemain;
 
@@ -49,9 +51,6 @@ typedef struct SPlayer
 	std::string		szKnights;
 	uint8_t			iKnightsGrade;
 	uint8_t			iKnightsRank;
-
-	int16_t			iMSPMax;
-	int16_t			iMSP;
 
 	uint32_t		iGold;
 	uint64_t		iExpNext;
@@ -130,9 +129,18 @@ typedef struct SNpc
 	int16_t			iMoveSpeed;
 	uint8_t			iMoveType;
 
-	int16_t			iHPMax;
-	int16_t			iHP;
+	int32_t			iHPMax;
+	int32_t			iHP;
 } TNpc;
+
+typedef struct SLoot
+{
+	int32_t			iNpcID;
+	uint32_t		iBundleID;
+	uint8_t			iItemCount;
+	std::chrono::milliseconds	msDropTime;
+	bool			iRequestedOpen;
+} TLoot;
 
 class Client
 {
@@ -141,7 +149,9 @@ public:
 	virtual ~Client();
 
 	static void Start();
+	static void StartHandler();
 	static void Stop();
+	static void StopHandler();
 	static bool IsWorking() { return m_bWorking; }
 	static void MainProcess();
 	static void HookProcess();
@@ -172,17 +182,25 @@ public:
 	static e_Class GetClass();
 	static uint64_t GetExp();
 	static uint64_t GetMaxExp();
-	static DWORD GetGoX();
-	static DWORD GetGoY();
-	static float GetX();
-	static float GetY();
-	static float GetZ();
+	static uint8_t GetAuthority();
+	static void SetAuthority(uint8_t iAuthority);
+
 	static uint8_t GetSkillPoint(int32_t Slot);
+
+	static void SetPosition(Vector3 v3Position);
+	static void SetMovePosition(Vector3 v3MovePosition);
+
+	static float GetGoX();
+	static float GetGoY();
+	static float GetGoZ();
+
+	static float GetX();
+	static float GetZ();
+	static float GetY();
 
 	static bool IsIntroPhase();
 	static bool IsLoginPhase();
 	static bool IsDisconnect();
-	static bool IsCharacterLoaded();
 
 	static void PushPhase(DWORD address);
 	static void SetLoginInformation(std::string strAccountId, std::string strAccountPassword);
@@ -191,7 +209,7 @@ public:
 	static void SelectCharacterSkip();
 	static void SelectCharacter(BYTE byCharacterIndex);
 
-	static void RouteStart(float fX, float fY, float fZ = 0.0f);
+	static void RouteStart(Vector3 vec3MovePosition);
 	static void SetAddress(std::string strAddressName, DWORD dwAddress);
 	static DWORD GetAddress(std::string strAddressName);
 
@@ -206,6 +224,7 @@ public:
 	static bool IsUserConfigLoaded(std::string strCharacterName) { return m_mapUserConfig.find(strCharacterName) != m_mapUserConfig.end(); };
 
 	static std::vector<TNpc> GetNpcList() { return m_vecNpc; }
+	static std::vector<TPlayer> GetPlayerList() { return m_vecPlayer; }
 
 	static float GetDistance(Vector3 v3Position);
 	static float GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition);
@@ -213,6 +232,8 @@ public:
 	static float GetDistance(float fX1, float fY1, float fX2, float fY2);
 
 	static int32_t GetInventoryItemCount(uint32_t iItemID);
+	static TInventory* GetInventoryItem(uint32_t iItemID);
+	static TInventory* GetInventoryItemSlot(uint8_t iSlotPosition);
 
 	static void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 
@@ -234,7 +255,14 @@ public:
 
 	static void SendMovePacket(Vector3 vecStartPosition, Vector3 vecTaragetPosition, int16_t iMoveSpeed, uint8_t iMoveType);
 
+	static void SendRotation(float fRotation);
+
 	static void SendShoppingMall(ShoppingMallType eType);
+
+	static void SendRequestBundleOpen(uint32_t iBundleID);
+	static void SendBundleItemGet(uint32_t iBundleID, uint32_t iItemID, int16_t iIndex);
+
+	static void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
 
 	static Vector3 GetPosition();
 	static Vector3 GetTargetPosition();
@@ -245,6 +273,23 @@ public:
 	static bool IsBuffActive(int32_t iBuffType) { return m_mapActiveBuffList.find(iBuffType) != m_mapActiveBuffList.end(); };
 
 	static bool IsBlinking();
+
+	static std::chrono::milliseconds GetSkillUseTime(int32_t iSkillID);
+	static void SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime);
+
+	static bool UseItem(uint32_t iItemID);
+
+	static void LoadSkillData();
+
+	static std::vector<__TABLE_UPC_SKILL> GetAvailableSkill() { return m_vecAvailableSkill; };
+
+	static std::vector<TLoot>* GetLootList() { return &m_vecLootList; }
+
+	static bool IsMovingToLoot() { return m_bIsMovingToLoot; }
+	static void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
+
+	static void EquipOreads(int32_t iItemID);
+	static void SetOreads(bool bValue);
 
 protected:
 	inline static int32_t m_iTargetID;
@@ -261,30 +306,29 @@ protected:
 
 	inline static TPlayer m_PlayerMySelf;
 
-	inline static bool m_bCharacterLoaded;
-
 	inline static std::vector<TNpc> m_vecNpc;
 	inline static std::vector<TPlayer> m_vecPlayer;
 
 	inline static std::map<int32_t, uint32_t> m_mapActiveBuffList;
+	inline static std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
 
 	inline static bool m_bLunarWarDressUp;
 
+	inline static std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
+
+	inline static std::vector<TLoot> m_vecLootList;
+	inline static bool m_bIsMovingToLoot;
+
 private:
-	typedef void(__thiscall* Send)(DWORD, uint8_t*, uint32_t);
-	typedef int(__thiscall* LoginCall1)(DWORD);
-	typedef int(__thiscall* LoginCall2)(DWORD);
-	typedef int(__thiscall* LoginServerCall)(DWORD);
-	typedef int(__thiscall* CharacterSelectSkipCall)(DWORD);
-	typedef int(__thiscall* CharacterSelectCall)(DWORD);
-	typedef int(__thiscall* RouteStartCall)(int, Vector3*); //Rota2
-	typedef int(__thiscall* MoveCall)(DWORD, int, int); //Rota2
-
-	//typedef char(__thiscall* LegalR)(DWORD);
-
-	////Get Skill Base
-	////int* __thiscall sub_60C050(_DWORD* this, unsigned int a2);
-
-	typedef int(__cdecl* PushPhaseCall)(int);
+	typedef void(__thiscall* SendFunction)(DWORD, uint8_t*, uint32_t);
+	typedef int(__thiscall* Login1Function)(DWORD);
+	typedef int(__thiscall* Login2Function)(DWORD);
+	typedef int(__thiscall* DisconnectFunction)(DWORD);
+	typedef int(__thiscall* LoginServerFunction)(DWORD);
+	typedef int(__thiscall* CharacterSelectSkipFunction)(DWORD);
+	typedef int(__thiscall* CharacterSelectFunction)(DWORD);
+	typedef int(__thiscall* RouteStartFunction)(int, Vector3*);
+	typedef int(__cdecl* PushPhaseFunction)(int);
+	typedef void(__thiscall* EquipOreadsFunction)(int, int, char);
 };
 

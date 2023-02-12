@@ -24,6 +24,9 @@ public:
 	static Table<__TABLE_UPC_SKILL_EXTENSION7> GetSkillExtension7Table() { return m_pTbl_Skill_Extension7; };
 	static Table<__TABLE_UPC_SKILL_EXTENSION8> GetSkillExtension8Table() { return m_pTbl_Skill_Extension8; };
 	static Table<__TABLE_UPC_SKILL_EXTENSION9> GetSkillExtension9Table() { return m_pTbl_Skill_Extension9; };
+
+	static Table<__TABLE_ITEM> GetItemTable() { return m_pTbl_Item; };
+
 	static Table<__TABLE_NPC> GetNpcTable() { return m_pTbl_Npc; };
 	static Table<__TABLE_MOB_USKO> GetMobTable() { return m_pTbl_Mob; };
 
