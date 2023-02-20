@@ -5,7 +5,9 @@
 
 void ProtectionHandler::Start()
 {
+#ifdef _DEBUG
 	printf("ProtectionHandler::Started\n");
+#endif
 
 	m_bWorking = true;
 
@@ -18,12 +20,16 @@ void ProtectionHandler::Stop()
 {
 	m_bWorking = false;
 
+#ifdef _DEBUG
 	printf("ProtectionHandler::Stopped\n");
+#endif
 }
 
 void ProtectionHandler::ProtectionProcess()
 {
+#ifdef _DEBUG
 	printf("ProtectionHandler::ProtectionProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -65,7 +71,9 @@ void ProtectionHandler::ProtectionProcess()
 		}
 	}
 
+#ifdef _DEBUG
 	printf("ProtectionHandler::ProtectionProcess Stopped\n");
+#endif
 }
 
 void ProtectionHandler::HealthPotionProcess()
@@ -145,7 +153,9 @@ void ProtectionHandler::ManaPotionProcess()
 
 void ProtectionHandler::GodModeProcess()
 {
+#ifdef _DEBUG
 	printf("ProtectionHandler::GodModeProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -202,12 +212,16 @@ void ProtectionHandler::GodModeProcess()
 		}
 	}
 
+#ifdef _DEBUG
 	printf("ProtectionHandler::GodModeProcess Stopped\n");
+#endif
 }
 
 void ProtectionHandler::MinorProcess()
 {
+#ifdef _DEBUG
 	printf("ProtectionHandler::MinorProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -247,5 +261,7 @@ void ProtectionHandler::MinorProcess()
 		}
 	}
 
+#ifdef _DEBUG
 	printf("ProtectionHandler::MinorProcess Stopped\n");
+#endif
 }

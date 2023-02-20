@@ -5,7 +5,9 @@
 
 void AutoLootHandler::Start()
 {
+#ifdef _DEBUG
 	printf("AutoLootHandler::Started\n");
+#endif
 
 	m_bWorking = true;
 
@@ -16,12 +18,16 @@ void AutoLootHandler::Stop()
 {
 	m_bWorking = false;
 
+#ifdef _DEBUG
 	printf("AutoLootHandler::Stopped\n");
+#endif
 }
 
 void AutoLootHandler::AutoLootProcess()
 {
+#ifdef _DEBUG
 	printf("AutoLootHandler::AutoLootProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -111,7 +117,9 @@ void AutoLootHandler::AutoLootProcess()
 
 						Client::SetMovingToLoot(false);
 
+#ifdef _DEBUG
 						printf("AutoLootProcess:: SendRequestBundleOpen: %d\n", pFindedLoot.iBundleID);
+#endif
 					}
 				}
 				else
@@ -126,11 +134,15 @@ void AutoLootHandler::AutoLootProcess()
 						pLoot->iRequestedOpen = true;
 					}
 
+#ifdef _DEBUG
 					printf("AutoLootProcess:: SendRequestBundleOpen: %d\n", pFindedLoot.iBundleID);
+#endif
 				}
 			}
 		}
 	}
 
+#ifdef _DEBUG
 	printf("AutoLootHandler::AutoLootProcess Stopped\n");
+#endif
 }

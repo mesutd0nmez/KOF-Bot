@@ -11,22 +11,28 @@ BOOL APIENTRY DllMain( HMODULE hModule,
     {
         case DLL_PROCESS_ATTACH:
         {
-//#ifdef _DEBUG
+#ifdef _DEBUG
             AllocConsole();
             freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-//#endif
+#endif
             DisableThreadLibraryCalls(hModule);
 
+#ifdef _DEBUG
             printf("EntryPoint::Starting Threads\n");
+#endif
 
             new std::thread([]()
             {
+#ifdef _DEBUG
                 printf("EntryPoint::Bootstrap\n");
+#endif
 
                 Bootstrap bootstrap;
                 bootstrap.Start();
 
+#ifdef _DEBUG
                 printf("EntryPoint::UI\n");
+#endif
 
                 UI ui;
                 ui.Render();

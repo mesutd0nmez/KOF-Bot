@@ -5,7 +5,9 @@
 
 void CharacterHandler::Start()
 {
+#ifdef _DEBUG
 	printf("CharacterHandler::Started\n");
+#endif
 
 	m_bWorking = true;
 
@@ -16,12 +18,16 @@ void CharacterHandler::Stop()
 {
 	m_bWorking = false;
 
+#ifdef _DEBUG
 	printf("CharacterHandler::Stopped\n");
+#endif
 }
 
 void CharacterHandler::CharacterProcess()
 {
+#ifdef _DEBUG
 	printf("CharacterHandler::CharacterProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -109,5 +115,7 @@ void CharacterHandler::CharacterProcess()
 		}
 	}
 
+#ifdef _DEBUG
 	printf("CharacterHandler::CharacterProcess Stopped\n");
+#endif
 }

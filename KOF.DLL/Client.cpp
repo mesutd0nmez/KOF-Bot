@@ -10,7 +10,9 @@
 
 Client::Client()
 {
+#ifdef _DEBUG
 	printf("Client::Initialize\n");
+#endif
 
 	m_mapAddressList.clear();
 
@@ -38,12 +40,16 @@ Client::Client()
 
 	m_bIsMovingToLoot = false;
 
+#ifdef _DEBUG
 	printf("Client::Initialized\n");
+#endif
 }
 
 Client::~Client()
 {
+#ifdef _DEBUG
 	printf("Client::Destroy\n");
+#endif
 
 	Stop();
 
@@ -71,35 +77,47 @@ Client::~Client()
 
 	m_vecLootList.clear();
 
+#ifdef _DEBUG
 	printf("Client::Destroyed\n");
+#endif
 }
 
 void Client::Start()
 {
+#ifdef _DEBUG
 	printf("Client::Starting\n");
+#endif
 
 	m_bWorking = true;
 
 	new std::thread([]() { MainProcess(); });
 	new std::thread([]() { HookProcess(); });
 
+#ifdef _DEBUG
 	printf("Client::Started\n");
+#endif
 }
 
 void Client::Stop()
 {
+#ifdef _DEBUG
 	printf("Client::Stoping\n");
+#endif
 
 	m_bWorking = false;
 
 	StopHandler();
 
+#ifdef _DEBUG
 	printf("Client::Stopped\n");
+#endif
 }
 
 void Client::StartHandler()
 {
+#ifdef _DEBUG
 	printf("Client::StartHandler\n");
+#endif
 
 	AttackHandler::Start();
 	CharacterHandler::Start();
@@ -109,7 +127,9 @@ void Client::StartHandler()
 
 void Client::StopHandler()
 {
+#ifdef _DEBUG
 	printf("Client::StopHandler\n");
+#endif
 
 	AttackHandler::Stop();
 	CharacterHandler::Stop();
@@ -131,7 +151,9 @@ void Client::LoadUserConfig(std::string strCharacterName)
 		m_mapUserConfig.insert(std::pair<std::string, Ini*>(Client::GetName(), pIni));
 	}
 
+#ifdef _DEBUG
 	printf("LoadUserConfig: %s loaded\n", Client::GetName().c_str());
+#endif
 }
 
 
@@ -147,7 +169,9 @@ Ini* Client::GetUserConfig(std::string strCharacterName)
 
 void Client::HookProcess()
 {
+#ifdef _DEBUG
 	printf("Client::HookProcess\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -163,7 +187,9 @@ void Client::HookProcess()
 
 void Client::MainProcess()
 {
+#ifdef _DEBUG
 	printf("Client::MainProcess\n");
+#endif
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -207,7 +233,7 @@ void Client::GameProcess()
 
 	if (Client::IsDisconnect())
 	{
-		fprintf(stdout, "%s Connection lost\n", strCharacterName.c_str());
+		printf("%s Connection lost\n", strCharacterName.c_str());
 		Client::SetState(State::LOST);
 	}
 }
@@ -470,7 +496,9 @@ void Client::SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillU
 
 void Client::LoadSkillData()
 {
+#ifdef _DEBUG
 	printf("Client::LoadSkillData: Start Load Character Skill Data\n");
+#endif
 
 	m_vecAvailableSkill.clear();
 
@@ -717,7 +745,9 @@ void Client::HookRecvAddress()
 	Memory::Write4Byte(GetRecvAddress(), GetRecvHookAddress());
 	VirtualProtect((LPVOID*)GetRecvAddress(), 1, oldProtection, &oldProtection);
 
-	fprintf(stdout, "HookRecvAddress: Patched\n");
+#ifdef _DEBUG
+	printf("HookRecvAddress: Patched\n");
+#endif
 }
 
 void Client::HookSendAddress()
@@ -762,7 +792,9 @@ void Client::HookSendAddress()
 	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
 	Memory::WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
 
+#ifdef _DEBUG
 	printf("HookSendAddress: Patched\n");
+#endif
 }
 
 TNpc Client::InitializeNpc(Packet& pkt)
@@ -936,26 +968,36 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			switch (byResult)
 			{
 				case AUTH_BANNED:
+#ifdef _DEBUG
 					printf("RecvProcess::LS_LOGIN_REQ: Account Banned\n");
+#endif
 					break;
 
 				case AUTH_IN_GAME:
 				{
+#ifdef _DEBUG
 					printf("RecvProcess::LS_LOGIN_REQ: Account already in-game\n");
+#endif
 
 					new std::thread([]()
 					{
+#ifdef _DEBUG
 						printf("RecvProcess::LS_LOGIN_REQ: Reconnecting login server\n");
+#endif
 						Client::ConnectLoginServer(true);
 					});
 				}
 				break;
 
 				case AUTH_SUCCESS:
+#ifdef _DEBUG
 					printf("RecvProcess::LS_LOGIN_REQ: Login Success\n");
+#endif
 					break;
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::LS_LOGIN_REQ: %d not implemented!\n", byResult);
+#endif
 					break;
 			}
 		}
@@ -969,11 +1011,15 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			if (byServerCount > 0)
 			{
+#ifdef _DEBUG
 				printf("RecvProcess::LS_SERVERLIST: %d Server loaded\n", byServerCount);
+#endif
 
 				new std::thread([]()
 				{
+#ifdef _DEBUG
 					printf("RecvProcess::LS_SERVERLIST: Connecting to server: %d\n", 1);
+#endif
 
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -997,11 +1043,15 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			if (bLoaded)
 			{
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Character list loaded\n");
+#endif
 
 				new std::thread([]()
 				{
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
+#endif
 
 					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -1127,7 +1177,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			m_PlayerMySelf.bBlinking = true;
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
+#endif
 		}
 		break;
 
@@ -1136,7 +1188,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			m_PlayerMySelf.iHPMax = pkt.read<int16_t>();
 			m_PlayerMySelf.iHP = pkt.read<int16_t>();
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_HP_CHANGE: %d / %d\n", m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
+#endif
 		}
 		break;
 
@@ -1145,7 +1199,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			m_PlayerMySelf.iMSPMax = pkt.read<int16_t>();
 			m_PlayerMySelf.iMSP = pkt.read<int16_t>();
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_MSP_CHANGE: %d / %d\n", m_PlayerMySelf.iMSP, m_PlayerMySelf.iMSPMax);
+#endif
 		}
 		break;
 
@@ -1154,7 +1210,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			uint8_t iUnknown1 = pkt.read<uint8_t>();
 			m_PlayerMySelf.iExp = pkt.read<uint64_t>();
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_EXP_CHANGE: %llu\n", m_PlayerMySelf.iExp);
+#endif
 		}
 		break;
 
@@ -1177,7 +1235,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				m_PlayerMySelf.iWeightMax = pkt.read<uint32_t>();
 				m_PlayerMySelf.iWeight = pkt.read<uint32_t>();
 
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", m_PlayerMySelf.szName.c_str(), iLevel);
+#endif
 			}
 			else
 			{
@@ -1188,7 +1248,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					it->iLevel = iLevel;
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", it->szName.c_str(), iLevel);
+#endif
 				}
 			}
 		}
@@ -1209,35 +1271,45 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				case 0x01:
 				{
 					m_PlayerMySelf.iStrength = (uint8_t)iVal;
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_POINT_CHANGE: STR %d\n", iVal);
+#endif
 				}
 				break;
 
 				case 0x02:
 				{
 					m_PlayerMySelf.iStamina = (uint8_t)iVal;
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_POINT_CHANGE: HP %d\n", iVal);
+#endif
 				}
 				break;
 
 				case 0x03:
 				{
 					m_PlayerMySelf.iDexterity = (uint8_t)iVal;
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_POINT_CHANGE: DEX %d\n", iVal);
+#endif
 				}
 				break;
 
 				case 0x04:
 				{
 					m_PlayerMySelf.iIntelligence = (uint8_t)iVal;
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_POINT_CHANGE: INT %d\n", iVal);
+#endif
 				}
 				break;
 
 				case 0x05:
 				{
 					m_PlayerMySelf.iMagicAttak = (uint8_t)iVal;
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_POINT_CHANGE: MP %d\n", iVal);
+#endif
 				}
 				break;
 			}
@@ -1245,7 +1317,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			if (iType >= 1 && iType <= 5)
 			{
 				m_PlayerMySelf.iBonusPointRemain--;
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_POINT_CHANGE: POINT %d\n", m_PlayerMySelf.iBonusPointRemain);
+#endif
 			}
 		}
 		break;
@@ -1253,7 +1327,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		case WIZ_WEIGHT_CHANGE:
 		{
 			m_PlayerMySelf.iWeight = pkt.read<uint32_t>();
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_WEIGHT_CHANGE: %d\n", m_PlayerMySelf.iWeight);
+#endif
 		}
 		break;
 
@@ -1264,7 +1340,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			m_PlayerMySelf.tInventory[iPos].iDurability = iDurability;
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_DURATION: %d,%d\n", iPos, iDurability);
+#endif
 		}
 		break;
 
@@ -1275,15 +1353,21 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			switch (iResult)
 			{
 				case 0x00: 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_REMOVE: 0\n");
+#endif
 					break;
 
 				case 0x01: 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_REMOVE: 1\n");
+#endif
 					break;
 
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_REMOVE: %d Result Not Implemented\n", iResult);
+#endif
 				break;
 			}
 		}
@@ -1311,6 +1395,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				m_PlayerMySelf.tInventory[14 + iIndex].iSerial = iSerial;
 				m_PlayerMySelf.tInventory[14 + iIndex].iExpirationTime = iExpirationTime;
 
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_ITEM_COUNT_CHANGE: %d,%d,%d,%d,%d,%d,%d,%d,%d\n", 
 					iDistrict,
 					iIndex,
@@ -1321,6 +1406,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					iDurability,
 					iSerial,
 					iExpirationTime);
+#endif
 
 			}
 		}
@@ -1334,7 +1420,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			m_PlayerMySelf.iSkillInfo[iType] = iValue;
 			m_PlayerMySelf.iSkillInfo[0]++;
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_ITEM_REMOVE: %d,%d,%d\n", iType, iValue, m_PlayerMySelf.iSkillInfo[0]);
+#endif
 		}
 		break;
 
@@ -1345,7 +1433,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			switch (iType)
 			{
 				case N3_SP_CLASS_CHANGE_PURE:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_PURE\n");
+#endif
 					break;
 
 				case N3_SP_CLASS_CHANGE_REQ:
@@ -1355,19 +1445,27 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					switch (eSP)
 					{
 						case N3_SP_CLASS_CHANGE_SUCCESS:
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_SUCCESS\n");
+#endif
 							break;
 
 						case N3_SP_CLASS_CHANGE_NOT_YET:
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_NOT_YET\n");
+#endif
 							break;
 
 						case N3_SP_CLASS_CHANGE_ALREADY:
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_ALREADY\n");
+#endif
 							break;
 
 						case N3_SP_CLASS_CHANGE_FAILURE:
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_FAILURE\n");
+#endif
 							break;
 					}
 				}
@@ -1399,6 +1497,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 							m_PlayerMySelf.iGold = iGold;
 
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: Stat point reset\n");
 							printf("RecvProcess::WIZ_CLASS_CHANGE: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
 								m_PlayerMySelf.iStrength,
@@ -1412,6 +1511,8 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 								m_PlayerMySelf.iWeightMax,
 								m_PlayerMySelf.iBonusPointRemain,
 								m_PlayerMySelf.iGold);
+
+#endif
 						}
 						break;
 
@@ -1436,8 +1537,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							for (int i = 1; i < 9; i++)
 								m_PlayerMySelf.iSkillInfo[i] = 0;
 
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: Skill point reset, new points: %d\n", 
 								m_PlayerMySelf.iSkillInfo[0]);
+#endif
 						}
 						break;
 
@@ -1449,7 +1552,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				case N3_SP_CLASS_POINT_CHANGE_PRICE_QUERY:
 				{
 					uint32_t iGold = pkt.read<uint32_t>();
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_CLASS_CHANGE: Point change price %d\n", iGold);
+#endif
 				}
 				break;
 
@@ -1461,8 +1566,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					if (m_PlayerMySelf.iID == iID)
 					{
 						m_PlayerMySelf.eClass = (e_Class)iClass;
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_CLASS_CHANGE: %s class changed to %d\n", 
 							m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.eClass);
+#endif
 					}
 					else
 					{
@@ -1473,8 +1580,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						{
 							it->eClass = (e_Class)iClass;
 
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_CLASS_CHANGE: %s class changed to %d\n",
 								it->szName.c_str(), it->eClass);
+#endif
 						}
 					}
 				}
@@ -1491,7 +1600,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			m_PlayerMySelf.iGold = iGold;
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_GOLD_CHANGE: %d,%d,%d\n", iType, iGoldOffset, iGold);
+#endif
 		}
 		break;
 
@@ -1527,6 +1638,7 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					m_PlayerMySelf.iRegistCurse = (uint8_t)pkt.read<uint16_t>();
 					m_PlayerMySelf.iRegistPoison = (uint8_t)pkt.read<uint16_t>();
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_MOVE: %d,%d,%d,Unknown1(%d),%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
 						m_PlayerMySelf.iAttack,
 						m_PlayerMySelf.iGuard,
@@ -1545,15 +1657,20 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						m_PlayerMySelf.iRegistMagic,
 						m_PlayerMySelf.iRegistCurse,
 						m_PlayerMySelf.iRegistPoison);
+#endif
 				}
 				else
 				{
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_MOVE: %d SubType Not Implemented\n", iSubType);
+#endif
 				}
 			}
 			else
 			{
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_ITEM_MOVE: %d Type Not Implemented\n", iType);
+#endif
 			}
 		}
 		break;
@@ -1569,19 +1686,25 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				uint32_t iUnknown1 = pkt.read<uint32_t>();
 				uint32_t iClanLoyaltyAmount = pkt.read<uint32_t>();
 
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_LOYALTY_CHANGE: %d,%d,%d,Unknown1(%d),%d\n", 
 					bType, iLoyalty, iLoyaltyMonthly, iUnknown1, iClanLoyaltyAmount);
+#endif
 			}
 			else
 			{
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_LOYALTY_CHANGE: %d Type Not Implemented\n", bType);
+#endif
 			}
 		}
 		break;
 
 		case WIZ_GAMESTART:
 		{
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_GAMESTART: Started\n");
+#endif
 
 			std::string strCharacterName = GetName();
 
@@ -1635,7 +1758,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					*it = pNpc;
 			}
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_REQ_NPCIN: Size %d\n", iNpcCount);
+#endif
 		}
 		break;
 
@@ -1662,7 +1787,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					*it = pUser;
 			}
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_REQ_USERIN: Size %d\n", iUserCount);
+#endif
 		}
 		break;
 
@@ -1684,7 +1811,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					else
 						*it = pNpc;
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_NPC_INOUT: %d,%d\n", iType, pNpc.iID);
+#endif
 				}
 				break;
 
@@ -1697,12 +1826,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							[iNpcID](const TNpc& a) { return a.iID == iNpcID; }),
 						m_vecNpc.end());
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_NPC_INOUT: %d,%d\n", iType, iNpcID);
+#endif
 				}
 				break;
 
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_NPC_INOUT: %d not implemented\n", iType);
+#endif
 					break;
 			}
 		}
@@ -1729,7 +1862,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					else
 						*it = pPlayer;
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_USER_INOUT: %d,%d\n", iType, pPlayer.iID);
+#endif
 				}
 				break;
 
@@ -1742,12 +1877,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							[iPlayerID](const TPlayer& a) { return a.iID == iPlayerID; }),
 						m_vecPlayer.end());
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_USER_INOUT: %d,%d\n", iType, iPlayerID);
+#endif
 				}
 				break;
 
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_USER_INOUT: %d not implemented\n", iType);
+#endif
 					break;
 			}
 		}
@@ -1761,7 +1900,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			if (iNpcCount < 0 || iNpcCount >= 1000)
 				return;
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_NPC_REGION: New npc count %d\n", iNpcCount);
+#endif
 		}
 		break;
 
@@ -1779,12 +1920,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						if (iUserCount < 0 || iUserCount >= 1000)
 							return;
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_REGIONCHANGE: New user count %d\n", iUserCount);
+#endif
 				}
 				break;
 
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_REGIONCHANGE: Type %d not implemented!\n", iType);
+#endif
 					break;
 			}
 		}
@@ -1798,7 +1943,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				m_PlayerMySelf.eState = PSA_DEATH;
 
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
+#endif
 			}
 			else
 			{
@@ -1811,7 +1958,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					{
 						it->eState = PSA_DEATH;
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_DEAD: %d Npc Dead\n", iID);
+#endif
 					}
 				}
 				else
@@ -1823,7 +1972,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					{
 						it->eState = PSA_DEATH;
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_DEAD: %d Player Dead\n", iID);
+#endif
 					}
 				}
 			}
@@ -1842,7 +1993,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					int32_t iAttackID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ATTACK: %d,%d FAIL\n", iAttackID, iTargetID);
+#endif
 				}
 				break;
 
@@ -1851,7 +2004,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					int32_t iAttackID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ATTACK: %d,%d SUCCESS\n", iAttackID, iTargetID);
+#endif
 				}
 				break;
 
@@ -1870,7 +2025,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						{
 							it->eState = PSA_DEATH;
 
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Npc Dead\n", iTargetID);
+#endif
 						}
 					}
 					else
@@ -1882,14 +2039,18 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						{
 							it->eState = PSA_DEATH;
 
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Player Dead\n", iTargetID);
+#endif
 						}
 					}
 				}
 				break;
 
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ATTACK: %d not implemented\n", iResult);
+#endif
 					break;
 
 			}
@@ -1914,8 +2075,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				if (m_PlayerMySelf.iHPMax > 0 && m_PlayerMySelf.iHP <= 0)
 					m_PlayerMySelf.eState = PSA_DEATH;
 
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n", 
 					m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
+#endif
 			}
 			else
 			{
@@ -1932,7 +2095,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						if (it->iHPMax > 0 && it->iHP <= 0)
 							it->eState = PSA_DEATH;
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->iHP, it->iHPMax);
+#endif
 					}
 				}
 				else
@@ -1948,8 +2113,10 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						if (it->iHPMax > 0 && it->iHP <= 0)
 							it->eState = PSA_DEATH;
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n", 
 							it->szName.c_str(), it->iHP, it->iHPMax);
+#endif
 					}
 				}
 			}
@@ -1990,12 +2157,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					it->iMoveSpeed = iSpeed;
 					it->iMoveType = iMoveType;
 				}
+#ifdef _DEBUG
 				else
 					printf("RecvProcess::WIZ_MOVE: %d not in m_vecPlayer list, is ghost player\n", iID);
+#endif
 			}
 
+#ifdef _DEBUG
 			//printf("RecvProcess::WIZ_MOVE: %d,%f,%f,%f,%d,%d\n", 
 			//	iID, fX, fY, fZ, iSpeed, iMoveType);
+#endif
 		}
 		break;
 
@@ -2023,11 +2194,15 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				it->iMoveSpeed = iSpeed;
 				it->iMoveType = iMoveType;
 			}
+#ifdef _DEBUG
 			else
 				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_vecNpc list, is ghost npc\n", iID);
+#endif
 
+#ifdef _DEBUG
 			//printf("RecvProcess::WIZ_NPC_MOVE: %d,%d,%f,%f,%f,%d\n",
 			//	iMoveType, iID, fX, fY, fZ, iSpeed);
+#endif
 		}
 		break;
 
@@ -2076,10 +2251,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 											break;
 									}
 
+#ifdef _DEBUG
 									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
+#endif
 								}
+#ifdef _DEBUG
 								else
-									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added but extension not exist\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
+								{
+									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added but extension not		exist\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
+								}	
+#endif
 							}
 							else
 							{
@@ -2102,7 +2283,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 												break;
 										}
 
+#ifdef _DEBUG
 										printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", it->szName.c_str(), pSkillData->second.szEngName.c_str());
+#endif
 									}
 								}
 							}
@@ -2124,7 +2307,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					if (iData[3] == -100 || iData[3] == -103)
 					{
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_MAGIC_PROCESS: %d - Skill failed %d\n", iSkillID, iData[3]);
+#endif
 						Client::SetSkillUseTime(iSkillID, (std::chrono::milliseconds)0);
 					}
 				}
@@ -2141,10 +2326,12 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						auto pSkillTable = Bootstrap::GetSkillTable().GetData();
 						auto pSkillData = pSkillTable.find(it->second);
 
+#ifdef _DEBUG
 						if (pSkillData != pSkillTable.end())
 							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
 						else
 							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %d buff removed\n", GetName().c_str(), it->second);
+#endif
 					}
 
 					switch (iBuffType)
@@ -2158,7 +2345,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				break;
 			default:
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_MAGIC_PROCESS: %d Type Not Implemented!\n", iType);
+#endif
 				break;
 			}
 		}
@@ -2180,7 +2369,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
-								fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", m_PlayerMySelf.szName.c_str());
+#ifdef _DEBUG
+								print("RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", m_PlayerMySelf.szName.c_str());
+#endif
 
 								m_PlayerMySelf.bBlinking = true;
 							}
@@ -2192,7 +2383,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 								if (it != m_vecPlayer.end())
 								{
-									fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", it->szName.c_str());
+#ifdef _DEBUG
+									printf("RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", it->szName.c_str());
+#endif
 
 									it->bBlinking = true;
 								}
@@ -2204,7 +2397,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
-								fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", m_PlayerMySelf.szName.c_str());
+#ifdef _DEBUG
+								printf("RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", m_PlayerMySelf.szName.c_str());
+#endif
 
 								m_PlayerMySelf.bBlinking = false;
 							}
@@ -2215,7 +2410,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 								if (it != m_vecPlayer.end())
 								{
-									fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", it->szName.c_str());
+#ifdef _DEBUG
+									printf( "RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", it->szName.c_str());
+#endif
 
 									it->bBlinking = false;
 								}
@@ -2224,14 +2421,18 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						break;
 
 						default:
-							fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: Abnormal Type - %llu Buff not implemented\n", iBuff);
+#ifdef _DEBUG
+							printf("RecvProcess::WIZ_STATE_CHANGE: Abnormal Type - %llu Buff not implemented\n", iBuff);
+#endif
 							break;
 					}
 				}
 				break;
 
 				default:
-					fprintf(stdout, "RecvProcess::WIZ_STATE_CHANGE: Type %d not implemented\n", iType);
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_STATE_CHANGE: Type %d not implemented\n", iType);
+#endif
 					break;
 			}		
 		}
@@ -2256,11 +2457,15 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						m_PlayerMySelf.tInventory[i].iSerial = pkt.read<uint32_t>();
 					}
 
-					fprintf(stdout, "RecvProcess::WIZ_SHOPPING_MALL: STORE_CLOSE\n");
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_SHOPPING_MALL: STORE_CLOSE\n");
+#endif
 				}
 				break;
 				default:
-					fprintf(stdout, "RecvProcess::WIZ_SHOPPING_MALL: Type %d not implemented\n", iType);
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_SHOPPING_MALL: Type %d not implemented\n", iType);
+#endif
 					break;
 			}
 		}
@@ -2275,7 +2480,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				case 0:
 				{
 					uint8_t iErrorCode = pkt.read<uint8_t>();
-					fprintf(stdout, "RecvProcess::WIZ_ITEM_TRADE: Error Code: %d\n", iErrorCode);
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_ITEM_TRADE: Error Code: %d\n", iErrorCode);
+#endif
 				}
 				break;
 
@@ -2287,12 +2494,16 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					SendShoppingMall(ShoppingMallType::STORE_CLOSE);
 
-					fprintf(stdout, "RecvProcess::WIZ_ITEM_TRADE: %d,%d,%d\n", iGold, iTransactionFee, iSellingGroup);
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_ITEM_TRADE: %d,%d,%d\n", iGold, iTransactionFee, iSellingGroup);
+#endif
 				}
 				break;
 
 				default:
-					fprintf(stdout, "RecvProcess::WIZ_ITEM_TRADE: Type %d not implemented\n", iType);
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_ITEM_TRADE: Type %d not implemented\n", iType);
+#endif
 					break;
 			}
 		}
@@ -2311,7 +2522,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				break;
 
 				default:
-					fprintf(stdout, "RecvProcess::WIZ_MAP_EVENT: Type %d not implemented\n", iType);
+#ifdef _DEBUG
+					printf("RecvProcess::WIZ_MAP_EVENT: Type %d not implemented\n", iType);
+#endif
 					break;
 			}
 		}
@@ -2371,16 +2584,22 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							m_PlayerMySelf.tInventory[14 + iItemPos].iCount = pkt.read<int16_t>();
 							m_PlayerMySelf.tInventory[14 + iItemPos].iDurability = pkt.read<int16_t>();
 
+#ifdef _DEBUG
 							printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Item - %d,%d,%d \n", 
 								m_PlayerMySelf.tInventory[14 + iItemPos].iItemID, 
 								m_PlayerMySelf.tInventory[14 + iItemPos].iCount,
 								m_PlayerMySelf.tInventory[14 + iItemPos].iDurability);
+#endif
 						}
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Success - %d,%d \n", m_PlayerMySelf.iGold, iItemCount);
+#endif
 					}
+#ifdef _DEBUG
 					else
 						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Failed\n");
+#endif
 				}
 				break;
 
@@ -2390,7 +2609,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				break;
 
 				default:
-					fprintf(stdout, "RecvProcess::WIZ_EXCHANGE: Type %d not implemented\n", iType);
+#ifdef _DEBUG
+					printf( "RecvProcess::WIZ_EXCHANGE: Type %d not implemented\n", iType);
+#endif
 					break;
 			}
 		}
@@ -2405,7 +2626,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				m_PlayerMySelf.fRotation = fRotation;
 
+#ifdef _DEBUG
 				printf("RecvProcess::WIZ_ROTATE: %s MySelf Rotate %f\n", m_PlayerMySelf.szName.c_str(), fRotation);
+#endif
 			}
 			else
 			{
@@ -2418,7 +2641,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					{
 						it->fRotation = fRotation;
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_ROTATE: %d Npc Rotate %f\n", iID, fRotation);
+#endif
 					}
 				}
 				else
@@ -2430,7 +2655,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					{
 						it->fRotation = fRotation;
 
+#ifdef _DEBUG
 						printf("RecvProcess::WIZ_ROTATE: %s Player Rotate %f\n", it->szName.c_str(), fRotation);
+#endif
 					}
 				}
 			}
@@ -2458,11 +2685,13 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			else
 				*pLoot = tLoot;
 
+#ifdef _DEBUG
 			printf("RecvProcess::WIZ_ITEM_DROP: %d,%d,%d,%lld\n", 
 				tLoot.iNpcID, 
 				tLoot.iBundleID, 
 				tLoot.iItemCount, 
 				tLoot.msDropTime.count());
+#endif
 		}
 		break;
 
@@ -2480,7 +2709,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					case 0:
 					{
-						fprintf(stdout, "RecvProcess::WIZ_BUNDLE_OPEN_REQ: Bundle open req failed\n");
+#ifdef _DEBUG
+						printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Bundle open req failed\n");
+#endif
 					}
 					break;
 
@@ -2493,13 +2724,17 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 							SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
 
-							fprintf(stdout, "RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
+#ifdef _DEBUG
+							printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
+#endif
 						}
 					}
 					break;
 
 					default:
-						fprintf(stdout, "RecvProcess::WIZ_BUNDLE_OPEN_REQ: Result %d not implemented\n", iResult);
+#ifdef _DEBUG
+						printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Result %d not implemented\n", iResult);
+#endif
 					break;
 				}
 
@@ -2526,7 +2761,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
+#endif
 				}
 				break;
 
@@ -2555,7 +2792,9 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_GET: %d,%d,%d,%d,%d,%d\n", iType, iBundleID, iPos, iItemID, iItemCount, iGold);
+#endif
 				}
 				break;
 
@@ -2568,25 +2807,31 @@ void Client::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
 
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
+#endif
 				}
 				break;
 
 				case 0x06:
 				{
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_GET: Inventory Full\n");
+#endif
 				}
 				break;
 
 				default:
+#ifdef _DEBUG
 					printf("RecvProcess::WIZ_ITEM_GET: %d Type Not Implemented\n", iType);
+#endif
 					break;
 			}
 		}
 		break;
 	}
 
-	//fprintf(stdout, "Recv Packet: %s\n", pkt.toHex().c_str());
+	//printf("Recv Packet: %s\n", pkt.toHex().c_str());
 }
 
 void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
@@ -2605,7 +2850,9 @@ void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
 	{
 		case WIZ_HOME:
 		{
-			fprintf(stdout, "SendProcess::WIZ_HOME\n");
+#ifdef _DEBUG
+			printf("SendProcess::WIZ_HOME\n");
+#endif
 			SetTarget(-1);		
 		}
 		break;
@@ -2650,28 +2897,34 @@ void Client::SendProcess(BYTE* byBuffer, DWORD dwLength)
 						case ITEM_MBAG_TO_MBAG:
 							break;
 						default:
-							fprintf(stdout, "SendProcess::WIZ_ITEM_MOVE: Direction %d not implemented\n", iDirection);
+#ifdef _DEBUG
+							printf("SendProcess::WIZ_ITEM_MOVE: Direction %d not implemented\n", iDirection);
+#endif
 							break;
 					}
 
-					fprintf(stdout, "SendProcess::WIZ_ITEM_MOVE: iDirection(%d), iItemID(%d), iCurrentPosition(%d), iTargetPosition(%d)\n",
+#ifdef _DEBUG
+					printf( "SendProcess::WIZ_ITEM_MOVE: iDirection(%d), iItemID(%d), iCurrentPosition(%d), iTargetPosition(%d)\n",
 						iDirection,
 						iItemID,
 						iCurrentPosition,
 						iTargetPosition
 					);
+#endif
 				}
 				break;
 
 				default:
-					fprintf(stdout, "SendProcess::WIZ_ITEM_MOVE: Type %d not implemented\n", iType);
+#ifdef _DEBUG
+					printf("SendProcess::WIZ_ITEM_MOVE: Type %d not implemented\n", iType);
+#endif
 				break;
 			}
 		}
 		break;
 	}
 
-	//fprintf(stdout, "Send Packet: %s\n", pkt.toHex().c_str());
+	//printf("Send Packet: %s\n", pkt.toHex().c_str());
 }
 
 void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)

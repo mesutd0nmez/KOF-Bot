@@ -5,7 +5,9 @@
 
 void AttackHandler::Start()
 {
+#ifdef _DEBUG
 	printf("AttackHandler::Started\n");
+#endif
 
 	m_bWorking = true;
 
@@ -18,12 +20,16 @@ void AttackHandler::Stop()
 {
 	m_bWorking = false;
 
+#ifdef _DEBUG
 	printf("AttackHandler::Stopped\n");
+#endif
 }
 
 void AttackHandler::BasicAttackProcess()
 {
+#ifdef _DEBUG
 	printf("AttackHandler::BasicAttackProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -98,12 +104,16 @@ void AttackHandler::BasicAttackProcess()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1110));
 	}
 
+#ifdef _DEBUG
 	printf("AttackHandler::BasicAttackProcess Stopped\n");
+#endif
 }
 
 void AttackHandler::AttackProcess()
 {
+#ifdef _DEBUG
 	printf("AttackHandler::AttackProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -215,12 +225,16 @@ void AttackHandler::AttackProcess()
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
 
+#ifdef _DEBUG
 	printf("AttackHandler::AttackProcess Stopped\n");
+#endif
 }
 
 void AttackHandler::SearchTargetProcess()
 {
+#ifdef _DEBUG
 	printf("AttackHandler::SearchTargetProcess Started\n");
+#endif
 
 	while (m_bWorking)
 	{
@@ -302,7 +316,9 @@ void AttackHandler::SearchTargetProcess()
 				auto pFindedTarget = vecFilteredNpc.at(0);
 				
 				Client::SetTarget(pFindedTarget.iID);
+#ifdef _DEBUG
 				printf("SearchTargetProcess:: %d, Target Selected\n", pFindedTarget.iID);
+#endif
 			}
 		}
 		else
@@ -317,29 +333,39 @@ void AttackHandler::SearchTargetProcess()
 			{
 				if (!bAutoTarget && !std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), it->iProtoID))
 				{
+#ifdef _DEBUG
 					printf("SearchTargetProcess:: %d, Target not selected, selecting new target\n", it->iID);
+#endif
 					Client::SetTarget(-1);
 				}
 
 				if (Client::GetDistance(it->fX, it->fY) > (float)MAX_ATTACK_RANGE)
 				{
+#ifdef _DEBUG
 					printf("SearchTargetProcess:: %d, Target out of range, selecting new target\n", it->iID);
+#endif
 					Client::SetTarget(-1);
 				}
 
 				if (it->eState == PSA_DYING || it->eState == PSA_DEATH)
 				{
+#ifdef _DEBUG
 					printf("SearchTargetProcess:: %d, Target Dead\n", it->iID);
+#endif
 					Client::SetTarget(-1);
 				}
 			}
 			else
 			{
+#ifdef _DEBUG
 				printf("SearchTargetProcess:: %d, Target Lost\n", it->iID);
+#endif
 				Client::SetTarget(-1);
 			}
 		}
 	}
 
+#ifdef _DEBUG
 	printf("AttackHandler::SearchTargetProcess Stopped\n");
+#endif
 }
