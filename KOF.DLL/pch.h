@@ -11,5 +11,14 @@
 #include "framework.h"
 
 #include "Define.h"
+#include "Enum.h"
+#include "Struct.h"
+
+#define WaitCondition(condition) \
+	while(condition) \
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+extern std::string to_string(wchar_t const* wcstr);
+extern std::string to_string(std::wstring const& wstr);
 
 #endif //PCH_H

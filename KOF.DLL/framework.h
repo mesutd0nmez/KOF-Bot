@@ -3,19 +3,13 @@
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 
 // Windows Header Files
-#include <windows.h>
-#include <string>
-#include <thread>
-#include <iomanip>
-#include <sstream>
-#include <iostream>
+#include <Windows.h>
+#include <stdio.h>
 #include <tchar.h>
-#include <cassert>
 #include <fstream>
-#include <map>
+#include <sstream>
+#include <ShlObj_core.h>
 #include <vector>
-#include <set>
-#include <filesystem>
-
-//DirectX
-#include <d3d11.h>
+#include <functional>
+#include <thread>
+#include <map>

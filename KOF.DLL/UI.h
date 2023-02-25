@@ -1,8 +1,9 @@
 #ifndef UI_H
 #define UI_H
 
-#include "pch.h"
-#include "imgui.h"
+#include <imgui.h>
+#include <d3d11.h>
+#include "Bot.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -21,11 +22,7 @@ private:
 	static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 public:
-
-	inline static ImFont* Font14F;
-	inline static ImFont* Font16F;
-
-	static void Render();
+	static void Render(Bot* pBot);
 
 	static bool LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height);
 

@@ -13,78 +13,141 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Header Files\Handlers">
-      <UniqueIdentifier>{4b39deda-bb1c-47c0-97b5-2e380c5ab08b}</UniqueIdentifier>
+    <Filter Include="Header Files\Socket">
+      <UniqueIdentifier>{b688d6ae-ef16-44e3-9d0a-9fd08dd78170}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Handlers">
-      <UniqueIdentifier>{594f6bb2-eb3b-43e3-b01d-197b565dbb09}</UniqueIdentifier>
+    <Filter Include="Source Files\Socket">
+      <UniqueIdentifier>{5bf2a254-ebbc-4ee4-b1eb-1f5f2b0c6a7c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Utility">
+      <UniqueIdentifier>{e939a28e-c21a-40b5-87b8-2cfb8b2a79a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\UI">
+      <UniqueIdentifier>{aa398c93-09cb-4db2-b6ed-5726aa6db5ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\UI">
+      <UniqueIdentifier>{c2d3147f-dde6-4099-ab40-8c144494430d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Utility">
+      <UniqueIdentifier>{1a44ca4e-28f4-4d32-89c1-b39003bf91b4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Core">
+      <UniqueIdentifier>{c7ea4ddd-d8d1-4cbf-afac-548c314cecea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Core">
+      <UniqueIdentifier>{12e3cb60-7e3d-44aa-908c-a7a5e8b45568}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Client">
+      <UniqueIdentifier>{73e14223-10e0-4283-b81d-fe5c4eb2cfc0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Client">
+      <UniqueIdentifier>{a12b818c-6f41-441a-b416-495cad0eeb1f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CharacterHandler.h">
-      <Filter>Header Files\Handlers</Filter>
-    </ClInclude>
-    <ClInclude Include="AttackHandler.h">
-      <Filter>Header Files\Handlers</Filter>
-    </ClInclude>
-    <ClInclude Include="UI.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Bootstrap.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Drawing.h">
+    <ClInclude Include="framework.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Define.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="UI.h">
+      <Filter>Header Files\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Drawing.h">
+      <Filter>Header Files\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Socket.h">
+      <Filter>Header Files\Socket</Filter>
+    </ClInclude>
+    <ClInclude Include="Compression.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Cryption.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="BaseSocket.h">
+      <Filter>Header Files\Socket</Filter>
+    </ClInclude>
+    <ClInclude Include="TcpSocket.h">
+      <Filter>Header Files\Socket</Filter>
+    </ClInclude>
+    <ClInclude Include="ByteBuffer.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Packet.h">
+      <Filter>Header Files\Socket</Filter>
+    </ClInclude>
+    <ClInclude Include="PacketHeader.h">
+      <Filter>Header Files\Socket</Filter>
+    </ClInclude>
+    <ClInclude Include="HardwareID.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Ini.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Trim.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Bot.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Service.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
     <ClInclude Include="Client.h">
+      <Filter>Header Files\Client</Filter>
+    </ClInclude>
+    <ClInclude Include="ClientHandler.h">
+      <Filter>Header Files\Client</Filter>
+    </ClInclude>
+    <ClInclude Include="Memory.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Enum.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ProtectionHandler.h">
-      <Filter>Header Files\Handlers</Filter>
+    <ClInclude Include="Struct.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="AutoLootHandler.h">
-      <Filter>Header Files\Handlers</Filter>
+    <ClInclude Include="Table.h">
+      <Filter>Header Files\Utility</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CharacterHandler.cpp">
-      <Filter>Source Files\Handlers</Filter>
-    </ClCompile>
-    <ClCompile Include="AttackHandler.cpp">
-      <Filter>Source Files\Handlers</Filter>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="UI.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Bootstrap.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\UI</Filter>
     </ClCompile>
     <ClCompile Include="Drawing.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Socket.cpp">
+      <Filter>Source Files\Socket</Filter>
+    </ClCompile>
+    <ClCompile Include="Ini.cpp">
+      <Filter>Source Files\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Bot.cpp">
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Service.cpp">
+      <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="Client.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Client</Filter>
     </ClCompile>
-    <ClCompile Include="ProtectionHandler.cpp">
-      <Filter>Source Files\Handlers</Filter>
-    </ClCompile>
-    <ClCompile Include="AutoLootHandler.cpp">
-      <Filter>Source Files\Handlers</Filter>
+    <ClCompile Include="ClientHandler.cpp">
+      <Filter>Source Files\Client</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -2,18 +2,17 @@
 #include "UI.h"
 #include "Drawing.h"
 
-#include "imgui_impl_dx11.h"
-#include "imgui_impl_win32.h"
-
 #define STB_IMAGE_IMPLEMENTATION
+
 #include "stb_image.h"
+
+#include <imgui_impl_dx11.h>
+#include <imgui_impl_win32.h>
 
 ID3D11Device* UI::pd3dDevice = nullptr;
 ID3D11DeviceContext* UI::pd3dDeviceContext = nullptr;
 IDXGISwapChain* UI::pSwapChain = nullptr;
 ID3D11RenderTargetView* UI::pMainRenderTargetView = nullptr;
-
-using Path = std::filesystem::path;
 
 bool UI::CreateDeviceD3D(HWND hWnd)
 {
@@ -34,7 +33,7 @@ bool UI::CreateDeviceD3D(HWND hWnd)
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
     const UINT createDeviceFlags = 0;
-
+    
     D3D_FEATURE_LEVEL featureLevel;
     const D3D_FEATURE_LEVEL featureLevelArray[2] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
     if (D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &pSwapChain, &pd3dDevice, &featureLevel, &pd3dDeviceContext) != S_OK)
@@ -129,7 +128,7 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-void UI::Render()
+void UI::Render(Bot* pBot)
 {
     ImGui_ImplWin32_EnableDpiAwareness();
     const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T("Discord"), nullptr };
@@ -152,7 +151,6 @@ void UI::Render()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-
     ImGui::StyleColorsDark();
 
     ImGuiStyle& style = ImGui::GetStyle();
@@ -162,20 +160,6 @@ void UI::Render()
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
-    /*  const HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-      MONITORINFO info = {};
-      info.cbSize = sizeof(MONITORINFO);
-      GetMonitorInfo(monitor, &info);
-      const int monitor_height = info.rcMonitor.bottom - info.rcMonitor.top;
-
-      if (monitor_height > 1080)
-      {
-          const float fScale = 2.0f;
-          ImFontConfig cfg;
-          cfg.SizePixels = 13 * fScale;
-          ImGui::GetIO().Fonts->AddFontDefault(&cfg);
-      }*/
-
     ImGui::GetIO().IniFilename = nullptr;
 
     ImGui_ImplWin32_Init(hwnd);
@@ -184,6 +168,8 @@ void UI::Render()
     const ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     bool bDone = false;
+
+    Drawing::Bot = pBot;
 
     while (!bDone)
     {
@@ -196,6 +182,9 @@ void UI::Render()
                 bDone = true;
         }
         if (bDone)
+            break;
+
+        if (Drawing::Bot == nullptr)
             break;
 
         ImGui_ImplDX11_NewFrame();
@@ -220,10 +209,10 @@ void UI::Render()
 
         pSwapChain->Present(1, 0);
 
-#ifndef _WINDLL
-        if (!Drawing::isActive())
-            break;
-#endif
+        #ifndef _WINDLL
+            if (!Drawing::isActive())
+                break;
+        #endif
     }
 
     ImGui_ImplDX11_Shutdown();
@@ -234,9 +223,9 @@ void UI::Render()
     ::DestroyWindow(hwnd);
     ::UnregisterClass(wc.lpszClassName, wc.hInstance);
 
-#ifdef _WINDLL
+    #ifdef _WINDLL
     ExitThread(0);
-#endif
+    #endif
 }
 
 bool UI::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height)
@@ -247,6 +236,8 @@ bool UI::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** ou
     unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
     if (image_data == NULL)
         return false;
+
+    stbi_set_flip_vertically_on_load(true);
 
     // Create texture
     D3D11_TEXTURE2D_DESC desc;
@@ -275,8 +266,11 @@ bool UI::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** ou
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = desc.MipLevels;
     srvDesc.Texture2D.MostDetailedMip = 0;
+
     pd3dDevice->CreateShaderResourceView(pTexture, &srvDesc, out_srv);
-    pTexture->Release();
+
+    if(pTexture)
+        pTexture->Release();
 
     *out_width = image_width;
     *out_height = image_height;
