@@ -22,7 +22,7 @@ public:
 
     bool Load(std::string szFileName)
     {
-        std::ifstream ifs(szFileName.c_str(), std::ios::binary | std::ios::ate);
+        std::ifstream ifs(szFileName, std::ios::binary | std::ios::ate);
         std::ifstream::pos_type pos = ifs.tellg();
 
         if (pos == -1)
@@ -61,70 +61,66 @@ protected:
 
     void Decode(std::vector<uint8_t> vecInputBuffer, std::vector<uint8_t>& vecOutputBuffer)
     {
-        int32_t iLength = vecInputBuffer.size() - 20;
-
         int32_t iInputIndex = 0;
         int32_t iOutputIndex = 0;
 
         std::vector<uint8_t> vecPlainByteBlock(64);
 
+        // Determine the length of the portion of vecInputBuffer to copy
+        int32_t iLength = vecInputBuffer.size() - 20;
+
+        // Copy the portion of vecInputBuffer starting from the 20th element to vecOutputBuffer
         vecOutputBuffer.resize(iLength);
-        vecOutputBuffer.assign(vecInputBuffer.begin() + 20, vecInputBuffer.end());
+        std::copy(vecInputBuffer.begin() + 20, vecInputBuffer.end(), vecOutputBuffer.begin());
 
         int32_t iMainCounter = (iLength + 7) >> 3;
 
-        while (iMainCounter-- != 1)
+        for (int32_t i = 0; i < iMainCounter; i++)
         {
-            vecPlainByteBlock.clear();
-            vecPlainByteBlock.resize(64);
-
-            int32_t iIndex = 0;
-            int32_t iCounter1 = 8;
-
-            while (iCounter1 > 0)
+            // process input data into 64-byte block
+            for (int32_t j = 0; j < 8; j++)
             {
                 uint8_t byInput = vecOutputBuffer[iInputIndex++];
 
-                vecPlainByteBlock[iIndex] = (uint8_t)((byInput >> 7) & 1);
+                vecPlainByteBlock[j * 8 + 0] = (uint8_t)((byInput >> 7) & 1);
+                vecPlainByteBlock[j * 8 + 1] = (uint8_t)((byInput >> 6) & 1);
+                vecPlainByteBlock[j * 8 + 2] = (uint8_t)((byInput >> 5) & 1);
+                vecPlainByteBlock[j * 8 + 3] = (uint8_t)((byInput >> 4) & 1);
+                vecPlainByteBlock[j * 8 + 4] = (uint8_t)((byInput >> 3) & 1);
+                vecPlainByteBlock[j * 8 + 5] = (uint8_t)((byInput >> 2) & 1);
+                vecPlainByteBlock[j * 8 + 6] = (uint8_t)((byInput >> 1) & 1);
+                vecPlainByteBlock[j * 8 + 7] = (uint8_t)(byInput & 1);
+            }
 
-                int32_t iPlainByteIndex = iIndex + 1;
-
-                vecPlainByteBlock[iPlainByteIndex++] = (uint8_t)((byInput >> 6) & 1);
-                vecPlainByteBlock[iPlainByteIndex++] = (uint8_t)((byInput >> 5) & 1);
-                vecPlainByteBlock[iPlainByteIndex++] = (uint8_t)((byInput >> 4) & 1);
-                vecPlainByteBlock[iPlainByteIndex++] = (uint8_t)((byInput >> 3) & 1);
-                vecPlainByteBlock[iPlainByteIndex++] = (uint8_t)((byInput >> 2) & 1);
-                vecPlainByteBlock[iPlainByteIndex++] = (uint8_t)((byInput >> 1) & 1);
-                vecPlainByteBlock[iPlainByteIndex] = (uint8_t)(byInput & 1);
-
-                iIndex = iPlainByteIndex + 1;
-
-                iCounter1--;
-            };
-
+            // perform initial decoding
             InitialDecode(vecPlainByteBlock, 0);
 
-            int32_t iCounter2 = 0;
-
-            while (iCounter2 < 64)
+            // process output data
+            for (int32_t j = 0; j < 8; j++)
             {
-                uint8_t byProcessedByte = (uint8_t)(vecPlainByteBlock[iCounter2 + 7] | (2 * (vecPlainByteBlock[iCounter2 + 6] | (2 * (vecPlainByteBlock[iCounter2 + 5] | (2 * (vecPlainByteBlock[iCounter2 + 4] | (2 * (vecPlainByteBlock[iCounter2 + 3] | (2 * (vecPlainByteBlock[iCounter2 + 2] | (2 * (vecPlainByteBlock[iCounter2 + 1] | (2 * vecPlainByteBlock[iCounter2]))))))))))))));
-                iCounter2 += 8;
-                vecOutputBuffer[iOutputIndex++] = byProcessedByte;
-            };
+                uint8_t byProcessedByte = vecPlainByteBlock[j * 8 + 7] |
+                    (vecPlainByteBlock[j * 8 + 6] << 1) |
+                    (vecPlainByteBlock[j * 8 + 5] << 2) |
+                    (vecPlainByteBlock[j * 8 + 4] << 3) |
+                    (vecPlainByteBlock[j * 8 + 3] << 4) |
+                    (vecPlainByteBlock[j * 8 + 2] << 5) |
+                    (vecPlainByteBlock[j * 8 + 1] << 6) |
+                    (vecPlainByteBlock[j * 8 + 0] << 7);
 
-        };
+                vecOutputBuffer[iOutputIndex++] = byProcessedByte;
+            }
+        }
 
         uint16_t sVolatileKey = 0x0418;
-        uint16_t sCipherKey1 = 0x8041;
-        uint16_t sCipherKey2 = 0x1804;
+        const uint16_t sCipherKey1 = 0x8041;
+        const uint16_t sCipherKey2 = 0x1804;
 
-        for (size_t i = 0; i < vecOutputBuffer.size(); i++)
+        for (size_t i = 0, size = vecOutputBuffer.size(); i < size; i++)
         {
-            uint8_t byRawByte = vecOutputBuffer[i];
-            uint8_t byTemporaryKey = (uint8_t)((sVolatileKey & 0xff00) >> 8);
-            uint8_t byEncryptedByte = (uint8_t)(byTemporaryKey ^ byRawByte);
-            sVolatileKey = (uint16_t)((byRawByte + sVolatileKey) * sCipherKey1 + sCipherKey2);
+            const uint8_t byRawByte = vecOutputBuffer[i];
+            const uint8_t byTemporaryKey = static_cast<uint8_t>(sVolatileKey >> 8);
+            const uint8_t byEncryptedByte = byTemporaryKey ^ byRawByte;
+            sVolatileKey = static_cast<uint16_t>((byRawByte + sVolatileKey) * sCipherKey1 + sCipherKey2);
             vecOutputBuffer[i] = byEncryptedByte;
         }
     }
@@ -293,10 +289,7 @@ protected:
             for (size_t i = 0; i < 8; i++)
             {
                 uint8_t* byBytePointer = reinterpret_cast<uint8_t*>(&iNumArray[i]);
-                auto vecNumBuffer = std::vector<uint8_t>(byBytePointer, byBytePointer + sizeof(iNumArray[i]));
-
-                for (size_t b = 0; b < vecNumBuffer.size(); b++)
-                    destinationArray[(i * 4) + b] = vecNumBuffer[b];
+                std::memcpy(&destinationArray[i * 4], byBytePointer, sizeof(iNumArray[i]));
             }
 
             iInputIndex = 0;
@@ -304,29 +297,22 @@ protected:
 
             if (iStartIndex2 <= 0)
             {
-                while (iCounter > 0)
+                for (int i = iCounter; i > 0; i--)
                 {
-                    uint8_t byInput = (uint8_t)(vecPlainByteblock[iInputIndex] ^ destinationArray[byPermutation[iInputIndex] - 1]);
-
-                    vecPlainByteblock[iInputIndex] = byInput;
-
+                    vecPlainByteblock[iInputIndex] ^= destinationArray[byPermutation[iInputIndex] - 1];
                     iInputIndex++;
-                    iCounter--;
-                };
+                }
             }
             else
             {
-                while (iCounter > 0)
+                for (int i = 0; i < 32; i++)
                 {
-                    uint8_t byInput1 = vecPlainByteblock[iInputIndex + 32];
-                    uint8_t byInput2 = (uint8_t)(vecPlainByteblock[iInputIndex] ^ destinationArray[byPermutation[iInputIndex] - 1]);
+                    uint8_t byInput1 = vecPlainByteblock[i + 32];
+                    uint8_t byInput2 = vecPlainByteblock[i] ^ destinationArray[byPermutation[i] - 1];
 
-                    vecPlainByteblock[iInputIndex] = byInput1;
-                    vecPlainByteblock[iInputIndex + 32] = byInput2;
-
-                    iInputIndex++;
-                    iCounter--;
-                };
+                    vecPlainByteblock[i] = byInput1;
+                    vecPlainByteblock[i + 32] = byInput2;
+                }
             }
 
             iStartIndex2--;
@@ -487,29 +473,27 @@ protected:
         {
             int32_t iCurDataSize = GetSize(m_DataType[i]);
 
-            if (1 == iCurDataSize % 4)
+            switch (iCurDataSize % 4)
             {
+            case 1:
                 vecOffsets[i] = vecOffsets[i - 1] + iPrevDataSize;
-            }
-            else if (2 == iCurDataSize % 4)
-            {
-                if (0 == ((vecOffsets[i - 1] + iPrevDataSize) % 2))
-                    vecOffsets[i] = vecOffsets[i - 1] + iPrevDataSize;
-                else
-                    vecOffsets[i] = vecOffsets[i - 1] + iPrevDataSize + 1;
-            }
-            else if (0 == iCurDataSize % 4)
-            {
-                if (0 == ((vecOffsets[i - 1] + iPrevDataSize) % 4))
-                    vecOffsets[i] = vecOffsets[i - 1] + iPrevDataSize;
-                else
-                    vecOffsets[i] = ((int32_t)(vecOffsets[i - 1] + iPrevDataSize + 3) / 4) * 4;
+                break;
+            case 2:
+                vecOffsets[i] = ((vecOffsets[i - 1] + iPrevDataSize) % 2 == 0) ?
+                    vecOffsets[i - 1] + iPrevDataSize :
+                    vecOffsets[i - 1] + iPrevDataSize + 1;
+                break;
+            case 0:
+                vecOffsets[i] = ((vecOffsets[i - 1] + iPrevDataSize) % 4 == 0) ?
+                    vecOffsets[i - 1] + iPrevDataSize :
+                    ((vecOffsets[i - 1] + iPrevDataSize + 3) / 4) * 4;
+                break;
             }
 
             iPrevDataSize = iCurDataSize;
         }
 
-        vecOffsets[iDataTypeCount] = ((int32_t)(vecOffsets[iDataTypeCount - 1] + iPrevDataSize + 3) / 4) * 4;
+        vecOffsets[iDataTypeCount] = ((vecOffsets[iDataTypeCount - 1] + iPrevDataSize + 3) / 4) * 4;
 
         return true;
     }

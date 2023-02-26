@@ -146,7 +146,6 @@ void Bot::OnPong()
 void Bot::OnAuthenticated()
 {
 
-	new std::thread([this]() { InitializeStaticData(); });
 }
 
 void Bot::OnLoaded()
@@ -159,7 +158,7 @@ void Bot::OnLoaded()
 
 	StartProcess(DEVELOPMENT_PATH, "KnightOnLine.exe", strCommandLine.str(), processInfo);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 	m_hInjectedProcess = processInfo.hProcess;
 	m_dwInjectedProcessID = processInfo.dwProcessId;
@@ -253,4 +252,21 @@ void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 void Bot::ExecuteRemoteCode(BYTE* codes, size_t psize)
 {
 	Memory::ExecuteRemoteCode(m_hInjectedProcess, codes, psize);
+}
+
+bool Bot::IsInjectedProcessLost()
+{
+	if (GetInjectedProcessId() == 0)
+		return true;
+
+	DWORD exitCode = 0;
+	if (GetExitCodeProcess(GetInjectedProcess(), &exitCode) == FALSE)
+	{
+		return true;
+	}
+
+	if (exitCode != STILL_ACTIVE)
+		return true;
+
+	return false;
 }

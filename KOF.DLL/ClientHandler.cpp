@@ -85,6 +85,8 @@ void ClientHandler::OnReady()
 	{
 		WaitCondition(Read4Byte(Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
 
+		new std::thread([this]() { m_Bot->InitializeStaticData(); });
+
 #ifdef DEBUG
 		printf("Auto Login: Connecting starting\n");
 #endif

@@ -15,16 +15,27 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 
         DisableThreadLibraryCalls(hinstDLL);
 
-        new std::thread([]()
-        {
-            auto player = std::make_unique<Bot>();
-            player->Initialize();
-        });
+        auto player = std::make_unique<Bot>();
+        player->Initialize();
 
-        return TRUE;
+        bool bWorking = true;
+
+        while (bWorking)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+            if (player->GetInjectedProcessId() != 0 && player->IsInjectedProcessLost())
+                bWorking = false;
+        }
+
+#ifdef DEBUG
+        FreeConsole();
+#endif
+
+        ExitThread(0);
     }
 
-    return TRUE;
+    return FALSE;
 }
 
 #else
@@ -37,14 +48,22 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 #endif
 
     auto player = std::make_unique<Bot>();
+
     player->Initialize();
 
-    while (true)
-    {
+    bool bWorking = true;
 
+    while (bWorking)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+        if (player->GetInjectedProcessId() != 0 && player->IsInjectedProcessLost())
+            bWorking = false;
     }
 
-    delete &player;
+#ifdef DEBUG
+    FreeConsole();
+#endif
 
     return 0;
 }

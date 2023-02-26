@@ -173,6 +173,8 @@ void UI::Render(Bot* pBot)
 
     while (!bDone)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
@@ -185,6 +187,15 @@ void UI::Render(Bot* pBot)
             break;
 
         if (Drawing::Bot == nullptr)
+            break;
+
+        if (Drawing::Bot == nullptr)
+            break;
+
+        if (Drawing::Bot->GetInjectedProcessId() == 0)
+            break;
+
+        if (Drawing::Bot->GetInjectedProcessId() != 0 && Drawing::Bot->IsInjectedProcessLost())
             break;
 
         ImGui_ImplDX11_NewFrame();
@@ -209,10 +220,10 @@ void UI::Render(Bot* pBot)
 
         pSwapChain->Present(1, 0);
 
-        #ifndef _WINDLL
+#ifndef _WINDLL
             if (!Drawing::isActive())
                 break;
-        #endif
+#endif
     }
 
     ImGui_ImplDX11_Shutdown();
@@ -223,9 +234,9 @@ void UI::Render(Bot* pBot)
     ::DestroyWindow(hwnd);
     ::UnregisterClass(wc.lpszClassName, wc.hInstance);
 
-    #ifdef _WINDLL
+#ifdef _WINDLL
     ExitThread(0);
-    #endif
+#endif
 }
 
 bool UI::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height)

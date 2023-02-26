@@ -77,6 +77,8 @@ public:
 
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
 
+	bool IsInjectedProcessLost();
+
 private:
 	HANDLE m_hInjectedProcess;
 	DWORD m_dwInjectedProcessID;

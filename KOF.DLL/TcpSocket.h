@@ -95,7 +95,7 @@ public:
 
     void Listen()
     {
-        TCPSocket::Receive(this);
+        new std::thread([this]() { TCPSocket::Receive(this); });
     }
 
     void setAddressStruct(sockaddr_in addr) { this->address = addr; }
