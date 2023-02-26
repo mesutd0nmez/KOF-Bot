@@ -13,6 +13,7 @@ public:
 public:
 	void InitializeHandler();
 	void StartHandler();
+	void Process();
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
@@ -26,9 +27,11 @@ private:
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
 
+public:
 	void MailSlotRecvProcess();
 	void MailSlotSendProcess();
 
+private:
 	void RecvProcess(BYTE* byBuffer, DWORD dwLength);
 	void SendProcess(BYTE* byBuffer, DWORD dwLength);
 

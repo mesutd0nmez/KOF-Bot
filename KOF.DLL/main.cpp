@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "UI.h"
 #include "Bot.h"
+#include "ClientHandler.h"
 
 #ifdef _WINDLL
 
@@ -26,6 +27,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 
             if (player->GetInjectedProcessId() != 0 && player->IsInjectedProcessLost())
                 bWorking = false;
+
+            player->Process();
         }
 
 #ifdef DEBUG
@@ -59,6 +62,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
         if (player->GetInjectedProcessId() != 0 && player->IsInjectedProcessLost())
             bWorking = false;
+
+        player->Process();
     }
 
 #ifdef DEBUG

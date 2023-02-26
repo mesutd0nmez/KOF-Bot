@@ -30,6 +30,12 @@ void Bot::Initialize()
 	InitializeService();
 }
 
+void Bot::Process()
+{
+	if (m_ClientHandler)
+		m_ClientHandler->Process();
+}
+
 ClientHandler* Bot::GetClientHandler()
 {
 	return m_ClientHandler;

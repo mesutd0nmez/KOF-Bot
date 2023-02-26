@@ -65,6 +65,11 @@ void ClientHandler::StartHandler()
 	new std::thread([this]() { MinorProcess(); });
 }
 
+void ClientHandler::Process()
+{
+
+}
+
 void ClientHandler::OnReady()
 {
 #ifdef DEBUG

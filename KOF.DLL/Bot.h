@@ -17,6 +17,8 @@ public:
 	void Initialize();
 	void InitializeStaticData();
 
+	void Process();
+
 	DWORD GetAddress(std::string szAddressName);
 	Ini* GetConfiguration();
 
