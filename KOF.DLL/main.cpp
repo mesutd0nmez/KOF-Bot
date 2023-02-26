@@ -36,8 +36,15 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 #endif
 
-    Bot bot;
-    bot.Initialize();
+    auto player = std::make_unique<Bot>();
+    player->Initialize();
+
+    while (true)
+    {
+
+    }
+
+    delete &player;
 
     return 0;
 }

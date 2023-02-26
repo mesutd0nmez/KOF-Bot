@@ -18,6 +18,8 @@
 	while(condition) \
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION & processInfo);
+
 extern std::string to_string(wchar_t const* wcstr);
 extern std::string to_string(std::wstring const& wstr);
 

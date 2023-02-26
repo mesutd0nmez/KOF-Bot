@@ -120,37 +120,37 @@ uint64_t Client::GetMaxExp()
 
 float Client::GetGoX()
 {
-	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"));
+	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"));
 }
 
 float Client::GetGoY()
 {
-	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"));
+	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"));
 }
 
 float Client::GetGoZ()
 {
-	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"));
+	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"));
 }
 
 float Client::GetX()
 {
-	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"));
+	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"));
 }
 
 float Client::GetZ()
 {
-	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"));
+	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"));
 }
 
 float Client::GetY()
 {
-	return Memory::ReadFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"));
+	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"));
 }
 
 uint8_t Client::GetAuthority()
 {
-	return Memory::ReadByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"));
+	return ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"));
 }
 
 std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
@@ -212,7 +212,7 @@ int32_t Client::GetTarget()
 
 void Client::SetAuthority(uint8_t iAuthority)
 {
-	Memory::WriteByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"), iAuthority);
+	WriteByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"), iAuthority);
 }
 
 bool Client::IsBuffActive(int32_t iBuffType)
@@ -282,4 +282,59 @@ TInventory* Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 		return &m_PlayerMySelf.tInventory[iSlotPosition];
 
 	return NULL;
+}
+
+BYTE Client::ReadByte(DWORD dwAddress)
+{
+	return m_Bot->ReadByte(dwAddress);
+}
+
+DWORD Client::Read4Byte(DWORD dwAddress)
+{
+	return m_Bot->Read4Byte(dwAddress);
+}
+
+float Client::ReadFloat(DWORD dwAddress)
+{
+	return m_Bot->ReadFloat(dwAddress);
+}
+
+std::string Client::ReadString(DWORD dwAddress, size_t nSize)
+{
+	return m_Bot->ReadString(dwAddress, nSize);
+}
+
+std::vector<BYTE> Client::ReadBytes(DWORD dwAddress, size_t nSize)
+{
+	return m_Bot->ReadBytes(dwAddress, nSize);
+}
+
+void Client::WriteByte(DWORD dwAddress, DWORD dwValue)
+{
+	m_Bot->WriteByte(dwAddress, dwValue);
+}
+
+void Client::Write4Byte(DWORD dwAddress, DWORD dwValue)
+{
+	m_Bot->Write4Byte(dwAddress, dwValue);
+}
+
+void Client::WriteFloat(DWORD dwAddress, float fValue)
+{
+	m_Bot->WriteFloat(dwAddress, fValue);
+}
+
+void Client::WriteString(DWORD dwAddress, std::string strValue)
+{
+	m_Bot->WriteString(dwAddress, strValue);
+}
+
+void Client::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
+{
+	m_Bot->WriteBytes(dwAddress, byValue);
+}
+
+void Client::ExecuteRemoteCode(BYTE* codes, size_t psize)
+{
+	m_Bot->ExecuteRemoteCode(codes, psize);
 }

@@ -26,8 +26,11 @@ private:
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
 
-	void SendProcess(BYTE* byBuffer, DWORD dwLength);
+	void MailSlotRecvProcess();
+	void MailSlotSendProcess();
+
 	void RecvProcess(BYTE* byBuffer, DWORD dwLength);
+	void SendProcess(BYTE* byBuffer, DWORD dwLength);
 
 	std::function<void(BYTE*, DWORD)> onClientRecvProcess;
 	std::function<void(BYTE*, DWORD)> onClientSendProcess;
@@ -149,6 +152,7 @@ private:
 	void ManaPotionProcess();
 
 private:
+	bool m_bMailSlotWorking;
 	bool m_bWorking;
 };
 

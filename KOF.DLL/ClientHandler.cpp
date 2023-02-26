@@ -15,6 +15,10 @@ ClientHandler::ClientHandler(Bot* pBot)
 	m_bIsMovingToLoot = false;
 
 	m_bWorking = false;
+
+	m_bConfigurationLoaded = false;
+
+	m_bMailSlotWorking = false;
 }
 
 ClientHandler::~ClientHandler()
@@ -25,6 +29,10 @@ ClientHandler::~ClientHandler()
 	m_bIsMovingToLoot = false;
 
 	m_bWorking = false;
+
+	m_bConfigurationLoaded = false;
+
+	m_bMailSlotWorking = false;
 }
 
 void ClientHandler::InitializeHandler()
@@ -75,13 +83,12 @@ void ClientHandler::OnReady()
 
 	new std::thread([this]()
 	{
+		WaitCondition(Read4Byte(Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
+
 #ifdef DEBUG
 		printf("Auto Login: Connecting starting\n");
 #endif
-
-		WaitCondition(Memory::Read4Byte(Memory::Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(1250));
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 		SetLoginInformation("colinkazim", "ttCnkoSh1993");
 		ConnectLoginServer();
@@ -107,14 +114,23 @@ void ClientHandler::PatchClient()
 
 	PatchSendAddress();
 
+#ifndef _WINDLL
+	m_bMailSlotWorking = true;
+	new std::thread([this]() { MailSlotRecvProcess(); });
+	new std::thread([this]() { MailSlotSendProcess(); });
+#endif
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
 	OnReady();
 }
 
 void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 {
-	WaitCondition(Memory::Read4Byte(dwAddress) == 0);
+#ifdef _WINDLL
+	WaitCondition(Read4Byte(dwAddress) == 0);
 
-	DWORD dwRecvAddress = Memory::Read4Byte(Memory::Read4Byte(dwAddress)) + 0x8;
+	DWORD dwRecvAddress = Read4Byte(Read4Byte(dwAddress)) + 0x8;
 
 	BYTE byPatch[] =
 	{
@@ -153,19 +169,158 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 	DWORD dwDlgAddress = dwAddress;
 	CopyBytes(byPatch + 47, dwDlgAddress);
 
-	DWORD dwRecvCallAddress = Memory::Read4Byte(dwRecvAddress);
+	DWORD dwRecvCallAddress = Read4Byte(dwRecvAddress);
 	CopyBytes(byPatch + 58, dwRecvCallAddress);
 
 	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAlloc(0, vecPatch.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-	Memory::WriteBytes(dwPatchAddress, vecPatch);
+	if (dwPatchAddress == 0)
+		return;
+
+	WriteBytes(dwPatchAddress, vecPatch);
 
 	DWORD dwOldProtection;
-	VirtualProtect((LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	Memory::Write4Byte(dwRecvAddress, dwPatchAddress);
-	VirtualProtect((LPVOID*)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	Write4Byte(dwRecvAddress, dwPatchAddress);
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
+#else
+
+	WaitCondition(Read4Byte(dwAddress) == 0);
+
+	HMODULE hModuleKernel32 = GetModuleHandle(L"kernel32.dll");
+
+	if (hModuleKernel32 == nullptr)
+	{
+#ifdef DEBUG
+		printf("hModuleKernel32 == nullptr\n");
+#endif
+		return;
+	}
+
+	LPVOID* pCreateFilePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "CreateFileA");
+	LPVOID* pWriteFilePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "WriteFile");
+	LPVOID* pCloseHandlePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "CloseHandle");
+
+	DWORD dwMailSlotNameAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwMailSlotNameAddress == 0)
+		return;
+
+	std::string szMailSlotName = "\\\\.\\mailslot\\KOF_RECV";
+
+	std::vector<BYTE> vecMailSlotName(szMailSlotName.begin(), szMailSlotName.end());
+	WriteBytes(dwMailSlotNameAddress, vecMailSlotName);
+
+	DWORD dwHookAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwHookAddress == 0)
+		return;
+
+	BYTE byHookPatch[] =
+	{
+		0x55,
+		0x8B, 0xEC,
+		0x83, 0xC4, 0xF4,
+		0x33, 0xC0,
+		0x89, 0x45, 0xFC,
+		0x33, 0xD2,
+		0x89, 0x55, 0xF8,
+		0x6A, 0x00,
+		0x68, 0x80, 0x00, 0x00, 0x00,
+		0x6A, 0x03,
+		0x6A, 0x00,
+		0x6A, 0x01,
+		0x68, 0x00, 0x00, 0x00, 0x40,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0xE8, 0x00, 0x00, 0x00, 0x00,
+		0x89, 0x45, 0xF8,
+		0x6A, 0x00,
+		0x8D, 0x4D, 0xFC,
+		0x51,
+		0xFF, 0x75, 0x0C,
+		0xFF, 0x75, 0x08,
+		0xFF, 0x75, 0xF8,
+		0xE8, 0x00, 0x00, 0x00, 0x00,
+		0x89, 0x45, 0xF4,
+		0xFF, 0x75, 0xF8,
+		0xE8, 0x00, 0x00, 0x00, 0x00,
+		0x8B, 0xE5,
+		0x5D,
+		0xC3
+	};
+
+	CopyBytes(byHookPatch + 35, dwMailSlotNameAddress);
+
+	DWORD dwCreateFileDifference = Memory::GetDifference(dwHookAddress + 39, (DWORD)pCreateFilePtr);
+	CopyBytes(byHookPatch + 40, dwCreateFileDifference);
+
+	DWORD dwWriteFileDifference = Memory::GetDifference(dwHookAddress + 62, (DWORD)pWriteFilePtr);
+	CopyBytes(byHookPatch + 63, dwWriteFileDifference);
+
+	DWORD dwCloseHandlePtrDifference = Memory::GetDifference(dwHookAddress + 73, (DWORD)pCloseHandlePtr);
+	CopyBytes(byHookPatch + 74, dwCloseHandlePtrDifference);
+
+	std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
+	WriteBytes(dwHookAddress, vecHookPatch);
+
+	DWORD dwRecvAddress = Read4Byte(Read4Byte(dwAddress)) + 0x8;
+
+	BYTE byPatch[] =
+	{
+		0x55,									//push ebp
+		0x8B, 0xEC,								//mov ebp,esp
+		0x83, 0xC4, 0xF8,						//add esp,-08
+		0x53,									//push ebx
+		0x8B, 0x45, 0x08,						//mov eax,[ebp+08]
+		0x83, 0xC0, 0x04,						//add eax,04
+		0x8B, 0x10,								//mov edx,[eax]
+		0x89, 0x55, 0xFC,						//mov [ebp-04],edx
+		0x8B, 0x4D, 0x08,						//mov ecx,[ebp+08]
+		0x83, 0xC1, 0x08,						//add ecx,08
+		0x8B, 0x01,								//mov eax,[ecx]
+		0x89, 0x45, 0xF8,						//mov [ebp-08],eax
+		0xFF, 0x75, 0xFC,						//push [ebp-04]
+		0xFF, 0x75, 0xF8,						//push [ebp-08]
+		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- ClientHook::RecvProcess()
+		0xFF, 0xD0,								//call eax
+		0x83, 0xC4, 0x08,						//add esp,08
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,		//mov ecx,[00000000] <-- KO_PTR_DLG
+		0xFF, 0x75, 0x0C,						//push [ebp+0C]
+		0xFF, 0x75, 0x08,						//push [ebp+08]
+		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- GetRecvCallAddress()
+		0xFF, 0xD0,								//call eax
+		0x5B,									//pop ebx
+		0x59,									//pop ecx
+		0x59,									//pop ecx
+		0x5D,									//pop ebp
+		0xC2, 0x08, 0x00						//ret 0008
+	};
+
+	DWORD dwRecvProcessFunction = (DWORD)(LPVOID*)dwHookAddress;
+	CopyBytes(byPatch + 36, dwRecvProcessFunction);
+
+	DWORD dwDlgAddress = dwAddress;
+	CopyBytes(byPatch + 47, dwDlgAddress);
+
+	DWORD dwRecvCallAddress = Read4Byte(dwRecvAddress);
+	CopyBytes(byPatch + 58, dwRecvCallAddress);
+
+	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
+
+	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwPatchAddress == 0)
+		return;
+
+	WriteBytes(dwPatchAddress, vecPatch);
+
+	DWORD dwOldProtection;
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	Write4Byte(Read4Byte(Read4Byte(dwAddress)) + 0x8, dwPatchAddress);
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
+#endif
 
 #ifdef DEBUG
 	printf("PatchRecvAddress: 0x%x patched\n", dwRecvAddress);
@@ -174,7 +329,8 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 
 void ClientHandler::PatchSendAddress()
 {
-	WaitCondition(Memory::Read4Byte(GetAddress("KO_SND_FNC")) == 0);
+#ifdef _WINDLL
+	WaitCondition(Read4Byte(GetAddress("KO_SND_FNC")) == 0);
 
 	BYTE byPatch1[] =
 	{
@@ -202,9 +358,12 @@ void ClientHandler::PatchSendAddress()
 
 	std::vector<BYTE> vecPatch1(byPatch1, byPatch1 + sizeof(byPatch1));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAlloc(0, vecPatch1.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-	Memory::WriteBytes(dwPatchAddress, vecPatch1);
+	if (dwPatchAddress == 0)
+		return;
+
+	WriteBytes(dwPatchAddress, vecPatch1);
 
 	BYTE byPatch2[] =
 	{
@@ -217,13 +376,243 @@ void ClientHandler::PatchSendAddress()
 	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
 
 	DWORD dwOldProtection;
-	VirtualProtect((LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	Memory::WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
-	VirtualProtect((LPVOID*)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
+#else
+
+	WaitCondition(Read4Byte(GetAddress("KO_SND_FNC")) == 0);
+
+	HMODULE hModuleKernel32 = GetModuleHandle(L"kernel32.dll");
+
+	if (hModuleKernel32 == nullptr)
+	{
+#ifdef DEBUG
+		printf("hModuleKernel32 == nullptr\n");
+#endif
+		return;
+	}
+
+	LPVOID* pCreateFilePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "CreateFileA");
+	LPVOID* pWriteFilePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "WriteFile");
+	LPVOID* pCloseHandlePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "CloseHandle");
+
+	DWORD dwMailSlotNameAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwMailSlotNameAddress == 0)
+		return;
+
+	std::string szMailSlotName = "\\\\.\\mailslot\\KOF_SEND";
+
+	std::vector<BYTE> vecMailSlotName(szMailSlotName.begin(), szMailSlotName.end());
+	WriteBytes(dwMailSlotNameAddress, vecMailSlotName);
+
+	DWORD dwHookAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwHookAddress == 0)
+		return;
+
+	BYTE byHookPatch[] =
+	{
+		0x55,
+		0x8B, 0xEC,
+		0x83, 0xC4, 0xF4,
+		0x33, 0xC0,
+		0x89, 0x45, 0xFC,
+		0x33, 0xD2,
+		0x89, 0x55, 0xF8,
+		0x6A, 0x00,
+		0x68, 0x80, 0x00, 0x00, 0x00,
+		0x6A, 0x03,
+		0x6A, 0x00,
+		0x6A, 0x01,
+		0x68, 0x00, 0x00, 0x00, 0x40,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0xE8, 0x00, 0x00, 0x00, 0x00,
+		0x89, 0x45, 0xF8,
+		0x6A, 0x00,
+		0x8D, 0x4D, 0xFC,
+		0x51,
+		0xFF, 0x75, 0x0C,
+		0xFF, 0x75, 0x08,
+		0xFF, 0x75, 0xF8,
+		0xE8, 0x00, 0x00, 0x00, 0x00,
+		0x89, 0x45, 0xF4,
+		0xFF, 0x75, 0xF8,
+		0xE8, 0x00, 0x00, 0x00, 0x00,
+		0x8B, 0xE5,
+		0x5D,
+		0xC3
+	};
+
+	CopyBytes(byHookPatch + 35, dwMailSlotNameAddress);
+
+	DWORD dwCreateFileDifference = Memory::GetDifference(dwHookAddress + 39, (DWORD)pCreateFilePtr);
+	CopyBytes(byHookPatch + 40, dwCreateFileDifference);
+
+	DWORD dwWriteFileDifference = Memory::GetDifference(dwHookAddress + 62, (DWORD)pWriteFilePtr);
+	CopyBytes(byHookPatch + 63, dwWriteFileDifference);
+
+	DWORD dwCloseHandlePtrDifference = Memory::GetDifference(dwHookAddress + 73, (DWORD)pCloseHandlePtr);
+	CopyBytes(byHookPatch + 74, dwCloseHandlePtrDifference);
+
+	std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
+	WriteBytes(dwHookAddress, vecHookPatch);
+
+	BYTE byPatch1[] =
+	{
+		0x55,										//push ebp
+		0x8B, 0xEC,									//mov ebp,esp 
+		0x60,										//pushad
+		0xFF, 0x75, 0x0C,							//push [ebp+0C]
+		0xFF, 0x75, 0x08,							//push [ebp+08]
+		0xBA, 0x00, 0x00, 0x00, 0x00,				//mov edx,00000000 <-- ClientHook::SendProcess()
+		0xFF, 0xD2,									//call edx
+		0x5E,										//pop esi
+		0x5D,										//pop ebp
+		0x61,										//popad
+		0x6A, 0xFF,									//push-01
+		0xBA, 0x00, 0x00, 0x00, 0x00,				//mov edx,00000000 <-- KO_SND_FNC
+		0x83, 0xC2, 0x5,							//add edx,05
+		0xFF, 0xE2									//jmp edx
+	};
+
+	DWORD dwSendProcessFunction = (DWORD)(LPVOID*)dwHookAddress;
+	CopyBytes(byPatch1 + 11, dwSendProcessFunction);
+
+	DWORD dwKoPtrSndFnc = GetAddress("KO_SND_FNC");
+	CopyBytes(byPatch1 + 23, dwKoPtrSndFnc);
+
+	std::vector<BYTE> vecPatch1(byPatch1, byPatch1 + sizeof(byPatch1));
+
+	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, vecPatch1.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwPatchAddress == 0)
+		return;
+
+	WriteBytes(dwPatchAddress, vecPatch1);
+
+	BYTE byPatch2[] =
+	{
+		0xE9, 0x00, 0x00, 0x00, 0x00,
+	};
+
+	DWORD dwCallDifference = Memory::GetDifference(GetAddress("KO_SND_FNC"), dwPatchAddress);
+	CopyBytes(byPatch2 + 1, dwCallDifference);
+
+	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
+
+	DWORD dwOldProtection;
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
+	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
+#endif
 
 #ifdef DEBUG
 	printf("PatchSendAddress: 0x%x patched\n", GetAddress("KO_SND_FNC"));
 #endif
+}
+
+void ClientHandler::MailSlotRecvProcess()
+{
+	LPCTSTR SlotName = TEXT("\\\\.\\mailslot\\KOF_RECV");
+
+	HANDLE hSlot = CreateMailslot(SlotName, 0, MAILSLOT_WAIT_FOREVER, (LPSECURITY_ATTRIBUTES)NULL);
+
+	if (hSlot == INVALID_HANDLE_VALUE)
+	{
+		printf("CreateMailslot failed with %d\n", GetLastError());
+		return;
+	}
+
+	HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("KOF_RECV"));
+
+	if (NULL == hEvent)
+		return;
+
+	while (m_bMailSlotWorking)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+		DWORD dwCurrentMesageSize, dwMesageLeft, dwMessageReadSize;
+		OVERLAPPED ov;
+
+		BOOL fResult = GetMailslotInfo(hSlot, (LPDWORD)NULL, &dwCurrentMesageSize, &dwMesageLeft, (LPDWORD)NULL);
+
+		if (!fResult)
+			continue;
+
+		if (dwCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+			continue;
+
+		std::vector<uint8_t> vecMessageBuffer;
+
+		vecMessageBuffer.resize(dwCurrentMesageSize);
+
+		ov.Offset = 0;
+		ov.OffsetHigh = 0;
+		ov.hEvent = hEvent;
+
+		fResult = ReadFile(hSlot, &vecMessageBuffer[0], dwCurrentMesageSize, &dwMessageReadSize, &ov);
+
+		if (!fResult)
+			continue;
+
+		vecMessageBuffer.resize(dwMessageReadSize);
+
+		onClientRecvProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
+	}
+}
+
+void ClientHandler::MailSlotSendProcess()
+{
+	LPCTSTR SlotName = TEXT("\\\\.\\mailslot\\KOF_SEND");
+
+	HANDLE hSlot = CreateMailslot(SlotName, 0, MAILSLOT_WAIT_FOREVER, (LPSECURITY_ATTRIBUTES)NULL);
+
+	if (hSlot == INVALID_HANDLE_VALUE)
+	{
+		printf("CreateMailslot failed with %d\n", GetLastError());
+		return;
+	}
+
+	HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("KOF_SEND"));
+
+	if (NULL == hEvent)
+		return;
+
+	while (m_bMailSlotWorking)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+		DWORD dwCurrentMesageSize, dwMesageLeft, dwMessageReadSize;
+		OVERLAPPED ov;
+
+		BOOL fResult = GetMailslotInfo(hSlot, (LPDWORD)NULL, &dwCurrentMesageSize, &dwMesageLeft, (LPDWORD)NULL);
+
+		if (!fResult)
+			continue;
+
+		if (dwCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+			continue;
+
+		std::vector<uint8_t> vecMessageBuffer;
+
+		vecMessageBuffer.resize(dwCurrentMesageSize);
+
+		ov.Offset = 0;
+		ov.OffsetHigh = 0;
+		ov.hEvent = hEvent;
+
+		fResult = ReadFile(hSlot, &vecMessageBuffer[0], dwCurrentMesageSize, &dwMessageReadSize, &ov);
+
+		if (!fResult)
+			continue;
+
+		vecMessageBuffer.resize(dwMessageReadSize);
+
+		onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
+	}
 }
 
 void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
@@ -270,7 +659,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 #ifdef DEBUG
 						printf("RecvProcess::LS_LOGIN_REQ: Reconnecting login server\n");
 
-						std::this_thread::sleep_for(std::chrono::milliseconds(100));
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
 						ConnectLoginServer(true);
 					});
@@ -312,7 +701,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 #ifdef DEBUG
 					printf("RecvProcess::LS_SERVERLIST: Connecting to server: %d\n", 1);
 
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
 					ConnectGameServer(1);
 				});
@@ -344,7 +733,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
 #endif
 
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 					SelectCharacterSkip();
 					SelectCharacter(1);
@@ -2409,26 +2798,49 @@ TPlayer ClientHandler::InitializePlayer(Packet& pkt)
 
 void ClientHandler::PushPhase(DWORD dwAddress)
 {
+#ifdef _WINDLL
 	PushPhaseFunction pPushPhaseFunction = (PushPhaseFunction)GetAddress("KO_PTR_PUSH_PHASE");
 	pPushPhaseFunction(*reinterpret_cast<int*>(dwAddress));
+#else
+	BYTE byCode[] =
+	{
+		0x60,
+		0xC6,0x81,0x0C,0x01,0x0,0x0,0x01,
+		0xFF,0x35,0x0,0x0,0x0,0x0,
+		0xBF,0,0,0,0,
+		0xFF,0xD7,
+		0x83,0xC4,0x04,
+		0xB0,0x01,
+		0x61,
+		0xC2,0x04,0x0,
+	};
+
+	CopyBytes(byCode + 10, dwAddress);
+
+	DWORD dwPushPhase = GetAddress("KO_PTR_PUSH_PHASE");
+	CopyBytes(byCode + 15, dwPushPhase);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+#endif
 }
 
 void ClientHandler::SetLoginInformation(std::string szAccountId, std::string szPassword)
 {
-	DWORD dwCGameProcIntroLogin = Memory::Read4Byte(GetAddress("KO_PTR_INTRO"));
-	DWORD dwCUILoginIntro = Memory::Read4Byte(dwCGameProcIntroLogin + GetAddress("KO_OFF_UI_LOGIN_INTRO"));
+	DWORD dwCGameProcIntroLogin = Read4Byte(GetAddress("KO_PTR_INTRO"));
+	DWORD dwCUILoginIntro = Read4Byte(dwCGameProcIntroLogin + GetAddress("KO_OFF_UI_LOGIN_INTRO"));
 
-	DWORD dwCN3UIEditIdBase = Memory::Read4Byte(dwCUILoginIntro + GetAddress("KO_OFF_UI_LOGIN_INTRO_ID"));
-	DWORD dwCN3UIEditPwBase = Memory::Read4Byte(dwCUILoginIntro + GetAddress("KO_OFF_UI_LOGIN_INTRO_PW"));
+	DWORD dwCN3UIEditIdBase = Read4Byte(dwCUILoginIntro + GetAddress("KO_OFF_UI_LOGIN_INTRO_ID"));
+	DWORD dwCN3UIEditPwBase = Read4Byte(dwCUILoginIntro + GetAddress("KO_OFF_UI_LOGIN_INTRO_PW"));
 
-	Memory::WriteString(dwCN3UIEditIdBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_ID_INPUT"), szAccountId.c_str());
-	Memory::Write4Byte(dwCN3UIEditIdBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH"), szAccountId.size());
-	Memory::WriteString(dwCN3UIEditPwBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_PW_INPUT"), szPassword.c_str());
-	Memory::Write4Byte(dwCN3UIEditPwBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH"), szPassword.size());
+	WriteString(dwCN3UIEditIdBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_ID_INPUT"), szAccountId.c_str());
+	Write4Byte(dwCN3UIEditIdBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH"), szAccountId.size());
+	WriteString(dwCN3UIEditPwBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_PW_INPUT"), szPassword.c_str());
+	Write4Byte(dwCN3UIEditPwBase + GetAddress("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH"), szPassword.size());
 }
 
 void ClientHandler::ConnectLoginServer(bool bDisconnect)
 {
+#ifdef _WINDLL
 	if (bDisconnect)
 	{
 		DisconnectFunction pDisconnectFunction = (DisconnectFunction)GetAddress("KO_PTR_LOGIN_DC_REQUEST");
@@ -2440,47 +2852,250 @@ void ClientHandler::ConnectLoginServer(bool bDisconnect)
 
 	LoginRequestFunction2 pLoginRequestFunction2 = (LoginRequestFunction2)GetAddress("KO_PTR_LOGIN_REQUEST2");
 	pLoginRequestFunction2(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_INTRO")));
+#else
+	if (bDisconnect)
+	{
+		BYTE byCode[] =
+		{
+			0x60,
+			0x8B,0x0D,0x0,0x0,0x0,0x0,
+			0xBF,0,0,0,0,
+			0xFF,0xD7,
+			0x8B,0x0D,0x0,0x0,0x0,0x0,
+			0xBF,0,0,0,0,
+			0xFF,0xD7,
+			0x8B,0x0D,0x0,0x0,0x0,0x0,
+			0xBF,0,0,0,0,
+			0xFF,0xD7,
+			0x61,
+			0xC3,
+		};
+
+		DWORD dwPtrIntro = GetAddress("KO_PTR_INTRO");
+		CopyBytes(byCode + 3, dwPtrIntro);
+		CopyBytes(byCode + 16, dwPtrIntro);
+		CopyBytes(byCode + 29, dwPtrIntro);
+
+		DWORD dwPtrDisconnect = GetAddress("KO_PTR_LOGIN_DC_REQUEST");
+		CopyBytes(byCode + 8, dwPtrDisconnect);
+
+		DWORD dwPtrLoginRequest1 = GetAddress("KO_PTR_LOGIN_REQUEST1");
+		CopyBytes(byCode + 21, dwPtrLoginRequest1);
+
+		DWORD dwPtrLoginRequest2 = GetAddress("KO_PTR_LOGIN_REQUEST2");
+		CopyBytes(byCode + 34, dwPtrLoginRequest2);
+
+		ExecuteRemoteCode(byCode, sizeof(byCode));
+	}
+	else
+	{
+		BYTE byCode[] =
+		{
+			0x60,
+			0x8B,0x0D,0x0,0x0,0x0,0x0,
+			0xBF,0,0,0,0,
+			0xFF,0xD7,
+			0x8B,0x0D,0x0,0x0,0x0,0x0,
+			0xBF,0,0,0,0,
+			0xFF,0xD7,
+			0x61,
+			0xC3,
+		};
+
+		DWORD dwPtrIntro = GetAddress("KO_PTR_INTRO");
+		CopyBytes(byCode + 3, dwPtrIntro);
+		CopyBytes(byCode + 16, dwPtrIntro);
+
+		DWORD dwPtrLoginRequest1 = GetAddress("KO_PTR_LOGIN_REQUEST1");
+		CopyBytes(byCode + 8, dwPtrLoginRequest1);
+
+		DWORD dwPtrLoginRequest2 = GetAddress("KO_PTR_LOGIN_REQUEST2");
+		CopyBytes(byCode + 21, dwPtrLoginRequest2);
+
+		ExecuteRemoteCode(byCode, sizeof(byCode));
+	}
+#endif
 }
 
 void ClientHandler::ConnectGameServer(BYTE byServerId)
 {
-	DWORD dwCGameProcIntroLogin = Memory::Read4Byte(GetAddress("KO_PTR_INTRO"));
-	DWORD dwCUILoginIntro = Memory::Read4Byte(dwCGameProcIntroLogin + GetAddress("KO_OFF_UI_LOGIN_INTRO"));
+	DWORD dwCGameProcIntroLogin = Read4Byte(GetAddress("KO_PTR_INTRO"));
+	DWORD dwCUILoginIntro = Read4Byte(dwCGameProcIntroLogin + GetAddress("KO_OFF_UI_LOGIN_INTRO"));
 
-	Memory::Write4Byte(dwCUILoginIntro + GetAddress("KO_OFF_UI_LOGIN_INTRO_SERVER_INDEX"), byServerId);
+	Write4Byte(dwCUILoginIntro + GetAddress("KO_OFF_UI_LOGIN_INTRO_SERVER_INDEX"), byServerId);
 
+#ifdef _WINDLL
 	LoginServerFunction pLoginServerFunction = (LoginServerFunction)GetAddress("KO_PTR_SERVER_SELECT");
 	pLoginServerFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_INTRO")));
+#else
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrIntro = GetAddress("KO_PTR_INTRO");
+	CopyBytes(byCode + 3, dwPtrIntro);
+
+	DWORD dwPtrServerSelect = GetAddress("KO_PTR_SERVER_SELECT");
+	CopyBytes(byCode + 8, dwPtrServerSelect);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+#endif
 }
 
 void ClientHandler::SelectCharacterSkip()
 {
+#ifdef _WINDLL
 	CharacterSelectSkipFunction pCharacterSelectSkipFunction = (CharacterSelectSkipFunction)GetAddress("KO_PTR_CHARACTER_SELECT_SKIP");
 	pCharacterSelectSkipFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
+#else
+
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrCharacterSelect = GetAddress("KO_PTR_CHARACTER_SELECT");
+	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+
+	DWORD dwPtrCharacterSelectSkip = GetAddress("KO_PTR_CHARACTER_SELECT_SKIP");
+	CopyBytes(byCode + 8, dwPtrCharacterSelectSkip);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+
+#endif
 }
 
 void ClientHandler::SelectCharacterLeft()
 {
+#ifdef _WINDLL
 	CharacterSelectLeftFunction pCharacterSelectLeftFunction = (CharacterSelectLeftFunction)GetAddress("KO_PTR_CHARACTER_SELECT_LEFT");
 	pCharacterSelectLeftFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
+#else
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrCharacterSelect = GetAddress("KO_PTR_CHARACTER_SELECT");
+	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+
+	DWORD dwPtrCharacterSelectLeft = GetAddress("KO_PTR_CHARACTER_SELECT_LEFT");
+	CopyBytes(byCode + 8, dwPtrCharacterSelectLeft);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+#endif
 }
 
 void ClientHandler::SelectCharacterRight()
 {
+#ifdef _WINDLL
 	CharacterSelectRightFunction pCharacterSelectRightFunction = (CharacterSelectRightFunction)GetAddress("KO_PTR_CHARACTER_SELECT_RIGHT");
 	pCharacterSelectRightFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
+#else
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrCharacterSelect = GetAddress("KO_PTR_CHARACTER_SELECT");
+	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+
+	DWORD dwPtrCharacterSelectRight = GetAddress("KO_PTR_CHARACTER_SELECT_RIGHT");
+	CopyBytes(byCode + 8, dwPtrCharacterSelectRight);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+#endif
 }
 
 void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
 {
+#ifdef _WINDLL
 	CharacterSelectFunction pCharacterSelectFunction = (CharacterSelectFunction)GetAddress("KO_PTR_CHARACTER_SELECT_ENTER");
 	pCharacterSelectFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
+#else
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrCharacterSelect = GetAddress("KO_PTR_CHARACTER_SELECT");
+	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+
+	DWORD dwPtrCharacterSelectEnter = GetAddress("KO_PTR_CHARACTER_SELECT_ENTER");
+	CopyBytes(byCode + 8, dwPtrCharacterSelectEnter);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+#endif
 }
 
 void ClientHandler::SendPacket(Packet vecBuffer)
 {
+#ifdef _WINDLL
 	SendFunction pSendFunction = (SendFunction)GetAddress("KO_SND_FNC");
 	pSendFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
+#else
+
+	DWORD dwPacketAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (dwPacketAddress == 0)
+		return;
+
+	WriteProcessMemory(m_Bot->GetInjectedProcess(), (LPVOID)dwPacketAddress, vecBuffer.contents(), vecBuffer.size(), 0);
+
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0x68, 0x0, 0x0, 0x0, 0x0,
+		0x68, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrPkt = GetAddress("KO_PTR_PKT");
+
+	CopyBytes(byCode + 3, dwPtrPkt);
+
+	size_t dwPacketSize = vecBuffer.size();
+
+	CopyBytes(byCode + 8, dwPacketSize);
+	CopyBytes(byCode + 13, dwPacketAddress);
+
+	DWORD dwPtrSndFnc = GetAddress("KO_SND_FNC");
+	CopyBytes(byCode + 18, dwPtrSndFnc);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+	VirtualFreeEx(m_Bot->GetInjectedProcess(), (LPVOID)dwPacketAddress, 0, MEM_RELEASE);
+
+#endif
 }
 
 void ClientHandler::LoadSkillData()
@@ -2801,18 +3416,18 @@ void ClientHandler::SendTownPacket()
 
 void ClientHandler::SetPosition(Vector3 v3Position)
 {
-	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"), v3Position.m_fX);
-	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"), v3Position.m_fY);
-	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"), v3Position.m_fZ);
+	WriteFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"), v3Position.m_fX);
+	WriteFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"), v3Position.m_fY);
+	WriteFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"), v3Position.m_fZ);
 }
 
 void ClientHandler::SetMovePosition(Vector3 v3MovePosition)
 {
-	Memory::WriteByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MOVE_TYPE"), 2);
-	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"), v3MovePosition.m_fX);
-	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"), v3MovePosition.m_fY);
-	Memory::WriteFloat(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"), v3MovePosition.m_fZ);
-	Memory::WriteByte(Memory::Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MOVE"), 1);
+	WriteByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MOVE_TYPE"), 2);
+	WriteFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"), v3MovePosition.m_fX);
+	WriteFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"), v3MovePosition.m_fY);
+	WriteFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"), v3MovePosition.m_fZ);
+	WriteByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MOVE"), 1);
 }
 
 void ClientHandler::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDistance)
@@ -2892,7 +3507,7 @@ void ClientHandler::EquipOreads(int32_t iItemID)
 
 void ClientHandler::SetOreads(bool bValue)
 {
-	Memory::Write4Byte(Memory::Read4Byte(0xF7F35C) + GetAddress("KO_OFF_LOOT"), bValue ? 1 : 0);
+	Write4Byte(Read4Byte(0xF7F35C) + GetAddress("KO_OFF_LOOT"), bValue ? 1 : 0);
 }
 
 bool ClientHandler::UseItem(uint32_t iItemID)

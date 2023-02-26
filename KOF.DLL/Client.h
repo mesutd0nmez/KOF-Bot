@@ -80,5 +80,19 @@ protected:
 	int32_t m_iTargetID;
 
 	bool m_bLunarWarDressUp;
+
+public:
+	BYTE ReadByte(DWORD dwAddress);
+	DWORD Read4Byte(DWORD dwAddress);
+	float ReadFloat(DWORD dwAddress);
+	std::string ReadString(DWORD dwAddress, size_t nSize);
+	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
+	void WriteByte(DWORD dwAddress, DWORD dwValue);
+	void Write4Byte(DWORD dwAddress, DWORD dwValue);
+	void WriteFloat(DWORD dwAddress, float fValue);
+	void WriteString(DWORD dwAddress, std::string strValue);
+	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
+
+	void ExecuteRemoteCode(BYTE* codes, size_t psize);
 };
 

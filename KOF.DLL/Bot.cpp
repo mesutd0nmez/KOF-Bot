@@ -2,22 +2,33 @@
 #include "Bot.h"
 #include "ClientHandler.h"
 #include "UI.h"
+#include "Memory.h"
 
 Bot::Bot()
 {
 	m_ClientHandler = nullptr;
+
+	m_hInjectedProcess = nullptr;
+	m_dwInjectedProcessID = 0;
 }
 
 Bot::~Bot()
 {
 	m_ClientHandler = nullptr;
+
+	m_hInjectedProcess = nullptr;
+	m_dwInjectedProcessID = 0;
 }
 
 void Bot::Initialize()
 {
+#ifdef _WINDLL
+	m_hInjectedProcess = GetCurrentProcess();
+	m_dwInjectedProcessID = GetCurrentProcessId();
+#endif
+
 	InitializeService();
 }
-
 
 ClientHandler* Bot::GetClientHandler()
 {
@@ -34,16 +45,18 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loading skill & skill extension data\n");
 #endif
 
-	m_pTbl_Skill.Load(".\\Data\\skill_magic_main_us.tbl");
-	m_pTbl_Skill_Extension1.Load(".\\Data\\skill_magic_1.tbl");
-	m_pTbl_Skill_Extension2.Load(".\\Data\\skill_magic_2.tbl");
-	m_pTbl_Skill_Extension3.Load(".\\Data\\skill_magic_3.tbl");
-	m_pTbl_Skill_Extension4.Load(".\\Data\\skill_magic_4.tbl");
-	m_pTbl_Skill_Extension5.Load(".\\Data\\skill_magic_5.tbl");
-	m_pTbl_Skill_Extension6.Load(".\\Data\\skill_magic_6.tbl");
-	m_pTbl_Skill_Extension7.Load(".\\Data\\skill_magic_7.tbl");
-	m_pTbl_Skill_Extension8.Load(".\\Data\\skill_magic_8.tbl");
-	m_pTbl_Skill_Extension9.Load(".\\Data\\skill_magic_9.tbl");
+	std::string szDevelopmentPath = DEVELOPMENT_PATH;
+
+	m_pTbl_Skill.Load(szDevelopmentPath + ".\\Data\\skill_magic_main_us.tbl");
+	m_pTbl_Skill_Extension1.Load(szDevelopmentPath + ".\\Data\\skill_magic_1.tbl");
+	m_pTbl_Skill_Extension2.Load(szDevelopmentPath + ".\\Data\\skill_magic_2.tbl");
+	m_pTbl_Skill_Extension3.Load(szDevelopmentPath + ".\\Data\\skill_magic_3.tbl");
+	m_pTbl_Skill_Extension4.Load(szDevelopmentPath + ".\\Data\\skill_magic_4.tbl");
+	m_pTbl_Skill_Extension5.Load(szDevelopmentPath + ".\\Data\\skill_magic_5.tbl");
+	m_pTbl_Skill_Extension6.Load(szDevelopmentPath + ".\\Data\\skill_magic_6.tbl");
+	m_pTbl_Skill_Extension7.Load(szDevelopmentPath + ".\\Data\\skill_magic_7.tbl");
+	m_pTbl_Skill_Extension8.Load(szDevelopmentPath + ".\\Data\\skill_magic_8.tbl");
+	m_pTbl_Skill_Extension9.Load(szDevelopmentPath + ".\\Data\\skill_magic_9.tbl");
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill.GetDataSize());
@@ -88,7 +101,7 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loading item data\n");
 #endif
 
-	m_pTbl_Item.Load(".\\Data\\item_org_nc.tbl");
+	m_pTbl_Item.Load(szDevelopmentPath + ".\\Data\\item_org_nc.tbl");
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item.GetDataSize());
@@ -98,7 +111,7 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loading npc data\n");
 #endif
 
-	m_pTbl_Npc.Load(".\\Data\\npc_us.tbl");
+	m_pTbl_Npc.Load(szDevelopmentPath + ".\\Data\\npc_us.tbl");
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc.GetDataSize());
@@ -108,7 +121,7 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loading mob data\n");
 #endif
 
-	m_pTbl_Mob.Load(".\\Data\\mob_us.tbl");
+	m_pTbl_Mob.Load(szDevelopmentPath + ".\\Data\\mob_us.tbl");
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob.GetDataSize());
@@ -126,19 +139,32 @@ void Bot::OnReady()
 
 void Bot::OnPong()
 {
-	printf("Bot: Pong!\n");
-
 	if(GetClientHandler()->GetName().size() > 0)
 		SendSaveUserConfiguration(1, GetClientHandler()->GetName());
 }
 
 void Bot::OnAuthenticated()
 {
-	InitializeStaticData();
+
+	new std::thread([this]() { InitializeStaticData(); });
 }
 
 void Bot::OnLoaded()
 {
+#ifndef _WINDLL
+	std::ostringstream strCommandLine;
+	strCommandLine << GetCurrentProcessId();
+
+	PROCESS_INFORMATION processInfo;
+
+	StartProcess(DEVELOPMENT_PATH, "KnightOnLine.exe", strCommandLine.str(), processInfo);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+	m_hInjectedProcess = processInfo.hProcess;
+	m_dwInjectedProcessID = processInfo.dwProcessId;
+#endif
+
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->InitializeHandler();
 }
@@ -172,4 +198,59 @@ DWORD Bot::GetAddress(std::string szAddressName)
 Ini* Bot::GetConfiguration()
 {
 	return &m_iniUserConfiguration;
+}
+
+BYTE Bot::ReadByte(DWORD dwAddress)
+{
+	return Memory::ReadByte(m_hInjectedProcess, dwAddress);
+}
+
+DWORD Bot::Read4Byte(DWORD dwAddress)
+{
+	return Memory::Read4Byte(m_hInjectedProcess, dwAddress);
+}
+
+float Bot::ReadFloat(DWORD dwAddress)
+{
+	return Memory::ReadFloat(m_hInjectedProcess, dwAddress);
+}
+
+std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
+{
+	return Memory::ReadString(m_hInjectedProcess, dwAddress, nSize);
+}
+
+std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
+{
+	return Memory::ReadBytes(m_hInjectedProcess, dwAddress, nSize);
+}
+
+void Bot::WriteByte(DWORD dwAddress, DWORD dwValue)
+{
+	Memory::WriteByte(m_hInjectedProcess, dwAddress, dwValue);
+}
+
+void Bot::Write4Byte(DWORD dwAddress, DWORD dwValue)
+{
+	Memory::Write4Byte(m_hInjectedProcess, dwAddress, dwValue);
+}
+
+void Bot::WriteFloat(DWORD dwAddress, float fValue)
+{
+	Memory::WriteFloat(m_hInjectedProcess, dwAddress, fValue);
+}
+
+void Bot::WriteString(DWORD dwAddress, std::string strValue)
+{
+	Memory::WriteString(m_hInjectedProcess, dwAddress, strValue);
+}
+
+void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
+{
+	Memory::WriteBytes(m_hInjectedProcess, dwAddress, byValue);
+}
+
+void Bot::ExecuteRemoteCode(BYTE* codes, size_t psize)
+{
+	Memory::ExecuteRemoteCode(m_hInjectedProcess, codes, psize);
 }
