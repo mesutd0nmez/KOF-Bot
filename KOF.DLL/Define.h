@@ -1,8 +1,8 @@
 #pragma once
 
 #define DEBUG
-#define PRINT_RECV_PACKET
-#define PRINT_SEND_PACKET
+//#define PRINT_RECV_PACKET
+//#define PRINT_SEND_PACKET
 
 #ifdef DEBUG
 #define DEVELOPMENT_PATH "C:\\CNKO"

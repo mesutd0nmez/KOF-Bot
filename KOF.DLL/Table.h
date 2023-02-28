@@ -8,7 +8,12 @@ template<typename... Type> struct is_std_vector<std::vector<Type...>> final : st
 template <typename Type> class Table
 {
 public:
-    Table() { }
+    Table() 
+    {
+        m_DataType.clear();
+        m_Data.clear();
+    }
+
     virtual ~Table()
     {
         Release();

@@ -4,6 +4,7 @@
 #include "Client.h"
 #include "ClientHandler.h"
 #include "UI.h"
+#include "Guard.h"
 
 Bot* Drawing::Bot = nullptr;
 LPCSTR Drawing::lpWindowName = "Discord";
@@ -19,6 +20,15 @@ ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
 ClientHandler* m_pClient = nullptr;
 Ini* m_pConfiguration = nullptr;
 
+int iMinimapWidth = 0;
+int iMinimapHeight = 0;
+ID3D11ShaderResourceView* pMinimapTexture = NULL;
+
+std::map<uint32_t, __TABLE_NPC> m_mapNpcTable;
+std::map<uint32_t, __TABLE_MOB_USKO> m_mapMobTable;
+
+std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
+
 void Drawing::Active()
 {
 	bDraw = true;
@@ -33,6 +43,21 @@ void Drawing::Draw()
 {
     m_pConfiguration = Drawing::Bot->GetConfiguration();
     m_pClient = Drawing::Bot->GetClientHandler();
+
+    if (m_mapNpcTable.size() == 0 && Drawing::Bot->IsTableLoaded())
+    {
+        m_mapNpcTable = Drawing::Bot->GetNpcTable()->GetData();
+    }
+
+    if (m_mapMobTable.size() == 0 && Drawing::Bot->IsTableLoaded())
+    {
+        m_mapMobTable = Drawing::Bot->GetMobTable()->GetData();
+    }
+
+    if (m_vecAvailableSkill.size() == 0 && Drawing::Bot->IsTableLoaded())
+    {
+        m_vecAvailableSkill = m_pClient->GetAvailableSkill();
+    }
 
 	if (isActive())
 	{
@@ -104,11 +129,13 @@ void Drawing::DrawGameController()
 
         ImGui::Spacing();
         {
-            int iMinimapWidth = 0;
-            int iMinimapHeight = 0;
-            ID3D11ShaderResourceView* pMinimapTexture = NULL;
-            bool ret = UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
-            IM_ASSERT(ret);
+
+
+            if (pMinimapTexture == NULL)
+            {
+                bool ret = UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
+                IM_ASSERT(ret);
+            }
 
             ImGui::BeginChild("Minimap", ImVec2((float)(iMinimapWidth + 17.0f), (float)iMinimapHeight + 17.0f), true);
             {
@@ -291,13 +318,13 @@ void Drawing::DrawGameController()
 
             if (ImGui::BeginTabItem("Skill"))
             {
-                if (m_pClient->GetAvailableSkill().size() == 0)
+                if (m_vecAvailableSkill.size() == 0)
                     ImGui::BeginDisabled();
 
                 DrawAutomatedAttackSkillTree();
                 DrawAutomatedCharacterSkillTree();
 
-                if (m_pClient->GetAvailableSkill().size() == 0)
+                if (m_vecAvailableSkill.size() == 0)
                     ImGui::EndDisabled();
 
                 ImGui::EndTabItem();
@@ -617,7 +644,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
 
     std::stringstream strTreeText;
 
-    if (Drawing::Bot->GetSkillTable().GetDataSize() == 0)
+    if (!Drawing::Bot->IsTableLoaded())
         strTreeText << "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3] << " ";
 
     strTreeText << "Automated attack skills";
@@ -625,9 +652,8 @@ void Drawing::DrawAutomatedAttackSkillTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
-        auto vecAvailableSkill = m_pClient->GetAvailableSkill();
 
-        for (const auto& x : vecAvailableSkill)
+        for (const auto& x : m_vecAvailableSkill)
         {
             if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
                 continue;
@@ -662,7 +688,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
 
     std::stringstream strTreeText;
 
-    if (Drawing::Bot->GetSkillTable().GetDataSize() == 0)
+    if (!Drawing::Bot->IsTableLoaded())
         strTreeText << "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3] << " ";
 
     strTreeText << "Automated character skills";
@@ -670,9 +696,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
-        auto vecAvailableSkill = m_pClient->GetAvailableSkill();
-
-        for (const auto& x : vecAvailableSkill)
+        for (const auto& x : m_vecAvailableSkill)
         {
             if (x.iTarget != SkillTargetType::TARGET_SELF && x.iTarget != SkillTargetType::TARGET_PARTY_ALL && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME)
                 continue;
@@ -766,9 +790,6 @@ void Drawing::DrawMonsterListTree()
             }
         }
 
-        auto pNpcData = Drawing::Bot->GetNpcTable().GetData();
-        auto pMobData = Drawing::Bot->GetMobTable().GetData();
-
         for (const auto& x : vecNpcList)
         {
             bool bIsAttackable = false;
@@ -790,15 +811,15 @@ void Drawing::DrawMonsterListTree()
 
             bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
 
-            auto pNpcInfo = pNpcData.find(x.iProtoID);
-            auto pMobInfo = pMobData.find(x.iProtoID);
+            auto pNpcInfo = m_mapNpcTable.find(x.iProtoID);
+            auto pMobInfo = m_mapMobTable.find(x.iProtoID);
 
             std::string szNpcName = "~Unknown~";
 
-            if (pNpcInfo != pNpcData.end())
+            if (pNpcInfo != m_mapNpcTable.end())
                 szNpcName = pNpcInfo->second.szText;
 
-            if (pMobInfo != pMobData.end())
+            if (pMobInfo != m_mapMobTable.end())
                 szNpcName = pMobInfo->second.szText;
 
             if (ImGui::Selectable(szNpcName.c_str(), &bSelected))

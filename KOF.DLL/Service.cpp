@@ -4,17 +4,26 @@
 
 Service::Service()
 {
-    m_szToken.clear();
+    Clear();
 }
 
 Service::~Service()
 {
-    m_szToken.clear();
+    Clear();
 
     CloseSocket();
 }
 
-void Service::InitializeService()
+void Service::Clear()
+{
+    m_szToken.clear();
+
+    m_iniPointer = nullptr;
+    m_iniUserConfiguration = nullptr;
+    m_iniConfiguration = nullptr;
+}
+
+void Service::Initialize()
 {
     PWSTR szAppDataPath = NULL;
     HRESULT hRes = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, NULL, &szAppDataPath);
@@ -28,9 +37,10 @@ void Service::InitializeService()
     }
 
     std::string szIniPath = to_string(szAppDataPath) + "\\KOF.ini";
-    m_iniConfiguration.Load(szIniPath.c_str());
+    m_iniConfiguration = new Ini();
+    m_iniConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniConfiguration.GetString("KOF", "Token", m_szToken.c_str());
+    m_szToken = m_iniConfiguration->GetString("KOF", "Token", m_szToken.c_str());
 
     Connect("127.0.0.1", 8888);
 }
@@ -123,7 +133,7 @@ void Service::HandlePacket(Packet& pkt)
             else
             {
                 if (iType == LoginType::TOKEN)
-                    m_szToken = m_iniConfiguration.SetString("KOF", "Token", "");
+                    m_szToken = m_iniConfiguration->SetString("KOF", "Token", "");
             }
         }
         break;
@@ -147,7 +157,8 @@ void Service::HandlePacket(Packet& pkt)
 
                     pkt >> szConfiguration;
 
-                    m_iniUserConfiguration.Load(szConfiguration);
+                    m_iniUserConfiguration = new Ini();
+                    m_iniUserConfiguration->Load(szConfiguration);
 
                     OnConfigurationLoaded();
                 }
@@ -169,7 +180,8 @@ void Service::HandlePacket(Packet& pkt)
 
             std::string szData((char*)vecBuffer.data(), vecBuffer.size());
 
-            m_iniPointer.Load(szData);
+            m_iniPointer = new Ini();
+            m_iniPointer->Load(szData);
 
             OnLoaded();
         }
@@ -280,7 +292,7 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
         << uint8_t(PlatformType::CNKO) 
         << uint8_t(1) 
         << szCharacterName 
-        << m_iniUserConfiguration.Dump();
+        << m_iniUserConfiguration->Dump();
 
     Send(pkt, true);
 }

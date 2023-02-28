@@ -9,8 +9,10 @@ public:
 	Service();
 	virtual ~Service();
 
+	void Clear();
+
 public:
-	void InitializeService();
+	void Initialize();
 	void CloseSocket() { m_tcpSocket.Close(); };
 
 	 void SendLoadUserConfiguration(uint8_t iServerId, std::string szCharacterName) ;
@@ -36,12 +38,12 @@ private:
 	void OnClose(int32_t iErrorCode);
 
 protected:
-	Ini m_iniPointer;
-	Ini m_iniUserConfiguration;
+	Ini* m_iniPointer;
+	Ini* m_iniUserConfiguration;
 
 private:
 	std::string m_szToken;
-	Ini m_iniConfiguration;
+	Ini* m_iniConfiguration;
 
 };
 

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "UI.h"
 #include "Drawing.h"
+#include "ClientHandler.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 
@@ -173,8 +174,6 @@ void UI::Render(Bot* pBot)
 
     while (!bDone)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
@@ -183,13 +182,17 @@ void UI::Render(Bot* pBot)
             if (msg.message == WM_QUIT)
                 bDone = true;
         }
+
         if (bDone)
             break;
 
         if (Drawing::Bot == nullptr)
             break;
 
-        if (Drawing::Bot == nullptr)
+        if (Drawing::Bot->GetClientHandler() == nullptr)
+            break;
+
+        if (!Drawing::Bot->GetClientHandler()->IsWorking())
             break;
 
         if (Drawing::Bot->GetInjectedProcessId() == 0)

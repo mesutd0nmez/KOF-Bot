@@ -9,28 +9,34 @@ public:
 	Client();
 	~Client();
 
+	void Clear();
+
 public:
-	int32_t GetID();
-	std::string GetName();
-	int16_t GetHp();
-	int16_t GetMaxHp();
-	int16_t GetMp();
-	int16_t GetMaxMp();
-	uint8_t GetZone();
-	uint32_t GetGold();
-	uint8_t GetLevel();
-	Nation GetNation();
-	Class GetClass();
-	uint64_t GetExp();
-	uint64_t GetMaxExp();
+	int32_t GetID(bool bFromServer = false);
+	std::string GetName(bool bFromServer = false);
+	int16_t GetHp(bool bFromServer = false);
+	int16_t GetMaxHp(bool bFromServer = false);
+	int16_t GetMp(bool bFromServer = false);
+	int16_t GetMaxMp(bool bFromServer = false);
+	uint8_t GetZone(bool bFromServer = false);
+	uint32_t GetGold(bool bFromServer = false);
+	uint8_t GetLevel(bool bFromServer = false);
+	Nation GetNation(bool bFromServer = false);
+	Class GetClass(bool bFromServer = false);
+	uint64_t GetExp(bool bFromServer = false);
+	uint64_t GetMaxExp(bool bFromServer = false);
+
+	bool IsDisconnect();
+
+	float GetX(bool bFromServer = false);
+	float GetZ(bool bFromServer = false);
+	float GetY(bool bFromServer = false);
+
 	float GetGoX();
 	float GetGoY();
 	float GetGoZ();
 
-	float GetX();
-	float GetZ();
-	float GetY();
-	uint8_t GetAuthority();
+	uint8_t GetAuthority(bool bFromServer = false);
 	void SetAuthority(uint8_t iAuthority);
 
 	std::chrono::milliseconds GetSkillUseTime(int32_t iSkillID);
@@ -69,11 +75,21 @@ protected:
 protected:
 	Bot* m_Bot;
 	TPlayer m_PlayerMySelf;
+	
 	std::vector<TNpc> m_vecNpc;
 	std::vector<TPlayer> m_vecPlayer;
 
+public:
+	std::recursive_mutex m_vecNpcLock;
+	std::recursive_mutex m_vecPlayerLock;
+
+protected:
+
 	std::map<int32_t, uint32_t> m_mapActiveBuffList;
+	std::recursive_mutex m_mapActiveBuffListLock;
+
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
+	std::recursive_mutex m_mapSkillUseTimeLock;
 
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
@@ -87,12 +103,26 @@ public:
 	float ReadFloat(DWORD dwAddress);
 	std::string ReadString(DWORD dwAddress, size_t nSize);
 	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
-	void WriteByte(DWORD dwAddress, DWORD dwValue);
+	void WriteByte(DWORD dwAddress, BYTE byValue);
 	void Write4Byte(DWORD dwAddress, DWORD dwValue);
 	void WriteFloat(DWORD dwAddress, float fValue);
 	void WriteString(DWORD dwAddress, std::string strValue);
 	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
 
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
+
+private:
+	std::vector<TLoot> GetLootList() { return m_vecLootList; }
+
+protected:
+	std::vector<TLoot> m_vecLootList;
+	std::recursive_mutex m_vecLootListLock;
+
+	bool m_bIsMovingToLoot;
+
+protected:
+	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
+	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
+
 };
 

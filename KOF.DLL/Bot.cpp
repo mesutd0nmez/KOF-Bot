@@ -10,30 +10,100 @@ Bot::Bot()
 
 	m_hInjectedProcess = nullptr;
 	m_dwInjectedProcessID = 0;
+
+	m_bTableLoaded = false;
+	m_pTbl_Skill = nullptr;
+	m_pTbl_Skill_Extension1 = nullptr;
+	m_pTbl_Skill_Extension2 = nullptr;
+	m_pTbl_Skill_Extension3 = nullptr;
+	m_pTbl_Skill_Extension4 = nullptr;
+	m_pTbl_Skill_Extension5 = nullptr;
+	m_pTbl_Skill_Extension6 = nullptr;
+	m_pTbl_Skill_Extension7 = nullptr;
+	m_pTbl_Skill_Extension8 = nullptr;
+	m_pTbl_Skill_Extension9 = nullptr;
+	m_pTbl_Item = nullptr;
+	m_pTbl_Npc = nullptr;
+	m_pTbl_Mob = nullptr;
 }
 
 Bot::~Bot()
 {
+	Close();
+
 	m_ClientHandler = nullptr;
 
 	m_hInjectedProcess = nullptr;
 	m_dwInjectedProcessID = 0;
+
+	m_bTableLoaded = false;
+
+	m_pTbl_Skill = nullptr;
+	m_pTbl_Skill_Extension1 = nullptr;
+	m_pTbl_Skill_Extension2 = nullptr;
+	m_pTbl_Skill_Extension3 = nullptr;
+	m_pTbl_Skill_Extension4 = nullptr;
+	m_pTbl_Skill_Extension5 = nullptr;
+	m_pTbl_Skill_Extension6 = nullptr;
+	m_pTbl_Skill_Extension7 = nullptr;
+	m_pTbl_Skill_Extension8 = nullptr;
+	m_pTbl_Skill_Extension9 = nullptr;
+	m_pTbl_Item = nullptr;
+	m_pTbl_Npc = nullptr;
+	m_pTbl_Mob = nullptr;
 }
 
 void Bot::Initialize()
 {
+#ifdef DEBUG
+	printf("Bot: Initialize\n");
+#endif
+
 #ifdef _WINDLL
 	m_hInjectedProcess = GetCurrentProcess();
 	m_dwInjectedProcessID = GetCurrentProcessId();
 #endif
 
-	InitializeService();
+	GetService()->Initialize();
 }
 
 void Bot::Process()
 {
 	if (m_ClientHandler)
 		m_ClientHandler->Process();
+}
+
+void Bot::Close()
+{
+#ifdef DEBUG
+	printf("Bot: Closing\n");
+#endif
+
+	if (m_ClientHandler)
+		m_ClientHandler->StopHandler();
+
+	Release();
+}
+
+void Bot::Release()
+{
+#ifdef DEBUG
+	printf("Bot: Release\n");
+#endif
+
+	m_pTbl_Skill->Release();
+	m_pTbl_Skill_Extension1->Release();
+	m_pTbl_Skill_Extension2->Release();
+	m_pTbl_Skill_Extension3->Release();
+	m_pTbl_Skill_Extension4->Release();
+	m_pTbl_Skill_Extension5->Release();
+	m_pTbl_Skill_Extension6->Release();
+	m_pTbl_Skill_Extension7->Release();
+	m_pTbl_Skill_Extension8->Release();
+	m_pTbl_Skill_Extension9->Release();
+	m_pTbl_Item->Release();
+	m_pTbl_Npc->Release();
+	m_pTbl_Mob->Release();
 }
 
 ClientHandler* Bot::GetClientHandler()
@@ -47,29 +117,40 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Started\n");
 #endif
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Loading skill & skill extension data\n");
-#endif
-
 	std::string szDevelopmentPath = DEVELOPMENT_PATH;
 
-	m_pTbl_Skill.Load(szDevelopmentPath + ".\\Data\\skill_magic_main_us.tbl");
-	m_pTbl_Skill_Extension1.Load(szDevelopmentPath + ".\\Data\\skill_magic_1.tbl");
-	m_pTbl_Skill_Extension2.Load(szDevelopmentPath + ".\\Data\\skill_magic_2.tbl");
-	m_pTbl_Skill_Extension3.Load(szDevelopmentPath + ".\\Data\\skill_magic_3.tbl");
-	m_pTbl_Skill_Extension4.Load(szDevelopmentPath + ".\\Data\\skill_magic_4.tbl");
-	m_pTbl_Skill_Extension5.Load(szDevelopmentPath + ".\\Data\\skill_magic_5.tbl");
-	m_pTbl_Skill_Extension6.Load(szDevelopmentPath + ".\\Data\\skill_magic_6.tbl");
-	m_pTbl_Skill_Extension7.Load(szDevelopmentPath + ".\\Data\\skill_magic_7.tbl");
-	m_pTbl_Skill_Extension8.Load(szDevelopmentPath + ".\\Data\\skill_magic_8.tbl");
-	m_pTbl_Skill_Extension9.Load(szDevelopmentPath + ".\\Data\\skill_magic_9.tbl");
+	m_pTbl_Skill = new Table<__TABLE_UPC_SKILL>();
+	m_pTbl_Skill->Load(szDevelopmentPath + ".\\Data\\skill_magic_main_us.tbl");
+
+	m_pTbl_Skill_Extension1 = new Table<__TABLE_UPC_SKILL_EXTENSION1>();
+	m_pTbl_Skill_Extension1->Load(szDevelopmentPath + ".\\Data\\skill_magic_1.tbl");
+
+	m_pTbl_Skill_Extension2 = new Table<__TABLE_UPC_SKILL_EXTENSION2>();
+	m_pTbl_Skill_Extension2->Load(szDevelopmentPath + ".\\Data\\skill_magic_2.tbl");
+
+	m_pTbl_Skill_Extension3 = new Table<__TABLE_UPC_SKILL_EXTENSION3>();
+	m_pTbl_Skill_Extension3->Load(szDevelopmentPath + ".\\Data\\skill_magic_3.tbl");
+
+	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
+	m_pTbl_Skill_Extension4->Load(szDevelopmentPath + ".\\Data\\skill_magic_4.tbl");
+
+	m_pTbl_Skill_Extension5 = new Table<__TABLE_UPC_SKILL_EXTENSION5>();
+	m_pTbl_Skill_Extension5->Load(szDevelopmentPath + ".\\Data\\skill_magic_5.tbl");
+
+	m_pTbl_Skill_Extension6 = new Table<__TABLE_UPC_SKILL_EXTENSION6>();
+	m_pTbl_Skill_Extension6->Load(szDevelopmentPath + ".\\Data\\skill_magic_6.tbl");
+
+	m_pTbl_Skill_Extension7 = new Table<__TABLE_UPC_SKILL_EXTENSION7>();
+	m_pTbl_Skill_Extension7->Load(szDevelopmentPath + ".\\Data\\skill_magic_7.tbl");
+
+	m_pTbl_Skill_Extension8 = new Table<__TABLE_UPC_SKILL_EXTENSION8>();
+	m_pTbl_Skill_Extension8->Load(szDevelopmentPath + ".\\Data\\skill_magic_8.tbl");
+
+	m_pTbl_Skill_Extension9 = new Table<__TABLE_UPC_SKILL_EXTENSION9>();
+	m_pTbl_Skill_Extension9->Load(szDevelopmentPath + ".\\Data\\skill_magic_9.tbl");
 
 #ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill.GetDataSize());
-#endif
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loading custom skills\n");
+	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
 #endif
 
 	TABLE_UPC_SKILL pGodMode;
@@ -87,7 +168,7 @@ void Bot::InitializeStaticData()
 	pGodMode.dw2ndTableType = 0;
 	pGodMode.iBaseId = 490006;
 
-	m_pTbl_Skill.Insert(pGodMode.iID, pGodMode);
+	m_pTbl_Skill->Insert(pGodMode.iID, pGodMode);
 
 	TABLE_UPC_SKILL_EXTENSION4 pGodModeExtension4;
 	memset(&pGodModeExtension4, 0, sizeof(pGodModeExtension4));
@@ -97,65 +178,70 @@ void Bot::InitializeStaticData()
 	pGodModeExtension4.iAreaRadius = 0;
 	pGodModeExtension4.iBuffDuration = 3600;
 
-	m_pTbl_Skill_Extension4.Insert(pGodModeExtension4.iID, pGodModeExtension4);
+	m_pTbl_Skill_Extension4->Insert(pGodModeExtension4.iID, pGodModeExtension4);
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded custom skills\n");
 #endif
 
+	m_pTbl_Item = new Table<__TABLE_ITEM>();
+	m_pTbl_Item->Load(szDevelopmentPath + ".\\Data\\item_org_nc.tbl");
+
 #ifdef DEBUG
-	printf("InitializeStaticData: Loading item data\n");
+	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
 #endif
 
-	m_pTbl_Item.Load(szDevelopmentPath + ".\\Data\\item_org_nc.tbl");
+	m_pTbl_Npc = new Table<__TABLE_NPC>();
+	m_pTbl_Npc->Load(szDevelopmentPath + ".\\Data\\npc_us.tbl");
 
 #ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item.GetDataSize());
+	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Loading npc data\n");
-#endif
-
-	m_pTbl_Npc.Load(szDevelopmentPath + ".\\Data\\npc_us.tbl");
+	m_pTbl_Mob = new Table<__TABLE_MOB_USKO>();
+	m_pTbl_Mob->Load(szDevelopmentPath + ".\\Data\\mob_us.tbl");
 
 #ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc.GetDataSize());
-#endif
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loading mob data\n");
-#endif
-
-	m_pTbl_Mob.Load(szDevelopmentPath + ".\\Data\\mob_us.tbl");
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob.GetDataSize());
+	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
 #endif
 
 #ifdef DEBUG
-	printf("InitializeStaticData: finished\n");
+	printf("InitializeStaticData: Finished\n");
 #endif
+
+	m_bTableLoaded = true;
 }
 
 void Bot::OnReady()
 {
-	
+#ifdef DEBUG
+	printf("Bot: OnReady\n");
+#endif
 }
 
 void Bot::OnPong()
 {
+#ifdef DEBUG
+	printf("Bot: OnPong\n");
+#endif
+
 	if(GetClientHandler()->GetName().size() > 0)
 		SendSaveUserConfiguration(1, GetClientHandler()->GetName());
 }
 
 void Bot::OnAuthenticated()
 {
-
+#ifdef DEBUG
+	printf("Bot: OnAuthenticated\n");
+#endif
 }
 
 void Bot::OnLoaded()
 {
+#ifdef DEBUG
+	printf("Bot: OnLoaded\n");
+#endif
+
 #ifndef _WINDLL
 	std::ostringstream strCommandLine;
 	strCommandLine << GetCurrentProcessId();
@@ -171,11 +257,15 @@ void Bot::OnLoaded()
 #endif
 
 	m_ClientHandler = new ClientHandler(this);
-	m_ClientHandler->InitializeHandler();
+	m_ClientHandler->Initialize();
 }
 
 void Bot::OnConfigurationLoaded()
 {
+#ifdef DEBUG
+	printf("Bot: OnConfigurationLoaded\n");
+#endif
+
 	if (m_ClientHandler == nullptr)
 	{
 #ifdef DEBUG
@@ -196,13 +286,13 @@ void Bot::OnConfigurationLoaded()
 
 DWORD Bot::GetAddress(std::string szAddressName)
 {
-	std::string szAddress = m_iniPointer.GetString("Address", szAddressName.c_str(), "0x000000");
+	std::string szAddress = m_iniPointer->GetString("Address", szAddressName.c_str(), "0x000000");
 	return std::strtoul(szAddress.c_str(), NULL, 16);
 }
 
 Ini* Bot::GetConfiguration()
 {
-	return &m_iniUserConfiguration;
+	return m_iniUserConfiguration;
 }
 
 BYTE Bot::ReadByte(DWORD dwAddress)
@@ -230,9 +320,9 @@ std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 	return Memory::ReadBytes(m_hInjectedProcess, dwAddress, nSize);
 }
 
-void Bot::WriteByte(DWORD dwAddress, DWORD dwValue)
+void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	Memory::WriteByte(m_hInjectedProcess, dwAddress, dwValue);
+	Memory::WriteByte(m_hInjectedProcess, dwAddress, byValue);
 }
 
 void Bot::Write4Byte(DWORD dwAddress, DWORD dwValue)
@@ -265,13 +355,11 @@ bool Bot::IsInjectedProcessLost()
 	if (GetInjectedProcessId() == 0)
 		return true;
 
-	DWORD exitCode = 0;
-	if (GetExitCodeProcess(GetInjectedProcess(), &exitCode) == FALSE)
-	{
+	DWORD dwExitCode = 0;
+	if (GetExitCodeProcess(GetInjectedProcess(), &dwExitCode) == FALSE)
 		return true;
-	}
 
-	if (exitCode != STILL_ACTIVE)
+	if (dwExitCode != STILL_ACTIVE)
 		return true;
 
 	return false;

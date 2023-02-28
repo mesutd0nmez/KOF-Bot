@@ -10,10 +10,18 @@ public:
 	ClientHandler(Bot* pBot);
 	~ClientHandler();
 
+	bool IsWorking() { return m_bWorking; }
+
+	void Clear();
+
+	Client* GetClient() { return static_cast<Client*>(this); }
+
 public:
-	void InitializeHandler();
+	void Initialize();
 	void StartHandler();
+	void StopHandler();
 	void Process();
+
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
@@ -27,9 +35,11 @@ private:
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
 
+#ifndef _WINDLL
 public:
 	void MailSlotRecvProcess();
 	void MailSlotSendProcess();
+#endif
 
 private:
 	void RecvProcess(BYTE* byBuffer, DWORD dwLength);
@@ -37,6 +47,14 @@ private:
 
 	std::function<void(BYTE*, DWORD)> onClientRecvProcess;
 	std::function<void(BYTE*, DWORD)> onClientSendProcess;
+
+#ifndef _WINDLL
+	std::string m_szMailSlotRecvName;
+	std::string m_szMailSlotSendName;
+
+	DWORD m_RecvHookAddress;
+	DWORD m_SendHookAddress;
+#endif
 
 private:
 	struct ClientHook
@@ -61,6 +79,7 @@ private:
 
 	ClientHook* m_ClientHook;
 
+#ifdef _WINDLL
 private:
 	typedef void(__thiscall* SendFunction)(DWORD, uint8_t*, uint32_t);
 	typedef int(__thiscall* LoginRequestFunction1)(DWORD);
@@ -73,6 +92,7 @@ private:
 	typedef int(__thiscall* CharacterSelectFunction)(DWORD);
 	typedef int(__cdecl* PushPhaseFunction)(int);
 	typedef void(__thiscall* EquipOreadsFunction)(int, int, char);
+#endif
 
 private:
 	void PushPhase(DWORD dwAddress);
@@ -106,6 +126,8 @@ public:
 	void SetMovePosition(Vector3 v3MovePosition);
 	void SendShoppingMall(ShoppingMallType eType);
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
+	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
+	void SetTarget(int32_t iTargetID);
 
 	void EquipOreads(int32_t iItemID);
 	void SetOreads(bool bValue);
@@ -118,17 +140,6 @@ private:
 	void SendRotation(float fRotation);
 	void SendRequestBundleOpen(uint32_t iBundleID);
 	void SendBundleItemGet(uint32_t iBundleID, uint32_t iItemID, int16_t iIndex);
-
-private:
-
-	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
-	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
-
-private:
-	std::vector<TLoot>* GetLootList() { return &m_vecLootList; }
-
-	std::vector<TLoot> m_vecLootList;
-	bool m_bIsMovingToLoot;
 
 private:
 	bool IsConfigurationLoaded() { return m_bConfigurationLoaded; };
@@ -155,8 +166,16 @@ private:
 	void ManaPotionProcess();
 
 private:
-	bool m_bMailSlotWorking;
 	bool m_bWorking;
+
+private:
+#ifndef _WINDLL
+	bool m_bMailSlotWorking;
+#endif
+
+private:
+	std::string m_szAccountId;
+	std::string m_szPassword;
 };
 
 

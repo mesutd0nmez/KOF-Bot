@@ -2,30 +2,28 @@
 #include "Client.h"
 #include "Bot.h"
 #include "Memory.h"
+#include "Guard.h"
 
 Client::Client()
 {
 	m_Bot = nullptr;
 
-	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
-
-	m_vecNpc.clear();
-	m_vecPlayer.clear();
-
-	m_mapActiveBuffList.clear();
-	m_mapSkillUseTime.clear();
-
-	m_iTargetID = -1;
-
-	m_bLunarWarDressUp = false;
-
-	m_vecAvailableSkill.clear();
+	Clear();
 }
 
 Client::~Client()
 {
 	m_Bot = nullptr;
 
+	Clear();
+}
+
+void Client::Clear()
+{
+#ifdef DEBUG
+	printf("Client data clearing.\n");
+#endif
+
 	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
 
 	m_vecNpc.clear();
@@ -39,6 +37,9 @@ Client::~Client()
 	m_bLunarWarDressUp = false;
 
 	m_vecAvailableSkill.clear();
+
+	m_vecLootList.clear();
+	m_bIsMovingToLoot = false;
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -53,70 +54,121 @@ Ini* Client::GetConfiguration()
 	return m_Bot->GetConfiguration();
 }
 
-int32_t Client::GetID()
+int32_t Client::GetID(bool bFromServer)
 {
-	return m_PlayerMySelf.iID;
+	if(bFromServer)
+		return m_PlayerMySelf.iID;
+
+	return Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_ID"));
 }
 
-std::string Client::GetName()
+std::string Client::GetName(bool bFromServer)
 {
-	return m_PlayerMySelf.szName;
+	if(bFromServer)
+		return m_PlayerMySelf.szName;
+	else
+	{
+		int iNameLen = Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NAME_LEN"));
+
+		if (iNameLen > 15)
+			return ReadString(Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NAME")), iNameLen);
+
+		return ReadString(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NAME"), iNameLen);
+	}
 }
 
-int16_t Client::GetHp()
+int16_t Client::GetHp(bool bFromServer)
 {
-	return (int16_t)m_PlayerMySelf.iHP;
+	if (bFromServer)
+		return (int16_t)m_PlayerMySelf.iHP;
+
+	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_HP"));
 }
 
-int16_t Client::GetMaxHp()
+int16_t Client::GetMaxHp(bool bFromServer)
 {
-	return (int16_t)m_PlayerMySelf.iHPMax;
+	if (bFromServer)
+		return (int16_t)m_PlayerMySelf.iHPMax;
+
+	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MAXHP"));
 }
 
-int16_t Client::GetMp()
+int16_t Client::GetMp(bool bFromServer)
 {
-	return (int16_t)m_PlayerMySelf.iMSP;
+	if (bFromServer)
+		return (int16_t)m_PlayerMySelf.iMSP;
+
+	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MP"));
 }
 
-int16_t Client::GetMaxMp()
+int16_t Client::GetMaxMp(bool bFromServer)
 {
-	return (int16_t)m_PlayerMySelf.iMSPMax;
+	if (bFromServer)
+		return (int16_t)m_PlayerMySelf.iMSPMax;
+
+	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MAXMP"));
 }
 
-uint8_t Client::GetZone()
+uint8_t Client::GetZone(bool bFromServer)
 {
-	return m_PlayerMySelf.iCity;
+	if (bFromServer)
+		return m_PlayerMySelf.iCity;
+
+	return (uint8_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_ZONE"));
 }
 
-uint32_t Client::GetGold()
+uint32_t Client::GetGold(bool bFromServer)
 {
-	return m_PlayerMySelf.iGold;
+	if (bFromServer)
+		return m_PlayerMySelf.iGold;
+
+	return Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOLD"));
 }
 
-uint8_t Client::GetLevel()
+uint8_t Client::GetLevel(bool bFromServer)
 {
-	return m_PlayerMySelf.iLevel;
+	if (bFromServer)
+		return m_PlayerMySelf.iLevel;
+
+	return ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_LEVEL"));
 }
 
-Nation Client::GetNation()
+Nation Client::GetNation(bool bFromServer)
 {
-	return m_PlayerMySelf.eNation;
+	if (bFromServer)
+		return m_PlayerMySelf.eNation;
+
+	return (Nation)ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NATION"));
 }
 
-Class Client::GetClass()
+Class Client::GetClass(bool bFromServer)
 {
-	return m_PlayerMySelf.eClass;
+	if (bFromServer)
+		return m_PlayerMySelf.eClass;
+
+	return (Class)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_CLASS"));
 }
 
-uint64_t Client::GetExp()
+uint64_t Client::GetExp(bool bFromServer)
 {
-	return m_PlayerMySelf.iExp;
+	if (bFromServer)
+		return m_PlayerMySelf.iExp;
+
+	return (uint64_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_EXP"));
 }
 
-uint64_t Client::GetMaxExp()
+uint64_t Client::GetMaxExp(bool bFromServer)
 {
-	return m_PlayerMySelf.iExpNext;
+	if (bFromServer)
+		return m_PlayerMySelf.iExpNext;
+
+	return (uint64_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MAXEXP"));
 }
+
+bool Client::IsDisconnect()
+{
+	return Read4Byte(Read4Byte(GetAddress("KO_PTR_PKT")) + GetAddress("KO_OFF_DISCONNECT")) == 0;
+};
 
 float Client::GetGoX()
 {
@@ -133,28 +185,41 @@ float Client::GetGoZ()
 	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"));
 }
 
-float Client::GetX()
+float Client::GetX(bool bFromServer)
 {
+	if (bFromServer)
+		return m_PlayerMySelf.fX;
+
 	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"));
 }
 
-float Client::GetZ()
+float Client::GetZ(bool bFromServer)
 {
+	if (bFromServer)
+		return m_PlayerMySelf.fZ;
+
 	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"));
 }
 
-float Client::GetY()
+float Client::GetY(bool bFromServer)
 {
+	if (bFromServer)
+		return m_PlayerMySelf.fY;
+
 	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"));
 }
 
-uint8_t Client::GetAuthority()
+uint8_t Client::GetAuthority(bool bFromServer)
 {
+	if (bFromServer)
+		return (uint8_t)m_PlayerMySelf.iAuthority;
+
 	return ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"));
 }
 
 std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
 {
+	Guard lock(m_mapSkillUseTimeLock);
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it != m_mapSkillUseTime.end())
@@ -165,6 +230,7 @@ std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
 
 void Client::SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime)
 {
+	Guard lock(m_mapSkillUseTimeLock);
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it == m_mapSkillUseTime.end())
@@ -182,6 +248,7 @@ Vector3 Client::GetTargetPosition()
 {
 	if (m_iTargetID >= 5000)
 	{
+		Guard lock(m_vecNpcLock);
 		auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 			[this](const TNpc& a) { return a.iID == m_iTargetID; });
 
@@ -190,6 +257,7 @@ Vector3 Client::GetTargetPosition()
 	}
 	else
 	{
+		Guard lock(m_vecPlayerLock);
 		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[this](const TPlayer& a) { return a.iID == m_iTargetID; });
 
@@ -198,11 +266,6 @@ Vector3 Client::GetTargetPosition()
 	}
 
 	return Vector3(0.0f, 0.0f, 0.0f);
-}
-
-void Client::SetTarget(int32_t iTargetID)
-{
-	m_iTargetID = iTargetID;
 }
 
 int32_t Client::GetTarget()
@@ -217,6 +280,7 @@ void Client::SetAuthority(uint8_t iAuthority)
 
 bool Client::IsBuffActive(int32_t iBuffType)
 { 
+	Guard lock(m_mapActiveBuffListLock);
 	return m_mapActiveBuffList.find(iBuffType) != m_mapActiveBuffList.end(); 
 };
 
@@ -309,9 +373,9 @@ std::vector<BYTE> Client::ReadBytes(DWORD dwAddress, size_t nSize)
 	return m_Bot->ReadBytes(dwAddress, nSize);
 }
 
-void Client::WriteByte(DWORD dwAddress, DWORD dwValue)
+void Client::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	m_Bot->WriteByte(dwAddress, dwValue);
+	m_Bot->WriteByte(dwAddress, byValue);
 }
 
 void Client::Write4Byte(DWORD dwAddress, DWORD dwValue)
