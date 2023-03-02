@@ -16,12 +16,6 @@ enum LoginType
 	TOKEN,
 };
 
-enum ReadyState
-{
-	INFO,
-	FINISH,
-};
-
 enum PlatformType
 {
 	USKO,

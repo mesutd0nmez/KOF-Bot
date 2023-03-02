@@ -1,285 +1,144 @@
 #pragma once
-
 #include <iostream>
 #include <vector>
 #include <string>
-#include <Windows.h>
-#include <comdef.h>
-#include <Wbemidl.h>
-#include <ntddscsi.h>
-
-#pragma comment(lib, "wbemuuid.lib")
+#include "SkCrypter.h"
 
 class HardwareID
 {
 public:
-	static std::wstring SafeString(const wchar_t* pString)
+	HardwareID()
 	{
-		return std::wstring((pString == nullptr ? L"(null)" : pString));
-	}
+		m_szProcessorId.clear();
+		m_szSystemName.clear();
+		m_szBaseBoardSerial.clear();
+		m_szHddSerial.clear();
+		m_szuid.clear();
+		m_szSystemSerialNumber.clear();
+	};
 
-	static void RemoveWhitespaces(std::wstring& String)
+	~HardwareID()
 	{
-		String.erase(std::remove(String.begin(), String.end(), L' '), String.end());
+		m_szProcessorId.clear();
+		m_szSystemName.clear();
+		m_szBaseBoardSerial.clear();
+		m_szHddSerial.clear();
+		m_szuid.clear();
+		m_szSystemSerialNumber.clear();
+	};
+
+public:
+	std::string GetProcesorId() { return m_szProcessorId; };
+	std::string GetSystemName() { return m_szSystemName; };
+	std::string GetBaseBoardSerial() { return m_szBaseBoardSerial; };
+	std::string GetHddSerial() { return m_szHddSerial; };
+	std::string GetUUID() { return m_szuid; };
+	std::string GetSystemSerialNumber() { return m_szSystemSerialNumber; };
+
+	bool Query()
+	{
+		auto strip_keyword = [](std::string& buffer, const bool filter_digits = false)
+		{
+			std::string current, stripped;
+			std::istringstream iss(buffer);
+
+			buffer.clear();
+			auto first_tick = false;
+			while (std::getline(iss, current))
+			{
+				if (!first_tick)
+				{
+					first_tick = true;
+					continue;
+				}
+
+				if (filter_digits && std::isdigit(current.at(0)))
+				{
+					continue;
+				}
+
+				buffer.append(current).append("\n");
+			}
+			if (buffer.back() == '\n')
+			{
+				buffer.pop_back();
+			}
+		};
+
+		if (!WMIC(skCryptDec("wmic cpu get processorId"), m_szProcessorId) ||
+			!WMIC(skCryptDec("wmic os get csname"), m_szSystemName) ||
+			!WMIC(skCryptDec("wmic baseboard get serialnumber"), m_szBaseBoardSerial) ||
+			!WMIC(skCryptDec("wmic diskdrive get SerialNumber"), m_szHddSerial) ||
+			!WMIC(skCryptDec("wmic csproduct get uuid"), m_szuid) ||
+			!WMIC(skCryptDec("wmic os get serialnumber"), m_szSystemSerialNumber))
+
+
+		{
+			return false;
+		}
+
+		strip_keyword(m_szProcessorId);
+		strip_keyword(m_szSystemName);
+		strip_keyword(m_szBaseBoardSerial);
+		strip_keyword(m_szHddSerial, true);
+		strip_keyword(m_szuid);
+		strip_keyword(m_szSystemSerialNumber);
+
+		return true;
 	}
 
 private:
-	std::wstring GetHKLM(std::wstring SubKey, std::wstring Value)
+
+	bool Cmd(const std::string& input)
 	{
-		DWORD Size{};
-		std::wstring Ret{};
+		auto* shell_cmd = _popen(input.c_str(), "r");
 
-		RegGetValueW(HKEY_LOCAL_MACHINE,
-			SubKey.c_str(),
-			Value.c_str(),
-			RRF_RT_REG_SZ,
-			nullptr,
-			nullptr,
-			&Size);
-
-		Ret.resize(Size);
-
-		RegGetValueW(HKEY_LOCAL_MACHINE,
-			SubKey.c_str(),
-			Value.c_str(),
-			RRF_RT_REG_SZ,
-			nullptr,
-			&Ret[0],
-			&Size);
-
-		return Ret.c_str();
-	}
-
-	template <typename T = const wchar_t*>
-	void QueryWMI(std::wstring WMIClass, std::wstring Field, std::vector <T>& Value, const wchar_t* ServerName = L"ROOT\\CIMV2")
-	{
-		std::wstring Query(L"SELECT ");
-		Query.append(Field.c_str()).append(L" FROM ").append(WMIClass.c_str());
-
-		IWbemLocator* Locator{};
-		IWbemServices* Services{};
-		IEnumWbemClassObject* Enumerator{};
-		IWbemClassObject* ClassObject{};
-		VARIANT Variant{};
-		DWORD Returned{};
-
-		HRESULT hResult{ CoInitializeEx(nullptr, COINIT_MULTITHREADED) };
-
-		if (FAILED(hResult)) {
-			return;
-		}
-
-		hResult = CoInitializeSecurity(nullptr,
-			-1,
-			nullptr,
-			nullptr,
-			RPC_C_AUTHN_LEVEL_DEFAULT,
-			RPC_C_IMP_LEVEL_IMPERSONATE,
-			nullptr,
-			EOAC_NONE,
-			nullptr);
-
-		if (FAILED(hResult))
+		if (!shell_cmd)
 		{
-			CoUninitialize();
-			return;
+			_pclose(shell_cmd);
+			return false;
 		}
-
-		hResult = CoCreateInstance(CLSID_WbemLocator,
-			NULL,
-			CLSCTX_INPROC_SERVER,
-			IID_IWbemLocator,
-			reinterpret_cast<PVOID*>(&Locator));
-
-		if (FAILED(hResult))
+		else
 		{
-			CoUninitialize();
-			return;
+			_pclose(shell_cmd);
+			return true;
 		}
+	}
 
-		hResult = Locator->ConnectServer(_bstr_t(ServerName),
-			nullptr,
-			nullptr,
-			nullptr,
-			NULL,
-			nullptr,
-			nullptr,
-			&Services);
-
-		if (FAILED(hResult))
+	bool WMIC(const std::string& input, std::string& out)
+	{
+		auto* shell_cmd = _popen(input.c_str(), "r");
+		if (!shell_cmd)
 		{
-			Locator->Release();
-			CoUninitialize();
-			return;
+			return false;
 		}
 
-		hResult = CoSetProxyBlanket(Services,
-			RPC_C_AUTHN_WINNT,
-			RPC_C_AUTHZ_NONE,
-			nullptr,
-			RPC_C_AUTHN_LEVEL_CALL,
-			RPC_C_IMP_LEVEL_IMPERSONATE,
-			nullptr,
-			EOAC_NONE);
+		static char buffer[1024] = {};
 
-		if (FAILED(hResult))
+		while (fgets(buffer, 1024, shell_cmd))
 		{
-			Services->Release();
-			Locator->Release();
-			CoUninitialize();
-			return;
+			out.append(buffer);
 		}
 
-		hResult = Services->ExecQuery(bstr_t(L"WQL"),
-			bstr_t(Query.c_str()),
-			WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-			nullptr,
-			&Enumerator);
+		_pclose(shell_cmd);
 
-		if (FAILED(hResult))
-		{
-			Services->Release();
-			Locator->Release();
-			CoUninitialize();
-			return;
+		while (out.back() == '\n' ||
+			out.back() == '\0' ||
+			out.back() == ' ' ||
+			out.back() == '\r' ||
+			out.back() == '\t') {
+			out.pop_back();
 		}
 
-		while (Enumerator)
-		{
-
-			HRESULT Res = Enumerator->Next(WBEM_INFINITE,
-				1,
-				&ClassObject,
-				&Returned);
-
-			if (!Returned)
-			{
-				break;
-			}
-
-			Res = ClassObject->Get(Field.c_str(),
-				0,
-				&Variant,
-				nullptr,
-				nullptr);
-
-			if (typeid(T) == typeid(long) || typeid(T) == typeid(int))
-			{
-				Value.push_back((T)Variant.intVal);
-			}
-			else if (typeid(T) == typeid(bool))
-			{
-				Value.push_back((T)Variant.boolVal);
-			}
-			else if (typeid(T) == typeid(unsigned int))
-			{
-				Value.push_back((T)Variant.uintVal);
-			}
-			else if (typeid(T) == typeid(unsigned short))
-			{
-				Value.push_back((T)Variant.uiVal);
-			}
-			else if (typeid(T) == typeid(long long))
-			{
-				Value.push_back((T)Variant.llVal);
-			}
-			else if (typeid(T) == typeid(unsigned long long))
-			{
-				Value.push_back((T)Variant.ullVal);
-			}
-			else
-			{
-				Value.push_back((T)((bstr_t)Variant.bstrVal).copy());
-			}
-
-			VariantClear(&Variant);
-			ClassObject->Release();
-		}
-
-		if (!Value.size())
-		{
-			Value.resize(1);
-		}
-
-		Services->Release();
-		Locator->Release();
-		Enumerator->Release();
-		CoUninitialize();
+		return !out.empty();
 	}
 
-	void QuerySMBIOS()
-	{
-		std::vector <const wchar_t*> SerialNumber{};
-		QueryWMI(L"Win32_BaseBoard", L"SerialNumber", SerialNumber);
-		this->SMBIOS.SerialNumber = SafeString(SerialNumber.at(0));
-	}
-
-
-	void QueryProcessor()
-	{
-		std::vector <const wchar_t*> ProcessorId{};
-
-		QueryWMI(L"Win32_Processor", L"ProcessorId", ProcessorId);
-		this->CPU.ProcessorID = SafeString(ProcessorId.at(0));
-	}
-
-	void QuerySystem()
-	{
-		std::vector <const wchar_t*> SystemName{};
-		std::vector <const wchar_t*> OSSerialNumber{};
-
-		QueryWMI(L"Win32_ComputerSystem", L"Name", SystemName);
-		QueryWMI(L"Win32_OperatingSystem", L"SerialNumber", OSSerialNumber);
-
-		this->System.Name = SafeString(SystemName.at(0));
-		this->System.OSSerialNumber = SafeString(OSSerialNumber.at(0));
-	}
-
-	void QueryRegistry()
-	{
-		this->Registry.ComputerHardwareID = SafeString(GetHKLM(L"SYSTEM\\CurrentControlSet\\Control\\SystemInformation", L"ComputerHardwareId").c_str());
-	}
-
-public:
-	struct
-	{
-		std::wstring SerialNumber{};
-	} SMBIOS;
-
-	struct
-	{
-		std::wstring ProcessorID{};
-
-	} CPU;
-
-	struct
-	{
-		std::wstring Name{};
-		std::wstring OSSerialNumber{};
-
-	} System;
-
-	struct
-	{
-		std::wstring ComputerHardwareID{};
-	} Registry;
-
-
-	std::unique_ptr<HardwareID> Pointer()
-	{
-		return std::make_unique<HardwareID>(*this);
-	}
-
-	void GetHardwareID()
-	{
-		QuerySMBIOS();
-		QueryProcessor();
-		QuerySystem();
-		QueryRegistry();
-	}
-
-	HardwareID()
-	{
-		//GetHardwareID();
-	}
+private:
+	std::string m_szProcessorId;
+	std::string m_szSystemName;
+	std::string m_szBaseBoardSerial;
+	std::string m_szHddSerial;
+	std::string m_szuid;
+	std::string m_szSystemSerialNumber;
 };
+

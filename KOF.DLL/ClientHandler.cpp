@@ -33,7 +33,7 @@ void ClientHandler::Clear()
 
 	m_bConfigurationLoaded = false;
 
-#ifndef _WINDLL
+#ifdef USE_MAILSLOT
 	m_bMailSlotWorking = false;
 	m_szMailSlotRecvName.clear();
 	m_szMailSlotSendName.clear();
@@ -44,6 +44,8 @@ void ClientHandler::Clear()
 
 	m_szAccountId.clear();
 	m_szPassword.clear();
+
+	m_vecOrigDeathEffectFunction.clear();
 }
 
 void ClientHandler::Initialize()
@@ -94,6 +96,7 @@ void ClientHandler::Process()
 
 		StopHandler();
 
+#ifdef AUTO_LOGIN_TEST
 		std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 		PushPhase(GetAddress("KO_PTR_INTRO"));
@@ -106,6 +109,7 @@ void ClientHandler::Process()
 
 			ConnectLoginServer();
 		});
+#endif
 	}
 }
 
@@ -115,6 +119,9 @@ void ClientHandler::OnReady()
 	printf("Client handler ready\n");
 #endif
 
+	new std::thread([this]() { m_Bot->InitializeStaticData(); });
+
+#ifdef AUTO_LOGIN_TEST
 	PushPhase(GetAddress("KO_PTR_INTRO"));
 
 	new std::thread([this]()
@@ -123,17 +130,14 @@ void ClientHandler::OnReady()
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-		new std::thread([this]() { m_Bot->InitializeStaticData(); });
-
 		SetLoginInformation("colinkazim", "ttCnkoSh1993");
 		ConnectLoginServer();
 	});
+#endif
 }
 
 void ClientHandler::PatchClient()
 {
-	m_ClientHook = new ClientHook(this);
-
 	onClientSendProcess = [=](BYTE* iStream, DWORD iStreamLength)
 	{
 		SendProcess(iStream, iStreamLength);
@@ -144,25 +148,24 @@ void ClientHandler::PatchClient()
 		RecvProcess(iStream, iStreamLength);
 	};
 
-	for (size_t i = 0; i < 11; i++)
+	//CNKO: 11
+	for (size_t i = 0; i < 12; i++)
 		PatchRecvAddress(GetAddress("KO_PTR_INTRO") + (4 * i));
 
 	PatchSendAddress();
 
-#ifndef _WINDLL
+#ifdef USE_MAILSLOT
 	m_bMailSlotWorking = true;
 	new std::thread([this]() { MailSlotRecvProcess(); });
 	new std::thread([this]() { MailSlotSendProcess(); });
 #endif
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 	OnReady();
 }
 
 void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 {
-#ifdef _WINDLL
+#ifndef USE_MAILSLOT
 	WaitCondition(Read4Byte(dwAddress) == 0);
 
 	DWORD dwRecvAddress = Read4Byte(Read4Byte(dwAddress)) + 0x8;
@@ -198,7 +201,9 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 		0xC2, 0x08, 0x00						//ret 0008
 	};
 
-	DWORD dwRecvProcessFunction = (DWORD)(LPVOID*)m_ClientHook->RecvProcess;
+	ClientHook* pClientHook = new ClientHook(this);
+
+	DWORD dwRecvProcessFunction = (DWORD)(LPVOID*)pClientHook->RecvProcess;
 	CopyBytes(byPatch + 36, dwRecvProcessFunction);
 
 	DWORD dwDlgAddress = dwAddress;
@@ -209,7 +214,7 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 
 	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwPatchAddress = (DWORD)VirtualAlloc(0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwPatchAddress == 0)
 		return;
@@ -217,14 +222,32 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 	WriteBytes(dwPatchAddress, vecPatch);
 
 	DWORD dwOldProtection;
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	VirtualProtect((LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
 	Write4Byte(dwRecvAddress, dwPatchAddress);
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
+	VirtualProtect((LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
 #else
 
-	WaitCondition(Read4Byte(dwAddress) == 0);
+#ifdef _WINDLL
+	HANDLE hProcess = GetCurrentProcess();
+#else
+	HANDLE hProcess = m_Bot->GetInjectedProcessInfo().hProcess;
+#endif
 
-	HMODULE hModuleKernel32 = GetModuleHandle(L"kernel32.dll");
+	if (hProcess == 0)
+	{
+#ifdef DEBUG
+		printf("hProcess == nullptr\n");
+#endif
+		return;
+	}
+
+	DWORD dwAddressReady = 0;
+	while (dwAddressReady == 0)
+	{
+		ReadProcessMemory(hProcess, (LPVOID*)dwAddress, &dwAddressReady, 4, 0);
+	}
+
+	HMODULE hModuleKernel32 = GetModuleHandle("kernel32.dll");
 
 	if (hModuleKernel32 == nullptr)
 	{
@@ -238,7 +261,7 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 	LPVOID* pWriteFilePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "WriteFile");
 	LPVOID* pCloseHandlePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "CloseHandle");
 
-	DWORD dwMailSlotNameAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwMailSlotNameAddress = (DWORD)VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwMailSlotNameAddress == 0)
 		return;
@@ -250,7 +273,7 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 
 	if (m_RecvHookAddress == 0)
 	{
-		m_RecvHookAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+		m_RecvHookAddress = (DWORD)VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 		if (m_RecvHookAddress == 0)
 			return;
@@ -347,7 +370,7 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 
 	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwPatchAddress == 0)
 		return;
@@ -355,9 +378,11 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 	WriteBytes(dwPatchAddress, vecPatch);
 
 	DWORD dwOldProtection;
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	VirtualProtectEx(hProcess, (LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
 	Write4Byte(Read4Byte(Read4Byte(dwAddress)) + 0x8, dwPatchAddress);
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
+	VirtualProtectEx(hProcess, (LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
+
+	CloseHandle(hProcess);
 #endif
 
 #ifdef DEBUG
@@ -367,7 +392,7 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 
 void ClientHandler::PatchSendAddress()
 {
-#ifdef _WINDLL
+#ifndef USE_MAILSLOT
 	WaitCondition(Read4Byte(GetAddress("KO_SND_FNC")) == 0);
 
 	BYTE byPatch1[] =
@@ -388,7 +413,9 @@ void ClientHandler::PatchSendAddress()
 		0xFF, 0xE2									//jmp edx
 	};
 
-	DWORD dwSendProcessFunction = (DWORD)(LPVOID*)m_ClientHook->SendProcess;
+	ClientHook* pClientHook = new ClientHook(this);
+
+	DWORD dwSendProcessFunction = (DWORD)(LPVOID*)pClientHook->SendProcess;
 	CopyBytes(byPatch1 + 11, dwSendProcessFunction);
 
 	DWORD dwKoPtrSndFnc = GetAddress("KO_SND_FNC");
@@ -396,7 +423,7 @@ void ClientHandler::PatchSendAddress()
 
 	std::vector<BYTE> vecPatch1(byPatch1, byPatch1 + sizeof(byPatch1));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwPatchAddress = (DWORD)VirtualAlloc(0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwPatchAddress == 0)
 		return;
@@ -414,14 +441,32 @@ void ClientHandler::PatchSendAddress()
 	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
 
 	DWORD dwOldProtection;
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	VirtualProtect((LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
 	WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
+	VirtualProtect((LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
 #else
 
-	WaitCondition(Read4Byte(GetAddress("KO_SND_FNC")) == 0);
+#ifdef _WINDLL
+	HANDLE hProcess = GetCurrentProcess();
+#else
+	HANDLE hProcess = m_Bot->GetInjectedProcessInfo().hProcess;
+#endif
 
-	HMODULE hModuleKernel32 = GetModuleHandle(L"kernel32.dll");
+	if (hProcess == 0)
+	{
+#ifdef DEBUG
+		printf("hProcess == nullptr\n");
+#endif
+		return;
+	}
+
+	DWORD dwAddressReady = 0;
+	while (dwAddressReady == 0)
+	{
+		ReadProcessMemory(hProcess, (LPVOID*)GetAddress("KO_SND_FNC"), &dwAddressReady, 4, 0);
+	}
+
+	HMODULE hModuleKernel32 = GetModuleHandle("kernel32.dll");
 
 	if (hModuleKernel32 == nullptr)
 	{
@@ -435,7 +480,7 @@ void ClientHandler::PatchSendAddress()
 	LPVOID* pWriteFilePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "WriteFile");
 	LPVOID* pCloseHandlePtr = (LPVOID*)GetProcAddress(hModuleKernel32, "CloseHandle");
 
-	DWORD dwMailSlotNameAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwMailSlotNameAddress = (DWORD)VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwMailSlotNameAddress == 0)
 		return;
@@ -447,7 +492,7 @@ void ClientHandler::PatchSendAddress()
 
 	if (m_SendHookAddress == 0)
 	{
-		m_SendHookAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+		m_SendHookAddress = (DWORD)VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 		if (m_SendHookAddress == 0)
 			return;
@@ -526,7 +571,7 @@ void ClientHandler::PatchSendAddress()
 
 	std::vector<BYTE> vecPatch1(byPatch1, byPatch1 + sizeof(byPatch1));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, vecPatch1.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(hProcess, 0, vecPatch1.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwPatchAddress == 0)
 		return;
@@ -544,9 +589,11 @@ void ClientHandler::PatchSendAddress()
 	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
 
 	DWORD dwOldProtection;
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	VirtualProtectEx(hProcess, (LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
 	WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
-	VirtualProtectEx(m_Bot->GetInjectedProcess(), (LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
+	VirtualProtectEx(hProcess, (LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
+
+	CloseHandle(hProcess);
 #endif
 
 #ifdef DEBUG
@@ -554,7 +601,6 @@ void ClientHandler::PatchSendAddress()
 #endif
 }
 
-#ifndef _WINDLL
 void ClientHandler::MailSlotRecvProcess()
 {
 	HANDLE hSlot = CreateMailslotA(m_szMailSlotRecvName.c_str(), 0, MAILSLOT_WAIT_FOREVER, (LPSECURITY_ATTRIBUTES)NULL);
@@ -652,7 +698,6 @@ void ClientHandler::MailSlotSendProcess()
 		onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
 	}
 }
-#endif
 
 void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 {
@@ -735,6 +780,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 #ifdef DEBUG
 				printf("RecvProcess::LS_SERVERLIST: %d Server loaded\n", byServerCount);
 #endif
+
+#ifdef AUTO_LOGIN_TEST
 				new std::thread([this]()
 				{
 #ifdef DEBUG
@@ -744,6 +791,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 #endif
 					ConnectGameServer(1);
 				});
+#endif
 			}
 		}
 		break;
@@ -766,6 +814,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Character list loaded\n");
 #endif
 
+#ifdef AUTO_LOGIN_TEST
 				new std::thread([this]()
 				{
 #ifdef DEBUG
@@ -777,6 +826,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					SelectCharacterSkip();
 					SelectCharacter(1);
 				});
+#endif
 			}
 		}
 		break;
@@ -1472,6 +1522,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					EquipOreads(700039000);
 					SetOreads(bOreads);
 				}
+
+				bool bDeathEffect = GetConfiguration()->GetBool("Feature", "DeathEffect", false);
+
+				if (bDeathEffect)
+				{
+					PatchDeathEffect(true);
+				}
 			});
 		}
 		break;
@@ -1484,13 +1541,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				if (iNpcCount < 0 || iNpcCount >= 1000)
 					return;
 
+			Guard lock(m_vecNpcLock);
+
 			for (int16_t i = 0; i < iNpcCount; i++)
 			{
 				auto pNpc = InitializeNpc(pkt);
 
 				int32_t iNpcID = pNpc.iID;
-
-				Guard lock(m_vecNpcLock);
 				auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 					[iNpcID](const TNpc& a) { return a.iID == iNpcID; });
 
@@ -1514,13 +1571,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				if (iUserCount < 0 || iUserCount >= 1000)
 					return;
 
+			Guard lock(m_vecPlayerLock);
 			for (int16_t i = 0; i < iUserCount; i++)
 			{
 				uint8_t iUnknown0 = pkt.read<uint8_t>();
 
 				auto pUser = InitializePlayer(pkt);
-
-				Guard lock(m_vecPlayerLock);
+				
 				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 					[pUser](const TPlayer& a) { return a.iID == pUser.iID; });
 
@@ -3131,12 +3188,22 @@ void ClientHandler::SendPacket(Packet vecBuffer)
 	pSendFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
 #else
 
-	DWORD dwPacketAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcess(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+
+	if (hProcess == 0)
+	{
+#ifdef DEBUG
+		printf("hProcess == nullptr\n");
+#endif
+		return;
+	}
+
+	DWORD dwPacketAddress = (DWORD)VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (dwPacketAddress == 0)
 		return;
 
-	WriteProcessMemory(m_Bot->GetInjectedProcess(), (LPVOID)dwPacketAddress, vecBuffer.contents(), vecBuffer.size(), 0);
+	WriteProcessMemory(hProcess, (LPVOID)dwPacketAddress, vecBuffer.contents(), vecBuffer.size(), 0);
 
 	BYTE byCode[] =
 	{
@@ -3163,8 +3230,9 @@ void ClientHandler::SendPacket(Packet vecBuffer)
 	CopyBytes(byCode + 18, dwPtrSndFnc);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-	VirtualFreeEx(m_Bot->GetInjectedProcess(), (LPVOID)dwPacketAddress, 0, MEM_RELEASE);
+	VirtualFreeEx(hProcess, (LPVOID)dwPacketAddress, 0, MEM_RELEASE);
 
+	CloseHandle(hProcess);
 #endif
 }
 
@@ -3647,7 +3715,7 @@ void ClientHandler::BasicAttackProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (GetTarget() == -1)
 			continue;
@@ -3681,27 +3749,34 @@ void ClientHandler::BasicAttackProcess()
 
 		auto iLeftHandWeapon = GetInventoryItemSlot(6);
 
-		uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon->iItemID / 1000 * 1000;
-		auto pLeftHandWeaponItemData = pItemTable.find(iLeftHandWeaponBaseID);
-
-		if (pLeftHandWeaponItemData != pItemTable.end())
+		if (iLeftHandWeapon != nullptr)
 		{
-			if (pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
-				|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
-				|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_CROSS)
-				continue;
+			uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon->iItemID / 1000 * 1000;
+			auto pLeftHandWeaponItemData = pItemTable.find(iLeftHandWeaponBaseID);
+
+			if (pLeftHandWeaponItemData != pItemTable.end())
+			{
+				if (pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
+					|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
+					|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_CROSS)
+					continue;
+			}
 		}
 
 		auto iRightHandWeapon = GetInventoryItemSlot(8);
-		uint32_t iRightHandWeaponBaseID = iRightHandWeapon->iItemID / 1000 * 1000;
-		auto pRightHandWeaponItemData = pItemTable.find(iRightHandWeaponBaseID);
 
-		if (pRightHandWeaponItemData != pItemTable.end())
-		{
-			if (pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
-				|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
-				|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_CROSS)
-				continue;
+		if (iRightHandWeapon != nullptr)
+		{	
+			uint32_t iRightHandWeaponBaseID = iRightHandWeapon->iItemID / 1000 * 1000;
+			auto pRightHandWeaponItemData = pItemTable.find(iRightHandWeaponBaseID);
+
+			if (pRightHandWeaponItemData != pItemTable.end())
+			{
+				if (pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
+					|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
+					|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_CROSS)
+					continue;
+			}
 		}
 
 		SendBasicAttackPacket(GetTarget(), 1.10f, 1.0f);
@@ -3724,7 +3799,7 @@ void ClientHandler::AttackProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (GetTarget() == -1)
 			continue;
@@ -3752,6 +3827,9 @@ void ClientHandler::AttackProcess()
 			continue;
 
 		std::vector<int> vecAttackSkillList = GetConfiguration()->GetInt("Automation", "AttackSkillList", std::vector<int>());
+
+		if (vecAttackSkillList.size() == 0)
+			continue;
 
 		auto pSort = [](int& a, int& b)
 		{
@@ -3805,7 +3883,9 @@ void ClientHandler::AttackProcess()
 
 				UseSkill(pSkillData->second, GetTarget());
 
-				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+				int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
 			}			
 		}
 
@@ -3835,7 +3915,7 @@ void ClientHandler::SearchTargetProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (IsBlinking())
 			continue;
@@ -3893,15 +3973,15 @@ void ClientHandler::SearchTargetProcess()
 					});
 			}
 
-			auto pSort = [this](TNpc const& a, TNpc const& b)
-			{
-				return GetDistance(a.fX, a.fY) < GetDistance(b.fX, b.fY);
-			};
-
-			std::sort(vecFilteredNpc.begin(), vecFilteredNpc.end(), pSort);
-
 			if (vecFilteredNpc.size() > 0)
 			{
+				//auto pSort = [this](TNpc const& a, TNpc const& b)
+				//{
+				//	return GetDistance(a.fX, a.fY) < GetDistance(b.fX, b.fY);
+				//};
+
+				//std::sort(vecFilteredNpc.begin(), vecFilteredNpc.end(), pSort);
+
 				auto pFindedTarget = vecFilteredNpc.at(0);
 
 				SetTarget(pFindedTarget.iID);
@@ -3913,44 +3993,36 @@ void ClientHandler::SearchTargetProcess()
 		else
 		{
 			Guard lock(m_vecNpcLock);
-			auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+			auto pTarget = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 				[this](const TNpc& a)
 				{
 					return a.iID == GetTarget();
 				});
 
-			if (it != m_vecNpc.end())
+			if (&(pTarget))
 			{
-				if (!bAutoTarget && !std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), it->iProtoID))
+				if (!bAutoTarget && !std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), pTarget->iProtoID))
 				{
-#ifdef DEBUG
-					printf("SearchTargetProcess:: %d, Target not selected, selecting new target\n", it->iID);
-#endif
 					SetTarget(-1);
+					continue;
 				}
 
-				if (GetDistance(it->fX, it->fY) > (float)MAX_ATTACK_RANGE)
+				if (GetDistance(pTarget->fX, pTarget->fY) > (float)MAX_ATTACK_RANGE)
 				{
-#ifdef DEBUG
-					printf("SearchTargetProcess:: %d, Target out of range, selecting new target\n", it->iID);
-#endif
 					SetTarget(-1);
+					continue;
 				}
 
-				if (it->eState == PSA_DYING || it->eState == PSA_DEATH)
+				if (pTarget->eState == PSA_DYING || pTarget->eState == PSA_DEATH)
 				{
-#ifdef DEBUG
-					printf("SearchTargetProcess:: %d, Target Dead\n", it->iID);
-#endif
 					SetTarget(-1);
+					continue;
 				}
 			}
 			else
 			{
-#ifdef DEBUG
-				printf("SearchTargetProcess:: %d, Target Lost\n", it->iID);
-#endif
 				SetTarget(-1);
+				continue;
 			}
 		}
 	}
@@ -3968,7 +4040,7 @@ void ClientHandler::AutoLootProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (IsBlinking())
 			continue;
@@ -3991,18 +4063,18 @@ void ClientHandler::AutoLootProcess()
 				std::back_inserter(vecFilteredLoot),
 				[msNow](const TLoot& c)
 				{
-					return (c.msDropTime.count() + 750) < msNow.count() && c.iRequestedOpen == false;
+					return (c.msDropTime.count() + 1000) < msNow.count() && c.iRequestedOpen == false;
 				});
-
-			auto pSort = [](TLoot const& a, TLoot const& b)
-			{
-				return a.msDropTime.count() > b.msDropTime.count();
-			};
-
-			std::sort(vecFilteredLoot.begin(), vecFilteredLoot.end(), pSort);
 
 			if (vecFilteredLoot.size() > 0)
 			{
+				auto pSort = [](TLoot const& a, TLoot const& b)
+				{
+					return a.msDropTime.count() > b.msDropTime.count();
+				};
+
+				std::sort(vecFilteredLoot.begin(), vecFilteredLoot.end(), pSort);
+
 				auto pFindedLoot = vecFilteredLoot.at(0);
 
 				bool bMoveToLoot = GetConfiguration()->GetBool("AutoLoot", "MoveToLoot", false);
@@ -4024,9 +4096,9 @@ void ClientHandler::AutoLootProcess()
 
 					if (pNpc != m_vecNpc.end())
 					{
-						while (GetDistance(pNpc->fX, pNpc->fY) > 3.0f)
+						while (m_bWorking && GetDistance(pNpc->fX, pNpc->fY) > 1.0f)
 						{
-							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+							std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 							SetMovePosition(Vector3(pNpc->fX, pNpc->fZ, pNpc->fY));
 							SetMovingToLoot(true);
@@ -4086,7 +4158,7 @@ void ClientHandler::CharacterProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (IsBlinking())
 			continue;
@@ -4096,6 +4168,9 @@ void ClientHandler::CharacterProcess()
 		if (bCharacterStatus)
 		{
 			std::vector<int> vecCharacterSkillList = GetConfiguration()->GetInt("Automation", "CharacterSkillList", std::vector<int>());
+
+			if (vecCharacterSkillList.size() == 0)
+				continue;
 
 			auto pSort = [](int& a, int& b)
 			{
@@ -4173,7 +4248,7 @@ void ClientHandler::ProtectionProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (IsBlinking())
 			continue;
@@ -4293,7 +4368,7 @@ void ClientHandler::GodModeProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (IsBlinking())
 			continue;
@@ -4350,7 +4425,7 @@ void ClientHandler::MinorProcess()
 
 	while (m_bWorking)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 		if (IsBlinking())
 			continue;
@@ -4373,7 +4448,6 @@ void ClientHandler::MinorProcess()
 				{
 					UseSkill(*it, GetID());
 				}
-
 			}
 		}
 	}
@@ -4381,4 +4455,21 @@ void ClientHandler::MinorProcess()
 #ifdef DEBUG
 	printf("ClientHandler::MinorProcess Stopped\n");
 #endif
+}
+
+void ClientHandler::PatchDeathEffect(bool bValue)
+{
+	if (bValue)
+	{
+		if (m_vecOrigDeathEffectFunction.size() == 0)
+			m_vecOrigDeathEffectFunction = ReadBytes(GetAddress("KO_DEATH_EFFECT"), 2);
+
+		std::vector<uint8_t> vecPatch = { 0x90, 0x90 };
+		WriteBytes(GetAddress("KO_DEATH_EFFECT"), vecPatch);
+	}
+	else
+	{
+		if (m_vecOrigDeathEffectFunction.size() > 0)
+			WriteBytes(GetAddress("KO_DEATH_EFFECT"), m_vecOrigDeathEffectFunction);
+	}
 }

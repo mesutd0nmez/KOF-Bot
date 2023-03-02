@@ -1,11 +1,17 @@
 #pragma once
 
 #define DEBUG
-//#define PRINT_RECV_PACKET
-//#define PRINT_SEND_PACKET
+#define PRINT_RECV_PACKET
+#define PRINT_SEND_PACKET
+
+#define USE_MAILSLOT
+
+//#define AUTO_LOGIN_TEST
+
+//#define DISABLE_XIGNCODE
 
 #ifdef DEBUG
-#define DEVELOPMENT_PATH "C:\\CNKO"
+#define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #else
 #define DEVELOPMENT_PATH ".\\"
 #endif

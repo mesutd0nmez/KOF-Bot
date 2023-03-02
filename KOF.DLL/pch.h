@@ -18,9 +18,19 @@
 	while(condition) \
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION & processInfo);
+typedef LONG(NTAPI* NtSuspendProcess)(IN HANDLE ProcessHandle);
+typedef LONG(NTAPI* NtResumeProcess)(IN HANDLE ProcessHandle);
+
+extern void SuspendProcess(HANDLE hProcess);
+extern void SuspendProcess(DWORD iProcessId);
+extern void ResumeProcess(HANDLE hProcess);
+extern void ResumeProcess(DWORD iProcessId);
+
+extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION& processInfo);
 
 extern std::string to_string(wchar_t const* wcstr);
 extern std::string to_string(std::wstring const& wstr);
+
+extern std::vector<std::string> Tokenize(std::string const& str, const char delimeter);
 
 #endif //PCH_H

@@ -15,7 +15,7 @@ public:
 	Service* GetService() { return static_cast<Service*>(this); }
 
 public:
-	void Initialize();
+	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
 	void InitializeStaticData();
 
 	void Process();
@@ -66,8 +66,11 @@ private:
 	Table<__TABLE_MOB_USKO>* m_pTbl_Mob;
 
 public:
-	HANDLE GetInjectedProcess() { return m_hInjectedProcess; };
 	DWORD GetInjectedProcessId() { return m_dwInjectedProcessID; };
+
+#ifndef _WINDLL
+	PROCESS_INFORMATION GetInjectedProcessInfo() { return m_injectedProcessInfo; };
+#endif
 
 	BYTE ReadByte(DWORD dwAddress);
 	DWORD Read4Byte(DWORD dwAddress);
@@ -87,8 +90,13 @@ public:
 	bool IsTableLoaded() { return m_bTableLoaded; }
 
 private:
-	HANDLE m_hInjectedProcess;
 	DWORD m_dwInjectedProcessID;
 	bool m_bTableLoaded;
+	std::chrono::milliseconds	msLastConfigurationSave;
+
+#ifndef _WINDLL
+private:
+	PROCESS_INFORMATION m_injectedProcessInfo;
+#endif
 };
 

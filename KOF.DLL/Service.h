@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Enum.h"
 #include "Socket.h"
 #include "Ini.h"
+
 
 class Service : Socket
 {
@@ -25,9 +27,11 @@ private:
 	virtual void OnLoaded() = 0;
 	virtual void OnConfigurationLoaded() = 0;
 
+protected:
+	void SendLogin(std::string szToken);
+
 private:
 	void SendReady();
-	void SendLogin(std::string szToken);
 	void SendPointerRequest();
 	void SendPong();
 
@@ -40,9 +44,12 @@ private:
 protected:
 	Ini* m_iniPointer;
 	Ini* m_iniUserConfiguration;
+	std::string m_szToken;
+
+	PlatformType m_ePlatformType;
+	int32_t m_iSelectedAccount;
 
 private:
-	std::string m_szToken;
 	Ini* m_iniConfiguration;
 
 };

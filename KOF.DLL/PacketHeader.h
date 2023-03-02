@@ -1,7 +1,5 @@
 #pragma once
 
-#include "pch.h"
-
 #define LS_VERSION_REQ			0x01
 #define LS_DOWNLOADINFO_REQ		0x02
 #define LS_CRYPTION				0xF2

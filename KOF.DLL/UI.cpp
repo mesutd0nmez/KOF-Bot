@@ -174,6 +174,8 @@ void UI::Render(Bot* pBot)
 
     while (!bDone)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {

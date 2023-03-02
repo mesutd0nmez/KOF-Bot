@@ -2,45 +2,42 @@
 #include "UI.h"
 #include "Bot.h"
 #include "ClientHandler.h"
+#include "ReflectiveInjection.h"
 
 #ifdef _WINDLL
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
+extern HINSTANCE hAppInstance;
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 {
-    if (fdwReason == DLL_PROCESS_ATTACH)
+    BOOL bReturnValue = TRUE;
+
+    switch (dwReason)
     {
+        case DLL_QUERY_HMODULE:
+            if (lpReserved != NULL)
+                *(HMODULE*)lpReserved = hAppInstance;
+            break;
+        case DLL_PROCESS_ATTACH:
+            hAppInstance = hinstDLL;
 #ifdef DEBUG
-        AllocConsole();
-        freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+            AllocConsole();
+            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 #endif
-
-        DisableThreadLibraryCalls(hinstDLL);
-
-        auto player = std::make_unique<Bot>();
-        player->Initialize();
-
-        bool bWorking = true;
-
-        while (bWorking)
+            break;
+        case DLL_PROCESS_DETACH:
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-            if (player->GetInjectedProcessId() != 0 && player->IsInjectedProcessLost())
-                bWorking = false;
-
-            player->Process();
-        }
-
 #ifdef DEBUG
-        FreeConsole();
+            FreeConsole();
 #endif
-
-        ExitThread(0);
+        }
+        break;
+        case DLL_THREAD_ATTACH:
+        case DLL_THREAD_DETACH:
+            break;
     }
 
-    return FALSE;
+    return bReturnValue;
 }
-
 #else
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -50,9 +47,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 #endif
 
-    auto player = std::make_unique<Bot>();
+    Bot* bot = new Bot();
 
-    player->Initialize();
+    bot->Initialize();
 
     bool bWorking = true;
 
@@ -60,10 +57,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-        if (player->GetInjectedProcessId() != 0 && player->IsInjectedProcessLost())
+        if (bot->GetInjectedProcessId() != 0 && bot->IsInjectedProcessLost())
             bWorking = false;
 
-        player->Process();
+        bot->Process();
     }
 
 #ifdef DEBUG

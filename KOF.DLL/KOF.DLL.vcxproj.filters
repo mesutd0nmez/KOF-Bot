@@ -43,6 +43,12 @@
     <Filter Include="Source Files\Client">
       <UniqueIdentifier>{a12b818c-6f41-441a-b416-495cad0eeb1f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\ReflectiveInjection">
+      <UniqueIdentifier>{146ccbc4-24f4-4cbd-9269-b4513c191e56}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\ReflectiveInjection">
+      <UniqueIdentifier>{ab8f06b1-852e-4ad8-acf0-422356591129}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -84,9 +90,6 @@
     <ClInclude Include="PacketHeader.h">
       <Filter>Header Files\Socket</Filter>
     </ClInclude>
-    <ClInclude Include="HardwareID.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
     <ClInclude Include="Ini.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
@@ -120,6 +123,21 @@
     <ClInclude Include="Guard.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
+    <ClInclude Include="Remap.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="ReflectiveInjection.h">
+      <Filter>Header Files\ReflectiveInjection</Filter>
+    </ClInclude>
+    <ClInclude Include="ReflectiveLoader.h">
+      <Filter>Header Files\ReflectiveInjection</Filter>
+    </ClInclude>
+    <ClInclude Include="HardwareID.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SkCrypter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -151,6 +169,12 @@
     </ClCompile>
     <ClCompile Include="ClientHandler.cpp">
       <Filter>Source Files\Client</Filter>
+    </ClCompile>
+    <ClCompile Include="EntryPoint.cpp">
+      <Filter>Source Files\ReflectiveInjection</Filter>
+    </ClCompile>
+    <ClCompile Include="ReflectiveLoader.cpp">
+      <Filter>Source Files\ReflectiveInjection</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

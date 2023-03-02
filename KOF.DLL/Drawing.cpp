@@ -157,6 +157,7 @@ void Drawing::DrawGameController()
                     );
                 }
 
+                Guard npcListLock(m_pClient->m_vecNpcLock);
                 auto pNpcList = m_pClient->GetNpcList();
 
                 if (pNpcList.size() > 0)
@@ -177,6 +178,7 @@ void Drawing::DrawGameController()
                     }
                 }
 
+                Guard playerListLock(m_pClient->m_vecPlayerLock);
                 auto pPlayerList = m_pClient->GetPlayerList();
 
                 if (pPlayerList.size() > 0)
@@ -580,6 +582,21 @@ void Drawing::DrawMainFeaturesArea()
             ImGui::SameLine();
 
             ImGui::Text("Oreads");
+
+            ImGui::SameLine();
+
+            bool bDeathEffect = m_pConfiguration->GetBool("Feature", "DeathEffect", false);
+
+            if (ImGui::Checkbox("##DeathEffect", &bDeathEffect))
+            {
+                m_pClient->PatchDeathEffect(bDeathEffect);
+                m_pConfiguration->SetInt("Feature", "DeathEffect", bDeathEffect ? 1 : 0);
+            }
+                
+
+            ImGui::SameLine();
+
+            ImGui::Text("Patch Death Effect");
         }
     }
 }
@@ -744,101 +761,98 @@ void Drawing::DrawMonsterListTree()
 
         std::vector<int> vecSelectedNpcList = m_pConfiguration->GetInt("Attack", "NpcList", std::vector<int>());
 
+        Guard lock(m_pClient->m_vecNpcLock);
         auto mapNpcList = m_pClient->GetNpcList();
 
-        for (const auto& x : vecSelectedNpcList)
+        if (mapNpcList.size() > 0)
         {
-            SNpcData pNpcData;
-
-            pNpcData.iProtoID = x;
-            pNpcData.fDistance = 0.0f;
-
-            const auto pFindedNpc = std::find_if(mapNpcList.begin(), mapNpcList.end(),
-                [x](const TNpc& a) { return a.iProtoID == x; });
-
-            if (pFindedNpc != mapNpcList.end())
-                pNpcData.fDistance = m_pClient->GetDistance(pFindedNpc->fX, pFindedNpc->fY);
-
-            vecNpcList.push_back(pNpcData);
-        }
-
-        auto pSort = [](TNpc const& a, TNpc const& b)
-        {
-            return m_pClient->GetDistance(a.fX, a.fY) < m_pClient->GetDistance(b.fX, b.fY);
-        };
-
-        std::sort(mapNpcList.begin(), mapNpcList.end(), pSort);
-
-        for (const auto& x : mapNpcList)
-        {
-            const auto pFindedNpc = std::find_if(vecNpcList.begin(), vecNpcList.end(),
-                [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
-
-            if ((x.iMonsterOrNpc == 1
-                || (x.iProtoID >= 19067 && x.iProtoID <= 19069)
-                || (x.iProtoID >= 19070 && x.iProtoID <= 19072))
-                && x.iProtoID != 9009
-                && m_pClient->GetDistance(x.fX, x.fY) <= MAX_VIEW_RANGE
-                && pFindedNpc == vecNpcList.end())
+            for (const auto& x : vecSelectedNpcList)
             {
                 SNpcData pNpcData;
 
-                pNpcData.iProtoID = x.iProtoID;
-                pNpcData.fDistance = m_pClient->GetDistance(x.fX, x.fY);
+                pNpcData.iProtoID = x;
+                pNpcData.fDistance = 0.0f;
+
+                const auto pFindedNpc = std::find_if(mapNpcList.begin(), mapNpcList.end(),
+                    [x](const TNpc& a) { return a.iProtoID == x; });
+
+                if (pFindedNpc != mapNpcList.end())
+                    pNpcData.fDistance = m_pClient->GetDistance(pFindedNpc->fX, pFindedNpc->fY);
 
                 vecNpcList.push_back(pNpcData);
             }
-        }
 
-        for (const auto& x : vecNpcList)
-        {
-            bool bIsAttackable = false;
-
-            if (bRangeLimit)
+            for (const auto& x : mapNpcList)
             {
-                if (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE)
-                    bIsAttackable = true;
+                const auto pFindedNpc = std::find_if(vecNpcList.begin(), vecNpcList.end(),
+                    [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
+
+                if ((x.iMonsterOrNpc == 1
+                    || (x.iProtoID >= 19067 && x.iProtoID <= 19069)
+                    || (x.iProtoID >= 19070 && x.iProtoID <= 19072))
+                    && x.iProtoID != 9009
+                    && m_pClient->GetDistance(x.fX, x.fY) <= MAX_VIEW_RANGE
+                    && pFindedNpc == vecNpcList.end())
+                {
+                    SNpcData pNpcData;
+
+                    pNpcData.iProtoID = x.iProtoID;
+                    pNpcData.fDistance = m_pClient->GetDistance(x.fX, x.fY);
+
+                    vecNpcList.push_back(pNpcData);
+                }
             }
-            else
-                bIsAttackable = (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE);
 
-            if (bIsAttackable)
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-            else
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
-
-            ImGui::PushID(x.iProtoID);
-
-            bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
-
-            auto pNpcInfo = m_mapNpcTable.find(x.iProtoID);
-            auto pMobInfo = m_mapMobTable.find(x.iProtoID);
-
-            std::string szNpcName = "~Unknown~";
-
-            if (pNpcInfo != m_mapNpcTable.end())
-                szNpcName = pNpcInfo->second.szText;
-
-            if (pMobInfo != m_mapMobTable.end())
-                szNpcName = pMobInfo->second.szText;
-
-            if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
+            for (const auto& x : vecNpcList)
             {
-                if (bSelected)
-                    vecSelectedNpcList.push_back(x.iProtoID);
+                bool bIsAttackable = false;
+
+                if (bRangeLimit)
+                {
+                    if (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE)
+                        bIsAttackable = true;
+                }
                 else
-                    vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
+                    bIsAttackable = (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE);
 
-                m_pConfiguration->SetInt("Attack", "NpcList", vecSelectedNpcList);
+                if (bIsAttackable)
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                else
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
+
+                ImGui::PushID(x.iProtoID);
+
+                bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
+
+                auto pNpcInfo = m_mapNpcTable.find(x.iProtoID);
+                auto pMobInfo = m_mapMobTable.find(x.iProtoID);
+
+                std::string szNpcName = "~Unknown~";
+
+                if (pNpcInfo != m_mapNpcTable.end())
+                    szNpcName = pNpcInfo->second.szText;
+
+                if (pMobInfo != m_mapMobTable.end())
+                    szNpcName = pMobInfo->second.szText;
+
+                if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
+                {
+                    if (bSelected)
+                        vecSelectedNpcList.push_back(x.iProtoID);
+                    else
+                        vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
+
+                    m_pConfiguration->SetInt("Attack", "NpcList", vecSelectedNpcList);
+                }
+
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
+                RightText(std::to_string((int)x.fDistance) + "m");
+                ImGui::PopStyleColor();
+                ImGui::PopID();
+
+                ImGui::PopStyleColor();
             }
-
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
-            RightText(std::to_string((int)x.fDistance) + "m");
-            ImGui::PopStyleColor();
-            ImGui::PopID();
-
-            ImGui::PopStyleColor();
         }
 
         ImGui::TreePop();

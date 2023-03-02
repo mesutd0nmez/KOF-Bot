@@ -308,7 +308,8 @@ float Client::GetDistance(float fX, float fY)
 
 float Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
 {
-	return (float)sqrt(pow(fX2 - fX1, 2.0f) + pow(fY2 - fY1, 2.0f) * 1.0);
+	return std::sqrt((fX1 - fX2) * (fX1 - fX2) +
+		(fY1 - fY2) * (fY1 - fY2));
 }
 
 uint8_t Client::GetSkillPoint(int32_t Slot)

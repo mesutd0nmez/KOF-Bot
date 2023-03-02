@@ -35,11 +35,9 @@ private:
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
 
-#ifndef _WINDLL
 public:
 	void MailSlotRecvProcess();
 	void MailSlotSendProcess();
-#endif
 
 private:
 	void RecvProcess(BYTE* byBuffer, DWORD dwLength);
@@ -48,7 +46,7 @@ private:
 	std::function<void(BYTE*, DWORD)> onClientRecvProcess;
 	std::function<void(BYTE*, DWORD)> onClientSendProcess;
 
-#ifndef _WINDLL
+#ifdef USE_MAILSLOT
 	std::string m_szMailSlotRecvName;
 	std::string m_szMailSlotSendName;
 
@@ -62,6 +60,11 @@ private:
 		ClientHook(ClientHandler* pHandler)
 		{
 			m_ClientHandler = pHandler;
+		}
+
+		~ClientHook()
+		{
+			m_ClientHandler = nullptr;
 		}
 
 		static void RecvProcess(BYTE* byBuffer, DWORD dwLength)
@@ -168,14 +171,21 @@ private:
 private:
 	bool m_bWorking;
 
+#ifdef USE_MAILSLOT
 private:
-#ifndef _WINDLL
 	bool m_bMailSlotWorking;
 #endif
+
 
 private:
 	std::string m_szAccountId;
 	std::string m_szPassword;
+
+public:
+	void PatchDeathEffect(bool bValue);
+
+private:
+	std::vector<uint8_t> m_vecOrigDeathEffectFunction;
 };
 
 

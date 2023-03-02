@@ -9,7 +9,7 @@ Ini::Ini()
 	m_isMemory = true;
 }
 
-Ini::Ini(const char *lpFilename)
+Ini::Ini(const char* lpFilename)
 {
 	m_szFileName = lpFilename;
 	m_isMemory = false;
@@ -17,11 +17,11 @@ Ini::Ini(const char *lpFilename)
 	Load(lpFilename);
 }
 
-bool Ini::Load(const char * lpFilename)
+bool Ini::Load(const char* lpFilename)
 {
 	m_szFileName = lpFilename;
 	m_isMemory = false;
-	const char * fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
+	const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
 	std::ifstream file(fn);
 	if (!file)
 	{
@@ -36,7 +36,7 @@ bool Ini::Load(const char * lpFilename)
 	// If an invalid section is hit
 	// Ensure that we don't place key/value pairs
 	// from the invalid section into the previously loaded section.
-	bool bSkipNextSection = false; 
+	bool bSkipNextSection = false;
 	while (!file.eof())
 	{
 		std::string line;
@@ -165,29 +165,37 @@ bool Ini::Load(std::string szData)
 	return true;
 }
 
-void Ini::Save(const char * lpFilename)
+void Ini::Save(const char* lpFilename)
 {
-	if (m_isMemory) return;
-	const char * fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
-	FILE * fp = fopen(fn, "w");
-	for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
+	if (onSaveEvent)
+		onSaveEvent();
+
+	if (!m_isMemory)
 	{
-		// Start the section
-		fprintf(fp, "[%s]" INI_NEWLINE, sectionItr->first.c_str());
+		const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
+		FILE* fp = fopen(fn, "w");
 
-		// Now list out all the key/value pairs
-		for (auto keyItr = sectionItr->second.begin(); keyItr != sectionItr->second.end(); keyItr++)
-			fprintf(fp, "%s=%s" INI_NEWLINE, keyItr->first.c_str(), keyItr->second.c_str());
+		for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
+		{
+			// Start the section
+			fprintf(fp, "[%s]" INI_NEWLINE, sectionItr->first.c_str());
 
-		// Use a trailing newline to finish the section, to make it easier to read
-		fprintf(fp, INI_NEWLINE);
+			// Now list out all the key/value pairs
+			for (auto keyItr = sectionItr->second.begin(); keyItr != sectionItr->second.end(); keyItr++)
+				fprintf(fp, "%s=%s" INI_NEWLINE, keyItr->first.c_str(), keyItr->second.c_str());
+
+			// Use a trailing newline to finish the section, to make it easier to read
+			fprintf(fp, INI_NEWLINE);
+		}
+
+		fclose(fp);
 	}
-	fclose(fp);
 }
 
 std::string Ini::Dump()
 {
 	std::stringstream f;
+
 	for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
 	{
 		f << "[" << sectionItr->first.c_str() << "]" << INI_NEWLINE;
@@ -230,7 +238,7 @@ std::vector<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const
 			std::vector<int> v;
 			std::stringstream ss(keyItr->second.c_str());
 
-			for (int i; ss >> i;) 
+			for (int i; ss >> i;)
 			{
 				v.push_back(i);
 
@@ -259,7 +267,7 @@ std::vector<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const
 {
 	std::string ret;
 
-	for (const int& s : nDefault) 
+	for (const int& s : nDefault)
 	{
 		if (!ret.empty())
 			ret += ",";
@@ -277,7 +285,7 @@ bool Ini::GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefa
 	return GetInt(lpAppName, lpKeyName, bDefault) == 1;
 }
 
-void Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string & lpOutString, bool bAllowEmptyStrings /*= true*/)
+void Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings /*= true*/)
 {
 	ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
@@ -306,7 +314,9 @@ std::string Ini::GetString(const char* lpAppName, const char* lpKeyName, const c
 const char* Ini::SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault)
 {
 	ConfigMap::iterator itr = m_configMap.find(lpAppName);
+
 	m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+
 	itr = m_configMap.find(lpAppName);
 	itr->second[lpKeyName] = lpDefault;
 	Save();
