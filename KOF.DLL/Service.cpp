@@ -4,17 +4,29 @@
 
 Service::Service()
 {
-    m_szToken.clear();
+    Clear();
 }
 
 Service::~Service()
 {
-    m_szToken.clear();
+    Clear();
 
     CloseSocket();
 }
 
-void Service::InitializeService()
+void Service::Clear()
+{
+    m_szToken.clear();
+
+    m_iniPointer = nullptr;
+    m_iniUserConfiguration = nullptr;
+    m_iniConfiguration = nullptr;
+
+    m_ePlatformType = PlatformType::USKO;
+    m_iSelectedAccount = 0;
+}
+
+void Service::Initialize()
 {
     PWSTR szAppDataPath = NULL;
     HRESULT hRes = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, NULL, &szAppDataPath);
@@ -28,11 +40,16 @@ void Service::InitializeService()
     }
 
     std::string szIniPath = to_string(szAppDataPath) + "\\KOF.ini";
-    m_iniConfiguration.Load(szIniPath.c_str());
+    m_iniConfiguration = new Ini();
+    m_iniConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniConfiguration.GetString("KOF", "Token", m_szToken.c_str());
+    m_szToken = m_iniConfiguration->GetString("KOF", "Token", m_szToken.c_str());
 
-    Connect("127.0.0.1", 8888);
+//#ifdef DEBUG
+//    Connect(skCryptDec("127.0.0.1"), 8888);
+//#else
+    Connect(skCryptDec("162.19.137.94"), 8888);
+//#endif 
 }
 
 void Service::OnConnect()
@@ -40,6 +57,7 @@ void Service::OnConnect()
 #ifdef DEBUG
     printf("Connected to socket successfully\n");
 #endif
+    SendReady();
 }
 
 void Service::OnError(int32_t iErrorCode)
@@ -66,38 +84,16 @@ void Service::HandlePacket(Packet& pkt)
     {
         case PacketHeader::READY:
         {
-            uint8_t iState;
+            pkt >> m_iId;
 
-            pkt >> iState;
-
-            switch (iState)
-            {
-                case ReadyState::INFO:
-                {
-                    pkt >> m_iId;
-
-                    SendReady();
-
-                    GenerateSeed(m_iId + GetCurrentProcessId());
-                    GetCryption()->SetInitialVector(std::to_string(GetSeed()));
-                }
-                break;
-
-                case ReadyState::FINISH:
-                {
 #ifdef DEBUG
-                    printf("Socket ready\n");
+            printf("Socket ready\n");
 #endif
 
-                    if (m_szToken.size() > 0)
-                    {
-                        SendLogin(m_szToken);
-                    }
+            GenerateSeed(m_iId + GetCurrentProcessId());
+            m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
-                    OnReady();
-                }
-                break;
-            }
+            OnReady();
         }
         break;
 
@@ -122,8 +118,9 @@ void Service::HandlePacket(Packet& pkt)
             }
             else
             {
-                if (iType == LoginType::TOKEN)
-                    m_szToken = m_iniConfiguration.SetString("KOF", "Token", "");
+#ifdef DEBUG
+                printf("Socket authentication failed\n");
+#endif
             }
         }
         break;
@@ -147,7 +144,8 @@ void Service::HandlePacket(Packet& pkt)
 
                     pkt >> szConfiguration;
 
-                    m_iniUserConfiguration.Load(szConfiguration);
+                    m_iniUserConfiguration = new Ini();
+                    m_iniUserConfiguration->Load(szConfiguration);
 
                     OnConfigurationLoaded();
                 }
@@ -169,7 +167,8 @@ void Service::HandlePacket(Packet& pkt)
 
             std::string szData((char*)vecBuffer.data(), vecBuffer.size());
 
-            m_iniPointer.Load(szData);
+            m_iniPointer = new Ini();
+            m_iniPointer->Load(szData);
 
             OnLoaded();
         }
@@ -178,7 +177,6 @@ void Service::HandlePacket(Packet& pkt)
         case PacketHeader::PING:
         {
             SendPong();
-
             OnPong();
         }
         break;
@@ -195,52 +193,33 @@ void Service::SendReady()
 
 void Service::SendLogin(std::string szToken)
 {
-    HardwareID pHardwareID;
+    HardwareID hardwareID;
 
-    pHardwareID.GetHardwareID();
-
-    std::string szSystemName;
-    std::transform(pHardwareID.System.Name.begin(), pHardwareID.System.Name.end(), std::back_inserter(szSystemName), [](wchar_t c)
+    if (hardwareID.Query())
     {
-        return (char)c;
-    });
+        Packet pkt = Packet(PacketHeader::LOGIN);
 
-    std::string szSerialNumber;
-    std::transform(pHardwareID.SMBIOS.SerialNumber.begin(), pHardwareID.SMBIOS.SerialNumber.end(), std::back_inserter(szSerialNumber), [](wchar_t c)
-    {
-        return (char)c;
-    });
+        pkt.DByte();
+        pkt
+            << uint8_t(LoginType::TOKEN)
+            << szToken.c_str()
+            << hardwareID.GetSystemName()
+            << hardwareID.GetProcesorId()
+            << hardwareID.GetBaseBoardSerial()
+            << hardwareID.GetHddSerial()
+            << hardwareID.GetUUID()
+            << hardwareID.GetSystemSerialNumber();
 
-    std::string szProcessorID;
-    std::transform(pHardwareID.CPU.ProcessorID.begin(), pHardwareID.CPU.ProcessorID.end(), std::back_inserter(szProcessorID), [](wchar_t c)
-    {
-        return (char)c;
-    });
-
-    std::string szComputerHardwareID;
-    std::transform(pHardwareID.Registry.ComputerHardwareID.begin(), pHardwareID.Registry.ComputerHardwareID.end(), std::back_inserter(szComputerHardwareID), [](wchar_t c)
-    {
-        return (char)c;
-    });
-
-    Packet pkt = Packet(PacketHeader::LOGIN);
-
-    pkt.DByte();
-    pkt
-        << uint8_t(LoginType::TOKEN)
-        << szToken.c_str()
-        << szSystemName.c_str()
-        << szSerialNumber.c_str()
-        << szProcessorID.c_str()
-        << szComputerHardwareID.c_str();
-
-    Send(pkt);
+        Send(pkt);
+    }
 }
 
 void Service::SendPointerRequest()
 {
     Packet pkt = Packet(PacketHeader::POINTER);
-    pkt << uint8_t(PlatformType::CNKO);
+    pkt 
+        << uint8_t(AppType::BOT)
+        << uint8_t(m_ePlatformType);
 
     Send(pkt);
 }
@@ -262,8 +241,8 @@ void Service::SendLoadUserConfiguration(uint8_t iServerId, std::string szCharact
     pkt 
         << uint8_t(ConfigurationRequestType::LOAD) 
         << uint8_t(AppType::BOT) 
-        << uint8_t(PlatformType::CNKO) 
-        << uint8_t(1) 
+        << uint8_t(m_ePlatformType)
+        << uint8_t(1) //server index
         << szCharacterName;
 
     Send(pkt);
@@ -277,10 +256,10 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
     pkt 
         << uint8_t(ConfigurationRequestType::SAVE) 
         << uint8_t(AppType::BOT) 
-        << uint8_t(PlatformType::CNKO) 
-        << uint8_t(1) 
+        << uint8_t(m_ePlatformType)
+        << uint8_t(1) //server index
         << szCharacterName 
-        << m_iniUserConfiguration.Dump();
+        << m_iniUserConfiguration->Dump();
 
     Send(pkt, true);
 }

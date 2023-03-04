@@ -10,6 +10,9 @@
 
 class Ini
 {
+public:
+	std::function<void()> onSaveEvent;
+
 private:
 	bool m_isMemory;
 	std::string m_szFileName;
@@ -40,7 +43,7 @@ public:
 	bool GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefault);
 	void GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings = true);
 	std::string GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, bool bAllowEmptyStrings = true);
-	
+
 	const char* SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault);
 
 	ConfigMap* GetConfigMap() { return &m_configMap; };

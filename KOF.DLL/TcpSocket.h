@@ -95,7 +95,7 @@ public:
 
     void Listen()
     {
-        TCPSocket::Receive(this);
+        new std::thread([this]() { TCPSocket::Receive(this); });
     }
 
     void setAddressStruct(sockaddr_in addr) { this->address = addr; }
@@ -131,13 +131,16 @@ private:
             vecStreamBuffer.resize(socket->BUFFER_SIZE);
         }
 
-        socket->Close();
+        if (socket != nullptr)
+        {
+            socket->Close();
 
-        if (socket->onSocketClosed)
-            socket->onSocketClosed(errno);
+            if (socket->onSocketClosed)
+                socket->onSocketClosed(errno);
 
-        if (socket->deleteAfterClosed && socket != nullptr)
-            delete socket;
+            if (socket->deleteAfterClosed && socket != nullptr)
+                delete socket;
+        }
     }
 
     void setTimeout(int seconds)

@@ -1,32 +1,49 @@
 #include "pch.h"
 #include "UI.h"
 #include "Bot.h"
+#include "ClientHandler.h"
+#include "ReflectiveInjection.h"
 
 #ifdef _WINDLL
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
+extern HINSTANCE hAppInstance;
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 {
-    if (fdwReason == DLL_PROCESS_ATTACH)
+    BOOL bReturnValue = TRUE;
+
+    switch (dwReason)
     {
-#ifdef DEBUG
-        AllocConsole();
-        freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-#endif
+        case DLL_QUERY_HMODULE:
+            if (lpReserved != NULL)
+                *(HMODULE*)lpReserved = hAppInstance;
+            break;
 
-        DisableThreadLibraryCalls(hinstDLL);
+        case DLL_PROCESS_ATTACH:
+            hAppInstance = hinstDLL;
 
-        new std::thread([]()
+//            AllocConsole();
+//            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+//
+//#ifndef DEBUG
+//            ShowWindow(GetConsoleWindow(), SW_HIDE);
+//#endif
+            break;
+
+        case DLL_PROCESS_DETACH:
         {
-            auto player = std::make_unique<Bot>();
-            player->Initialize();
-        });
+//#ifdef DEBUG
+//            FreeConsole();
+//#endif
+        }
+        break;
 
-        return TRUE;
+        case DLL_THREAD_ATTACH:
+        case DLL_THREAD_DETACH:
+            break;
     }
 
-    return TRUE;
+    return bReturnValue;
 }
-
 #else
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -36,8 +53,25 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 #endif
 
-    Bot bot;
-    bot.Initialize();
+    Bot* bot = new Bot();
+
+    bot->Initialize(PlatformType::USKO, 0);
+
+    bool bWorking = true;
+
+    while (bWorking)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+        if (bot->GetInjectedProcessId() != 0 && bot->IsInjectedProcessLost())
+            bWorking = false;
+
+        bot->Process();
+    }
+
+#ifdef DEBUG
+    FreeConsole();
+#endif
 
     return 0;
 }

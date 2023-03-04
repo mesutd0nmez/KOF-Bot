@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Enum.h"
 #include "Socket.h"
 #include "Ini.h"
+
 
 class Service : Socket
 {
@@ -9,8 +11,10 @@ public:
 	Service();
 	virtual ~Service();
 
+	void Clear();
+
 public:
-	void InitializeService();
+	void Initialize();
 	void CloseSocket() { m_tcpSocket.Close(); };
 
 	 void SendLoadUserConfiguration(uint8_t iServerId, std::string szCharacterName) ;
@@ -23,9 +27,11 @@ private:
 	virtual void OnLoaded() = 0;
 	virtual void OnConfigurationLoaded() = 0;
 
+protected:
+	void SendLogin(std::string szToken);
+
 private:
 	void SendReady();
-	void SendLogin(std::string szToken);
 	void SendPointerRequest();
 	void SendPong();
 
@@ -36,12 +42,15 @@ private:
 	void OnClose(int32_t iErrorCode);
 
 protected:
-	Ini m_iniPointer;
-	Ini m_iniUserConfiguration;
+	Ini* m_iniPointer;
+	Ini* m_iniUserConfiguration;
+	std::string m_szToken;
+
+	PlatformType m_ePlatformType;
+	int32_t m_iSelectedAccount;
 
 private:
-	std::string m_szToken;
-	Ini m_iniConfiguration;
+	Ini* m_iniConfiguration;
 
 };
 

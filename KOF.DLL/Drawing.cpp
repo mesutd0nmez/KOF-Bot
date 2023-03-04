@@ -4,6 +4,7 @@
 #include "Client.h"
 #include "ClientHandler.h"
 #include "UI.h"
+#include "Guard.h"
 
 Bot* Drawing::Bot = nullptr;
 LPCSTR Drawing::lpWindowName = "Discord";
@@ -19,6 +20,15 @@ ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
 ClientHandler* m_pClient = nullptr;
 Ini* m_pConfiguration = nullptr;
 
+int iMinimapWidth = 0;
+int iMinimapHeight = 0;
+ID3D11ShaderResourceView* pMinimapTexture = NULL;
+
+std::map<uint32_t, __TABLE_NPC> m_mapNpcTable;
+std::map<uint32_t, __TABLE_MOB_USKO> m_mapMobTable;
+
+std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
+
 void Drawing::Active()
 {
 	bDraw = true;
@@ -33,6 +43,21 @@ void Drawing::Draw()
 {
     m_pConfiguration = Drawing::Bot->GetConfiguration();
     m_pClient = Drawing::Bot->GetClientHandler();
+
+    if (m_mapNpcTable.size() == 0 && Drawing::Bot->IsTableLoaded())
+    {
+        m_mapNpcTable = Drawing::Bot->GetNpcTable()->GetData();
+    }
+
+    if (m_mapMobTable.size() == 0 && Drawing::Bot->IsTableLoaded())
+    {
+        m_mapMobTable = Drawing::Bot->GetMobTable()->GetData();
+    }
+
+    if (m_vecAvailableSkill.size() == 0 && Drawing::Bot->IsTableLoaded())
+    {
+        m_vecAvailableSkill = m_pClient->GetAvailableSkill();
+    }
 
 	if (isActive())
 	{
@@ -104,86 +129,90 @@ void Drawing::DrawGameController()
 
         ImGui::Spacing();
         {
-            int iMinimapWidth = 0;
-            int iMinimapHeight = 0;
-            ID3D11ShaderResourceView* pMinimapTexture = NULL;
-            bool ret = UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
-            IM_ASSERT(ret);
-
-            ImGui::BeginChild("Minimap", ImVec2((float)(iMinimapWidth + 17.0f), (float)iMinimapHeight + 17.0f), true);
+            /*if (pMinimapTexture == NULL)
             {
-                ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
-
-                ImGui::Image((void*)pMinimapTexture, ImVec2((float)iMinimapWidth, (float)iMinimapHeight));
-
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                {
-                    ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
-                    ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
-                    ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
-
-                    m_pClient->SetMovePosition(
-                        Vector3(
-                            std::ceil(mousePositionRelative.x * (float)(1024 / iMinimapWidth)), 0.0f,
-                            std::ceil((iMinimapHeight - mousePositionRelative.y) * (float)(1024 / iMinimapHeight))
-                        )
-                    );
-                }
-
-                auto pNpcList = m_pClient->GetNpcList();
-
-                if (pNpcList.size() > 0)
-                {
-                    for (const TNpc& pNpc : pNpcList)
-                    {
-                        if (m_pClient->GetDistance(pNpc.fX, pNpc.fY) > MAX_VIEW_RANGE)
-                            continue;
-
-                        ImVec2 pNpcPosition = ImVec2(
-                            pOffsetPosition.x + std::ceil(pNpc.fX / (float)(1024 / iMinimapWidth)),
-                            pOffsetPosition.y + std::ceil(iMinimapHeight - (pNpc.fY / (float)(1024 / iMinimapHeight))));
-
-                        if (pNpc.iMonsterOrNpc == 1)
-                            ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
-                        else
-                            ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
-                    }
-                }
-
-                auto pPlayerList = m_pClient->GetPlayerList();
-
-                if (pPlayerList.size() > 0)
-                {
-                    for (const TPlayer& pPlayer : pPlayerList)
-                    {
-                        if (m_pClient->GetDistance(pPlayer.fX, pPlayer.fY) > MAX_VIEW_RANGE)
-                            continue;
-
-                        ImVec2 pPlayerPosition = ImVec2(
-                            pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(1024 / iMinimapWidth)),
-                            pOffsetPosition.y + std::ceil(iMinimapHeight - (pPlayer.fY / (float)(1024 / iMinimapHeight))));
-
-                        ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
-                    }
-                }
-
-                ImVec2 currentPosition = ImVec2(
-                    pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(1024 / iMinimapWidth)),
-                    pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetPosition().m_fY / (float)(1024 / iMinimapHeight))));
-
-                ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
-
-                if (m_pClient->GetGoX() > 0.0f && m_pClient->GetGoY() > 0.0f)
-                {
-                    ImVec2 movePosition = ImVec2(
-                        pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(1024 / iMinimapWidth)),
-                        pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetGoY() / (float)(1024 / iMinimapHeight))));
-
-                    ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
-                }
-
-                ImGui::EndChild();
+                UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
             }
+
+            if (pMinimapTexture)
+            {
+                ImGui::BeginChild("Minimap", ImVec2((float)(iMinimapWidth + 17.0f), (float)iMinimapHeight + 17.0f), true);
+                {
+                    ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
+
+                    ImGui::Image((void*)pMinimapTexture, ImVec2((float)iMinimapWidth, (float)iMinimapHeight));
+
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                    {
+                        ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
+                        ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
+                        ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
+
+                        m_pClient->SetMovePosition(
+                            Vector3(
+                                std::ceil(mousePositionRelative.x * (float)(1024 / iMinimapWidth)), 0.0f,
+                                std::ceil((iMinimapHeight - mousePositionRelative.y) * (float)(1024 / iMinimapHeight))
+                            )
+                        );
+                    }
+
+                    Guard npcListLock(m_pClient->m_vecNpcLock);
+                    auto pNpcList = m_pClient->GetNpcList();
+
+                    if (pNpcList.size() > 0)
+                    {
+                        for (const TNpc& pNpc : pNpcList)
+                        {
+                            if (m_pClient->GetDistance(pNpc.fX, pNpc.fY) > MAX_VIEW_RANGE)
+                                continue;
+
+                            ImVec2 pNpcPosition = ImVec2(
+                                pOffsetPosition.x + std::ceil(pNpc.fX / (float)(1024 / iMinimapWidth)),
+                                pOffsetPosition.y + std::ceil(iMinimapHeight - (pNpc.fY / (float)(1024 / iMinimapHeight))));
+
+                            if (pNpc.iMonsterOrNpc == 1)
+                                ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
+                            else
+                                ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                        }
+                    }
+
+                    Guard playerListLock(m_pClient->m_vecPlayerLock);
+                    auto pPlayerList = m_pClient->GetPlayerList();
+
+                    if (pPlayerList.size() > 0)
+                    {
+                        for (const TPlayer& pPlayer : pPlayerList)
+                        {
+                            if (m_pClient->GetDistance(pPlayer.fX, pPlayer.fY) > MAX_VIEW_RANGE)
+                                continue;
+
+                            ImVec2 pPlayerPosition = ImVec2(
+                                pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(1024 / iMinimapWidth)),
+                                pOffsetPosition.y + std::ceil(iMinimapHeight - (pPlayer.fY / (float)(1024 / iMinimapHeight))));
+
+                            ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
+                        }
+                    }
+
+                    ImVec2 currentPosition = ImVec2(
+                        pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(1024 / iMinimapWidth)),
+                        pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetPosition().m_fY / (float)(1024 / iMinimapHeight))));
+
+                    ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
+
+                    if (m_pClient->GetGoX() > 0.0f && m_pClient->GetGoY() > 0.0f)
+                    {
+                        ImVec2 movePosition = ImVec2(
+                            pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(1024 / iMinimapWidth)),
+                            pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetGoY() / (float)(1024 / iMinimapHeight))));
+
+                        ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                    }
+
+                    ImGui::EndChild();
+                }
+            }*/
         }
 
         ImGui::Spacing();
@@ -291,13 +320,13 @@ void Drawing::DrawGameController()
 
             if (ImGui::BeginTabItem("Skill"))
             {
-                if (m_pClient->GetAvailableSkill().size() == 0)
+                if (m_vecAvailableSkill.size() == 0)
                     ImGui::BeginDisabled();
 
                 DrawAutomatedAttackSkillTree();
                 DrawAutomatedCharacterSkillTree();
 
-                if (m_pClient->GetAvailableSkill().size() == 0)
+                if (m_vecAvailableSkill.size() == 0)
                     ImGui::EndDisabled();
 
                 ImGui::EndTabItem();
@@ -553,6 +582,21 @@ void Drawing::DrawMainFeaturesArea()
             ImGui::SameLine();
 
             ImGui::Text("Oreads");
+
+            ImGui::SameLine();
+
+            bool bDeathEffect = m_pConfiguration->GetBool("Feature", "DeathEffect", false);
+
+            if (ImGui::Checkbox("##DeathEffect", &bDeathEffect))
+            {
+                m_pClient->PatchDeathEffect(bDeathEffect);
+                m_pConfiguration->SetInt("Feature", "DeathEffect", bDeathEffect ? 1 : 0);
+            }
+                
+
+            ImGui::SameLine();
+
+            ImGui::Text("Patch Death Effect");
         }
     }
 }
@@ -617,7 +661,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
 
     std::stringstream strTreeText;
 
-    if (Drawing::Bot->GetSkillTable().GetDataSize() == 0)
+    if (!Drawing::Bot->IsTableLoaded())
         strTreeText << "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3] << " ";
 
     strTreeText << "Automated attack skills";
@@ -625,9 +669,8 @@ void Drawing::DrawAutomatedAttackSkillTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
-        auto vecAvailableSkill = m_pClient->GetAvailableSkill();
 
-        for (const auto& x : vecAvailableSkill)
+        for (const auto& x : m_vecAvailableSkill)
         {
             if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
                 continue;
@@ -662,7 +705,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
 
     std::stringstream strTreeText;
 
-    if (Drawing::Bot->GetSkillTable().GetDataSize() == 0)
+    if (!Drawing::Bot->IsTableLoaded())
         strTreeText << "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3] << " ";
 
     strTreeText << "Automated character skills";
@@ -670,9 +713,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
-        auto vecAvailableSkill = m_pClient->GetAvailableSkill();
-
-        for (const auto& x : vecAvailableSkill)
+        for (const auto& x : m_vecAvailableSkill)
         {
             if (x.iTarget != SkillTargetType::TARGET_SELF && x.iTarget != SkillTargetType::TARGET_PARTY_ALL && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME)
                 continue;
@@ -720,104 +761,98 @@ void Drawing::DrawMonsterListTree()
 
         std::vector<int> vecSelectedNpcList = m_pConfiguration->GetInt("Attack", "NpcList", std::vector<int>());
 
+        Guard lock(m_pClient->m_vecNpcLock);
         auto mapNpcList = m_pClient->GetNpcList();
 
-        for (const auto& x : vecSelectedNpcList)
+        if (mapNpcList.size() > 0)
         {
-            SNpcData pNpcData;
-
-            pNpcData.iProtoID = x;
-            pNpcData.fDistance = 0.0f;
-
-            const auto pFindedNpc = std::find_if(mapNpcList.begin(), mapNpcList.end(),
-                [x](const TNpc& a) { return a.iProtoID == x; });
-
-            if (pFindedNpc != mapNpcList.end())
-                pNpcData.fDistance = m_pClient->GetDistance(pFindedNpc->fX, pFindedNpc->fY);
-
-            vecNpcList.push_back(pNpcData);
-        }
-
-        auto pSort = [](TNpc const& a, TNpc const& b)
-        {
-            return m_pClient->GetDistance(a.fX, a.fY) < m_pClient->GetDistance(b.fX, b.fY);
-        };
-
-        std::sort(mapNpcList.begin(), mapNpcList.end(), pSort);
-
-        for (const auto& x : mapNpcList)
-        {
-            const auto pFindedNpc = std::find_if(vecNpcList.begin(), vecNpcList.end(),
-                [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
-
-            if ((x.iMonsterOrNpc == 1
-                || (x.iProtoID >= 19067 && x.iProtoID <= 19069)
-                || (x.iProtoID >= 19070 && x.iProtoID <= 19072))
-                && x.iProtoID != 9009
-                && m_pClient->GetDistance(x.fX, x.fY) <= MAX_VIEW_RANGE
-                && pFindedNpc == vecNpcList.end())
+            for (const auto& x : vecSelectedNpcList)
             {
                 SNpcData pNpcData;
 
-                pNpcData.iProtoID = x.iProtoID;
-                pNpcData.fDistance = m_pClient->GetDistance(x.fX, x.fY);
+                pNpcData.iProtoID = x;
+                pNpcData.fDistance = 0.0f;
+
+                const auto pFindedNpc = std::find_if(mapNpcList.begin(), mapNpcList.end(),
+                    [x](const TNpc& a) { return a.iProtoID == x; });
+
+                if (pFindedNpc != mapNpcList.end())
+                    pNpcData.fDistance = m_pClient->GetDistance(pFindedNpc->fX, pFindedNpc->fY);
 
                 vecNpcList.push_back(pNpcData);
             }
-        }
 
-        auto pNpcData = Drawing::Bot->GetNpcTable().GetData();
-        auto pMobData = Drawing::Bot->GetMobTable().GetData();
-
-        for (const auto& x : vecNpcList)
-        {
-            bool bIsAttackable = false;
-
-            if (bRangeLimit)
+            for (const auto& x : mapNpcList)
             {
-                if (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE)
-                    bIsAttackable = true;
+                const auto pFindedNpc = std::find_if(vecNpcList.begin(), vecNpcList.end(),
+                    [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
+
+                if ((x.iMonsterOrNpc == 1
+                    || (x.iProtoID >= 19067 && x.iProtoID <= 19069)
+                    || (x.iProtoID >= 19070 && x.iProtoID <= 19072))
+                    && x.iProtoID != 9009
+                    && m_pClient->GetDistance(x.fX, x.fY) <= MAX_VIEW_RANGE
+                    && pFindedNpc == vecNpcList.end())
+                {
+                    SNpcData pNpcData;
+
+                    pNpcData.iProtoID = x.iProtoID;
+                    pNpcData.fDistance = m_pClient->GetDistance(x.fX, x.fY);
+
+                    vecNpcList.push_back(pNpcData);
+                }
             }
-            else
-                bIsAttackable = (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE);
 
-            if (bIsAttackable)
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-            else
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
-
-            ImGui::PushID(x.iProtoID);
-
-            bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
-
-            auto pNpcInfo = pNpcData.find(x.iProtoID);
-            auto pMobInfo = pMobData.find(x.iProtoID);
-
-            std::string szNpcName = "~Unknown~";
-
-            if (pNpcInfo != pNpcData.end())
-                szNpcName = pNpcInfo->second.szText;
-
-            if (pMobInfo != pMobData.end())
-                szNpcName = pMobInfo->second.szText;
-
-            if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
+            for (const auto& x : vecNpcList)
             {
-                if (bSelected)
-                    vecSelectedNpcList.push_back(x.iProtoID);
+                bool bIsAttackable = false;
+
+                if (bRangeLimit)
+                {
+                    if (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE)
+                        bIsAttackable = true;
+                }
                 else
-                    vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
+                    bIsAttackable = (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE);
 
-                m_pConfiguration->SetInt("Attack", "NpcList", vecSelectedNpcList);
+                if (bIsAttackable)
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                else
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
+
+                ImGui::PushID(x.iProtoID);
+
+                bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
+
+                auto pNpcInfo = m_mapNpcTable.find(x.iProtoID);
+                auto pMobInfo = m_mapMobTable.find(x.iProtoID);
+
+                std::string szNpcName = "~Unknown~";
+
+                if (pNpcInfo != m_mapNpcTable.end())
+                    szNpcName = pNpcInfo->second.szText;
+
+                if (pMobInfo != m_mapMobTable.end())
+                    szNpcName = pMobInfo->second.szText;
+
+                if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
+                {
+                    if (bSelected)
+                        vecSelectedNpcList.push_back(x.iProtoID);
+                    else
+                        vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
+
+                    m_pConfiguration->SetInt("Attack", "NpcList", vecSelectedNpcList);
+                }
+
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
+                RightText(std::to_string((int)x.fDistance) + "m");
+                ImGui::PopStyleColor();
+                ImGui::PopID();
+
+                ImGui::PopStyleColor();
             }
-
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
-            RightText(std::to_string((int)x.fDistance) + "m");
-            ImGui::PopStyleColor();
-            ImGui::PopID();
-
-            ImGui::PopStyleColor();
         }
 
         ImGui::TreePop();

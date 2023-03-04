@@ -21,9 +21,9 @@ public:
 	uint32_t GetSeed() { return m_iSeed; };
 
 	Cryption* GetCryption() { return m_Cryption; };
+
 public:
 	void Send(Packet& pkt, bool bCompress = false);
-	
 
 private:
 	void ProcessPacket(uint8_t* iStream, size_t iStreamLength);
@@ -37,10 +37,10 @@ private:
 private:
 	uint32_t m_iSeed;
 	Compression* m_Compression;
-	Cryption* m_Cryption;
 
 protected:
 	int32_t m_iId;
 	TCPSocket m_tcpSocket;
+	Cryption* m_Cryption;
 };
 
