@@ -10,6 +10,7 @@
 // add headers that you want to pre-compile here
 #include "framework.h"
 
+#include "SkCrypter.h"
 #include "Define.h"
 #include "Enum.h"
 #include "Struct.h"

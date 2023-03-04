@@ -129,90 +129,90 @@ void Drawing::DrawGameController()
 
         ImGui::Spacing();
         {
-
-
-            if (pMinimapTexture == NULL)
+            /*if (pMinimapTexture == NULL)
             {
-                bool ret = UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
-                IM_ASSERT(ret);
+                UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
             }
 
-            ImGui::BeginChild("Minimap", ImVec2((float)(iMinimapWidth + 17.0f), (float)iMinimapHeight + 17.0f), true);
+            if (pMinimapTexture)
             {
-                ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
-
-                ImGui::Image((void*)pMinimapTexture, ImVec2((float)iMinimapWidth, (float)iMinimapHeight));
-
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                ImGui::BeginChild("Minimap", ImVec2((float)(iMinimapWidth + 17.0f), (float)iMinimapHeight + 17.0f), true);
                 {
-                    ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
-                    ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
-                    ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
+                    ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
 
-                    m_pClient->SetMovePosition(
-                        Vector3(
-                            std::ceil(mousePositionRelative.x * (float)(1024 / iMinimapWidth)), 0.0f,
-                            std::ceil((iMinimapHeight - mousePositionRelative.y) * (float)(1024 / iMinimapHeight))
-                        )
-                    );
-                }
+                    ImGui::Image((void*)pMinimapTexture, ImVec2((float)iMinimapWidth, (float)iMinimapHeight));
 
-                Guard npcListLock(m_pClient->m_vecNpcLock);
-                auto pNpcList = m_pClient->GetNpcList();
-
-                if (pNpcList.size() > 0)
-                {
-                    for (const TNpc& pNpc : pNpcList)
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                     {
-                        if (m_pClient->GetDistance(pNpc.fX, pNpc.fY) > MAX_VIEW_RANGE)
-                            continue;
+                        ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
+                        ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
+                        ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
 
-                        ImVec2 pNpcPosition = ImVec2(
-                            pOffsetPosition.x + std::ceil(pNpc.fX / (float)(1024 / iMinimapWidth)),
-                            pOffsetPosition.y + std::ceil(iMinimapHeight - (pNpc.fY / (float)(1024 / iMinimapHeight))));
-
-                        if (pNpc.iMonsterOrNpc == 1)
-                            ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
-                        else
-                            ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                        m_pClient->SetMovePosition(
+                            Vector3(
+                                std::ceil(mousePositionRelative.x * (float)(1024 / iMinimapWidth)), 0.0f,
+                                std::ceil((iMinimapHeight - mousePositionRelative.y) * (float)(1024 / iMinimapHeight))
+                            )
+                        );
                     }
-                }
 
-                Guard playerListLock(m_pClient->m_vecPlayerLock);
-                auto pPlayerList = m_pClient->GetPlayerList();
+                    Guard npcListLock(m_pClient->m_vecNpcLock);
+                    auto pNpcList = m_pClient->GetNpcList();
 
-                if (pPlayerList.size() > 0)
-                {
-                    for (const TPlayer& pPlayer : pPlayerList)
+                    if (pNpcList.size() > 0)
                     {
-                        if (m_pClient->GetDistance(pPlayer.fX, pPlayer.fY) > MAX_VIEW_RANGE)
-                            continue;
+                        for (const TNpc& pNpc : pNpcList)
+                        {
+                            if (m_pClient->GetDistance(pNpc.fX, pNpc.fY) > MAX_VIEW_RANGE)
+                                continue;
 
-                        ImVec2 pPlayerPosition = ImVec2(
-                            pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(1024 / iMinimapWidth)),
-                            pOffsetPosition.y + std::ceil(iMinimapHeight - (pPlayer.fY / (float)(1024 / iMinimapHeight))));
+                            ImVec2 pNpcPosition = ImVec2(
+                                pOffsetPosition.x + std::ceil(pNpc.fX / (float)(1024 / iMinimapWidth)),
+                                pOffsetPosition.y + std::ceil(iMinimapHeight - (pNpc.fY / (float)(1024 / iMinimapHeight))));
 
-                        ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
+                            if (pNpc.iMonsterOrNpc == 1)
+                                ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
+                            else
+                                ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                        }
                     }
+
+                    Guard playerListLock(m_pClient->m_vecPlayerLock);
+                    auto pPlayerList = m_pClient->GetPlayerList();
+
+                    if (pPlayerList.size() > 0)
+                    {
+                        for (const TPlayer& pPlayer : pPlayerList)
+                        {
+                            if (m_pClient->GetDistance(pPlayer.fX, pPlayer.fY) > MAX_VIEW_RANGE)
+                                continue;
+
+                            ImVec2 pPlayerPosition = ImVec2(
+                                pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(1024 / iMinimapWidth)),
+                                pOffsetPosition.y + std::ceil(iMinimapHeight - (pPlayer.fY / (float)(1024 / iMinimapHeight))));
+
+                            ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
+                        }
+                    }
+
+                    ImVec2 currentPosition = ImVec2(
+                        pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(1024 / iMinimapWidth)),
+                        pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetPosition().m_fY / (float)(1024 / iMinimapHeight))));
+
+                    ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
+
+                    if (m_pClient->GetGoX() > 0.0f && m_pClient->GetGoY() > 0.0f)
+                    {
+                        ImVec2 movePosition = ImVec2(
+                            pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(1024 / iMinimapWidth)),
+                            pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetGoY() / (float)(1024 / iMinimapHeight))));
+
+                        ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                    }
+
+                    ImGui::EndChild();
                 }
-
-                ImVec2 currentPosition = ImVec2(
-                    pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(1024 / iMinimapWidth)),
-                    pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetPosition().m_fY / (float)(1024 / iMinimapHeight))));
-
-                ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
-
-                if (m_pClient->GetGoX() > 0.0f && m_pClient->GetGoY() > 0.0f)
-                {
-                    ImVec2 movePosition = ImVec2(
-                        pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(1024 / iMinimapWidth)),
-                        pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetGoY() / (float)(1024 / iMinimapHeight))));
-
-                    ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
-                }
-
-                ImGui::EndChild();
-            }
+            }*/
         }
 
         ImGui::Spacing();

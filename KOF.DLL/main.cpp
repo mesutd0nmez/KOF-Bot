@@ -17,20 +17,26 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
             if (lpReserved != NULL)
                 *(HMODULE*)lpReserved = hAppInstance;
             break;
+
         case DLL_PROCESS_ATTACH:
             hAppInstance = hinstDLL;
-#ifdef DEBUG
-            AllocConsole();
-            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-#endif
+
+//            AllocConsole();
+//            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+//
+//#ifndef DEBUG
+//            ShowWindow(GetConsoleWindow(), SW_HIDE);
+//#endif
             break;
+
         case DLL_PROCESS_DETACH:
         {
-#ifdef DEBUG
-            FreeConsole();
-#endif
+//#ifdef DEBUG
+//            FreeConsole();
+//#endif
         }
         break;
+
         case DLL_THREAD_ATTACH:
         case DLL_THREAD_DETACH:
             break;
@@ -49,7 +55,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
     Bot* bot = new Bot();
 
-    bot->Initialize();
+    bot->Initialize(PlatformType::USKO, 0);
 
     bool bWorking = true;
 

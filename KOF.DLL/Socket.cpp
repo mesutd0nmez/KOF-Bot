@@ -21,7 +21,7 @@ void Socket::Connect(std::string szIP, uint16_t iPort)
     {
         m_tcpSocket.isConnected = true;
 
-        m_Cryption->SetEncryptionKey("abcdefghlmnoprs");
+        m_Cryption->SetEncryptionKey(skCryptDec("3f3d7e0528381988cadab8fc19d34c23db1988a5115e4bd750968830ed1508da"));
         GenerateSeed((1881 * 1923) / 1993 << 16);
         m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 

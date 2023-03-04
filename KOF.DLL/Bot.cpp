@@ -372,7 +372,6 @@ void Bot::OnConfigurationLoaded()
 		}
 	};
 
-
 	m_ClientHandler->SetConfigurationLoaded(true);
 	m_ClientHandler->StartHandler();
 

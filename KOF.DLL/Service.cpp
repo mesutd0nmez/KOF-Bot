@@ -45,7 +45,11 @@ void Service::Initialize()
 
     m_szToken = m_iniConfiguration->GetString("KOF", "Token", m_szToken.c_str());
 
-    Connect("127.0.0.1", 8888);
+//#ifdef DEBUG
+//    Connect(skCryptDec("127.0.0.1"), 8888);
+//#else
+    Connect(skCryptDec("162.19.137.94"), 8888);
+//#endif 
 }
 
 void Service::OnConnect()
@@ -85,6 +89,9 @@ void Service::HandlePacket(Packet& pkt)
 #ifdef DEBUG
             printf("Socket ready\n");
 #endif
+
+            GenerateSeed(m_iId + GetCurrentProcessId());
+            m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
             OnReady();
         }
