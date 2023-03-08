@@ -6,8 +6,6 @@
 
 #define USE_MAILSLOT
 
-//#define AUTO_LOGIN_TEST
-
 //#define DISABLE_XIGNCODE
 
 #ifdef DEBUG
@@ -15,6 +13,8 @@
 #else
 #define DEVELOPMENT_PATH ".\\"
 #endif
+
+#define DEVELOPMENT_EXE "KnightOnLine.exe"
 
 #define MAX_ATTACK_RANGE		50.0f
 #define MAX_VIEW_RANGE		100.0f

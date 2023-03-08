@@ -32,6 +32,6 @@ extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::stri
 extern std::string to_string(wchar_t const* wcstr);
 extern std::string to_string(std::wstring const& wstr);
 
-extern std::vector<std::string> Tokenize(std::string const& str, const char delimeter);
+extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
 
 #endif //PCH_H

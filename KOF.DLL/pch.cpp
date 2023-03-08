@@ -75,7 +75,11 @@ BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szComm
 
 	std::string cmd = cmdArgs.str();
 
-	BOOL result = CreateProcess(&file[0], &cmd[0], NULL, NULL, TRUE, 0, NULL, &szWorkingDirectory[0], &info, &processInfo);
+	SECURITY_ATTRIBUTES securityInfo = { sizeof(securityInfo) };
+
+	securityInfo.bInheritHandle = FALSE;
+
+	BOOL result = CreateProcess(&file[0], &cmd[0], &securityInfo, NULL, FALSE, 0, NULL, &szWorkingDirectory[0], &info, &processInfo);
 
 	if (!result)
 		return FALSE;
@@ -103,17 +107,17 @@ std::string to_string(std::wstring const& wstr)
 	return to_string(wstr.c_str());
 }
 
-std::vector<std::string> Tokenize(std::string const& str, const char delimeter)
+BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
 {
-	std::vector<std::string> out;
+	DWORD dwDesiredAccess = PROCESS_ALL_ACCESS;
+	BOOL  bInheritHandle = FALSE;
+	HANDLE hProcess = OpenProcess(dwDesiredAccess, bInheritHandle, dwProcessId);
+	if (hProcess == NULL)
+		return FALSE;
 
-	std::stringstream ss(str);
+	BOOL result = TerminateProcess(hProcess, uExitCode);
 
-	std::string s;
-	while (std::getline(ss, s, delimeter))
-	{
-		out.push_back(s);
-	}
+	CloseHandle(hProcess);
 
-	return out;
+	return result;
 }

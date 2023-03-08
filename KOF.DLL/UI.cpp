@@ -168,11 +168,11 @@ void UI::Render(Bot* pBot)
 
     const ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    bool bDone = false;
+    Drawing::Done = false;
 
     Drawing::Bot = pBot;
 
-    while (!bDone)
+    while (!Drawing::Done)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
@@ -182,10 +182,10 @@ void UI::Render(Bot* pBot)
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
             if (msg.message == WM_QUIT)
-                bDone = true;
+                Drawing::Done = true;
         }
 
-        if (bDone)
+        if (Drawing::Done)
             break;
 
         if (Drawing::Bot == nullptr)
@@ -230,6 +230,8 @@ void UI::Render(Bot* pBot)
                 break;
 #endif
     }
+
+    Drawing::Done = true;
 
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();

@@ -96,20 +96,21 @@ void ClientHandler::Process()
 
 		StopHandler();
 
-#ifdef AUTO_LOGIN_TEST
-		std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-
-		PushPhase(GetAddress("KO_PTR_INTRO"));
-
-		new std::thread([this]()
+		if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 		{
-			WaitCondition(Read4Byte(Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
+			std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			PushPhase(GetAddress("KO_PTR_INTRO"));
 
-			ConnectLoginServer();
-		});
-#endif
+			new std::thread([this]()
+			{
+				WaitCondition(Read4Byte(Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+				ConnectLoginServer();
+			});
+		}
 	}
 }
 
@@ -121,19 +122,20 @@ void ClientHandler::OnReady()
 
 	new std::thread([this]() { m_Bot->InitializeStaticData(); });
 
-#ifdef AUTO_LOGIN_TEST
-	PushPhase(GetAddress("KO_PTR_INTRO"));
-
-	new std::thread([this]()
+	if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 	{
-		WaitCondition(Read4Byte(Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
+		PushPhase(GetAddress("KO_PTR_INTRO"));
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		new std::thread([this]()
+		{
+			WaitCondition(Read4Byte(Read4Byte(GetAddress("KO_PTR_INTRO")) + GetAddress("KO_OFF_UI_LOGIN_INTRO")) == 0);
 
-		SetLoginInformation("colinkazim", "ttCnkoSh1993");
-		ConnectLoginServer();
-	});
-#endif
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+			SetLoginInformation("colinkazim", "ttCnkoSh1993");
+			ConnectLoginServer();
+		});
+	}
 }
 
 void ClientHandler::PatchClient()
@@ -781,17 +783,19 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				printf("RecvProcess::LS_SERVERLIST: %d Server loaded\n", byServerCount);
 #endif
 
-#ifdef AUTO_LOGIN_TEST
-				new std::thread([this]()
+				if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 				{
+					new std::thread([this]()
+					{
 #ifdef DEBUG
-					printf("RecvProcess::LS_SERVERLIST: Connecting to server: %d\n", 1);
+						printf("RecvProcess::LS_SERVERLIST: Connecting to server: %d\n", 1);
 
-					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
-					ConnectGameServer(1);
-				});
-#endif
+						ConnectGameServer(1);
+					});
+				}
+
 			}
 		}
 		break;
@@ -814,19 +818,20 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Character list loaded\n");
 #endif
 
-#ifdef AUTO_LOGIN_TEST
-				new std::thread([this]()
+				if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 				{
+					new std::thread([this]()
+					{
 #ifdef DEBUG
-					printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
+						printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
 #endif
 
-					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-					SelectCharacterSkip();
-					SelectCharacter(1);
-				});
-#endif
+						SelectCharacterSkip();
+						SelectCharacter(1);
+					});
+				}
 			}
 		}
 		break;
@@ -3579,7 +3584,7 @@ void ClientHandler::SendBasicAttackPacket(int32_t iTargetID, float fInterval, fl
 		<< uint16_t(fDistance * 10.0f)
 		<< uint8_t(0) << uint8_t(0);
 
-	SendPacket(pkt);
+	SendPacket(pkt); 
 }
 
 void ClientHandler::SendShoppingMall(ShoppingMallType eType)

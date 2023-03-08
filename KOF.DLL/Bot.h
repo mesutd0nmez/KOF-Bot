@@ -15,6 +15,7 @@ public:
 	Service* GetService() { return static_cast<Service*>(this); }
 
 public:
+	void Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount);
 	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
 	void InitializeStaticData();
 
@@ -89,7 +90,11 @@ public:
 	bool IsInjectedProcessLost();
 	bool IsTableLoaded() { return m_bTableLoaded; }
 
+	PlatformType GetPlatformType() { return m_ePlatformType; }
+
 private:
+	std::string m_szClientPath;
+	std::string m_szClientExe;
 	DWORD m_dwInjectedProcessID;
 	bool m_bTableLoaded;
 	std::chrono::milliseconds	msLastConfigurationSave;

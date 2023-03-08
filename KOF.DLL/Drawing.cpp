@@ -11,6 +11,7 @@ LPCSTR Drawing::lpWindowName = "Discord";
 ImVec2 Drawing::vWindowSize = { 658, 600 };
 ImGuiWindowFlags Drawing::WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 bool Drawing::bDraw = true;
+bool Drawing::Done = false;
 
 float fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
 float fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;

@@ -32,8 +32,6 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="Guard.h" />
     <ClInclude Include="Memory.h" />
-    <ClInclude Include="ReflectiveInjection.h" />
-    <ClInclude Include="ReflectiveLoader.h" />
     <ClInclude Include="Remap.h" />
     <ClInclude Include="Service.h" />
     <ClInclude Include="Ini.h" />
@@ -54,8 +52,6 @@
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="ClientHandler.cpp" />
     <ClCompile Include="Drawing.cpp" />
-    <ClCompile Include="EntryPoint.cpp" />
-    <ClCompile Include="ReflectiveLoader.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
@@ -78,14 +74,14 @@
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>

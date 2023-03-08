@@ -2,7 +2,9 @@
 #include "UI.h"
 #include "Bot.h"
 #include "ClientHandler.h"
-#include "ReflectiveInjection.h"
+#include "Drawing.h"
+
+Bot* bot = nullptr;
 
 #ifdef _WINDLL
 
@@ -21,19 +23,28 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
         case DLL_PROCESS_ATTACH:
             hAppInstance = hinstDLL;
 
-//            AllocConsole();
-//            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-//
-//#ifndef DEBUG
-//            ShowWindow(GetConsoleWindow(), SW_HIDE);
-//#endif
+#ifdef DEBUG
+            AllocConsole();
+            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+#endif
+
+#ifdef DEBUG
+            printf("EntryPoint\n");
+#endif
+            new std::thread([]()
+            {
+                Bot* bot = new Bot();
+                bot->Initialize(PlatformType::USKO, 0);
+            });
+
             break;
 
         case DLL_PROCESS_DETACH:
         {
-//#ifdef DEBUG
-//            FreeConsole();
-//#endif
+#ifdef DEBUG
+            fclose(stdout);
+            FreeConsole();
+#endif
         }
         break;
 
@@ -46,6 +57,19 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 }
 #else
 
+BOOL WINAPI MyConsoleCtrlHandler(DWORD dwCtrlType)
+{
+    if (dwCtrlType == CTRL_CLOSE_EVENT)
+    {
+        if (bot)
+        {
+            TerminateMyProcess(bot->GetInjectedProcessId(), -1);
+        }
+    } 
+
+    return TRUE;
+}
+
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
 #ifdef DEBUG
@@ -53,15 +77,47 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 #endif
 
-    Bot* bot = new Bot();
+    SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 
-    bot->Initialize(PlatformType::USKO, 0);
+    std::string szClientPath = DEVELOPMENT_PATH;
+    std::string szClientExe = DEVELOPMENT_EXE;
+    PlatformType iPlatformType = PlatformType::USKO;
+    int iAccountIndex = 0;
+
+    int argc;
+
+    LPWSTR* szArglist = CommandLineToArgvW(GetCommandLineW(), &argc);
+
+    char** argv = new char* [argc];
+
+    for (int i = 0; i < argc; i++) 
+    {
+        int lgth = wcslen(szArglist[i]);
+
+        argv[i] = new char[lgth + 1];
+
+        for (int j = 0; j <= lgth; j++)
+            argv[i][j] = char(szArglist[i][j]);
+    }
+
+    if (argc == 5)
+    {
+        szClientPath = to_string(szArglist[1]);
+        szClientExe = to_string(szArglist[2]);
+        iPlatformType = (PlatformType)std::stoi(szArglist[3]);
+        iAccountIndex = std::stoi(szArglist[4]);
+    }
+
+    bot = new Bot();
+
+    bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
 
     bool bWorking = true;
 
     while (bWorking)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if(Drawing::Done)
+            bWorking = false;
 
         if (bot->GetInjectedProcessId() != 0 && bot->IsInjectedProcessLost())
             bWorking = false;
@@ -69,9 +125,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         bot->Process();
     }
 
+    TerminateMyProcess(bot->GetInjectedProcessId(), -1);
+
 #ifdef DEBUG
+    fclose(stdout);
     FreeConsole();
 #endif
+
+    LocalFree(szArglist);
 
     return 0;
 }

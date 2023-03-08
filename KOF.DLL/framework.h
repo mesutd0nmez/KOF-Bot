@@ -15,3 +15,5 @@
 #include <map>
 #include <mutex>
 #include <set>
+#include <shellapi.h>
+#include <limits>

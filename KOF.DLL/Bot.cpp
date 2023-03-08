@@ -27,6 +27,11 @@ Bot::Bot()
 	m_pTbl_Mob = nullptr;
 
 	msLastConfigurationSave = std::chrono::milliseconds(0);
+
+	memset(&m_injectedProcessInfo, 0, sizeof(m_injectedProcessInfo));
+
+	m_szClientPath.clear();
+	m_szClientExe.clear();
 }
 
 Bot::~Bot()
@@ -54,6 +59,19 @@ Bot::~Bot()
 	m_pTbl_Mob = nullptr;
 
 	msLastConfigurationSave = std::chrono::milliseconds(0);
+
+	memset(&m_injectedProcessInfo, 0, sizeof(m_injectedProcessInfo));
+
+	m_szClientPath.clear();
+	m_szClientExe.clear();
+}
+
+void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
+{
+	m_szClientPath = szClientPath;
+	m_szClientExe = szClientExe;
+
+	Initialize(ePlatformType, iSelectedAccount);
 }
 
 void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -91,6 +109,8 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 
 void Bot::Process()
 {
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
 	if (m_ClientHandler)
 		m_ClientHandler->Process();
 }
@@ -291,52 +311,57 @@ void Bot::OnLoaded()
 	printf("Bot: OnLoaded\n");
 #endif
 
-#ifndef _WINDLL
-	std::ostringstream strCommandLine;
-	strCommandLine << GetCurrentProcessId();
+#if !defined(_WINDLL)
 
-	StartProcess(DEVELOPMENT_PATH, "KnightOnLine.exe", strCommandLine.str(), m_injectedProcessInfo);
-
-	if (m_injectedProcessInfo.hProcess != 0)
+	if (m_dwInjectedProcessID == 0)
 	{
-		
+		std::ostringstream strCommandLine;
+		strCommandLine << GetCurrentProcessId();
 
-		DWORD dwXignCodeEntryPoint = 0;
+		StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), m_injectedProcessInfo);
 
-		while (dwXignCodeEntryPoint == 0)
-			ReadProcessMemory(m_injectedProcessInfo.hProcess, (LPVOID)0xCEB282, &dwXignCodeEntryPoint, 4, 0);
-
-		SuspendProcess(m_injectedProcessInfo.hProcess);
-
-		Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00400000, 0x00A30000);
-		Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00E30000, 0x00140000);
-
-		HMODULE hModuleAdvapi = GetModuleHandle("advapi32");
-
-		if (hModuleAdvapi != 0)
+		if (m_injectedProcessInfo.hProcess != 0)
 		{
-			LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, "OpenServiceW");
-
-			if (pOpenServicePtr != 0)
+			if (m_ePlatformType == PlatformType::USKO)
 			{
-				BYTE byPatch[] =
-				{
-					0xC2, 0x0C, 0x00
-				};
+				DWORD dwXignCodeEntryPoint = 0;
 
-				WriteProcessMemory(m_injectedProcessInfo.hProcess, pOpenServicePtr, byPatch, sizeof(byPatch), 0);
+				while (dwXignCodeEntryPoint == 0)
+					ReadProcessMemory(m_injectedProcessInfo.hProcess, (LPVOID)0xCEB282, &dwXignCodeEntryPoint, 4, 0);
+
+				Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00400000, 0x00A30000);
+				Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00E30000, 0x00140000);
+
+				HMODULE hModuleAdvapi = GetModuleHandle("advapi32");
+
+				if (hModuleAdvapi != 0)
+				{
+					LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, "OpenServiceW");
+
+					if (pOpenServicePtr != 0)
+					{
+						BYTE byPatch[] =
+						{
+							0xC2, 0x0C, 0x00
+						};
+
+						WriteProcessMemory(m_injectedProcessInfo.hProcess, pOpenServicePtr, byPatch, sizeof(byPatch), 0);
+				}
 			}
-		}
 
 #ifdef DISABLE_XIGNCODE
-		BYTE byPatch22[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-		WriteProcessMemory(processInfo.hProcess, (LPVOID*)0xCEB282, byPatch22, sizeof(byPatch22), 0);
+				BYTE byPatch22[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
+				WriteProcessMemory(processInfo.hProcess, (LPVOID*)0xCEB282, byPatch22, sizeof(byPatch22), 0);
 #endif
+			}
 
-		ResumeProcess(m_injectedProcessInfo.hProcess);
+			m_dwInjectedProcessID = m_injectedProcessInfo.dwProcessId;
 
-		m_dwInjectedProcessID = m_injectedProcessInfo.dwProcessId;
+			CloseHandle(m_injectedProcessInfo.hProcess);
+			CloseHandle(m_injectedProcessInfo.hThread);
+		}
 	}
+
 #endif
 
 	m_ClientHandler = new ClientHandler(this);

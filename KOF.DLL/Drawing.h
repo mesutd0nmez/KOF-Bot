@@ -8,6 +8,7 @@ class Drawing
 {
 public:
 	static Bot* Bot;
+	static bool Done;
 
 private:
 	static LPCSTR lpWindowName;
