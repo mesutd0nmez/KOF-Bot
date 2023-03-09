@@ -9,7 +9,11 @@ Bot::Bot()
 {
 	m_ClientHandler = nullptr;
 
-	m_dwInjectedProcessID = 0;
+#ifdef _WINDLL
+	m_dwInjectedProcessId = GetCurrentProcessId();
+#else
+	m_dwInjectedProcessId = 0;
+#endif
 
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
@@ -27,8 +31,6 @@ Bot::Bot()
 	m_pTbl_Mob = nullptr;
 
 	msLastConfigurationSave = std::chrono::milliseconds(0);
-
-	memset(&m_injectedProcessInfo, 0, sizeof(m_injectedProcessInfo));
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
@@ -40,7 +42,7 @@ Bot::~Bot()
 
 	m_ClientHandler = nullptr;
 
-	m_dwInjectedProcessID = 0;
+	m_dwInjectedProcessId = 0;
 
 	m_bTableLoaded = false;
 
@@ -59,8 +61,6 @@ Bot::~Bot()
 	m_pTbl_Mob = nullptr;
 
 	msLastConfigurationSave = std::chrono::milliseconds(0);
-
-	memset(&m_injectedProcessInfo, 0, sizeof(m_injectedProcessInfo));
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
@@ -97,14 +97,16 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 		CloseHandle(hToken);
 	}
 
-#ifdef _WINDLL
-	m_dwInjectedProcessID = GetCurrentProcessId();
-#endif
+	wchar_t* wszAppDataFolder;
+	SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, NULL, &wszAppDataFolder);
+	m_szAppDataFolder = to_string(wszAppDataFolder);
 
 	m_ePlatformType = ePlatformType;
 	m_iSelectedAccount = iSelectedAccount;
 
-	new std::thread([this]() { GetService()->Initialize(); });
+	LoadAccountList();
+
+	GetService()->Initialize();
 }
 
 void Bot::Process()
@@ -113,6 +115,25 @@ void Bot::Process()
 
 	if (m_ClientHandler)
 		m_ClientHandler->Process();
+}
+
+void Bot::LoadAccountList()
+{
+	try
+	{
+		m_szAccountListFilePath = m_szAppDataFolder + skCryptDec("\\KOF.Accounts.json");
+
+		std::ifstream i(m_szAccountListFilePath.c_str());
+		m_AccountList = JSON::parse(i);
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
 }
 
 void Bot::Close()
@@ -184,37 +205,35 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Started\n");
 #endif
 
-	std::string szDevelopmentPath = DEVELOPMENT_PATH;
-
 	m_pTbl_Skill = new Table<__TABLE_UPC_SKILL>();
-	m_pTbl_Skill->Load(szDevelopmentPath + ".\\Data\\skill_magic_main_us.tbl");
+	m_pTbl_Skill->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_main_us.tbl"));
 
 	m_pTbl_Skill_Extension1 = new Table<__TABLE_UPC_SKILL_EXTENSION1>();
-	m_pTbl_Skill_Extension1->Load(szDevelopmentPath + ".\\Data\\skill_magic_1.tbl");
+	m_pTbl_Skill_Extension1->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_1.tbl"));
 
 	m_pTbl_Skill_Extension2 = new Table<__TABLE_UPC_SKILL_EXTENSION2>();
-	m_pTbl_Skill_Extension2->Load(szDevelopmentPath + ".\\Data\\skill_magic_2.tbl");
+	m_pTbl_Skill_Extension2->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_2.tbl"));
 
 	m_pTbl_Skill_Extension3 = new Table<__TABLE_UPC_SKILL_EXTENSION3>();
-	m_pTbl_Skill_Extension3->Load(szDevelopmentPath + ".\\Data\\skill_magic_3.tbl");
+	m_pTbl_Skill_Extension3->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_3.tbl"));
 
 	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
-	m_pTbl_Skill_Extension4->Load(szDevelopmentPath + ".\\Data\\skill_magic_4.tbl");
+	m_pTbl_Skill_Extension4->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_4.tbl"));
 
 	m_pTbl_Skill_Extension5 = new Table<__TABLE_UPC_SKILL_EXTENSION5>();
-	m_pTbl_Skill_Extension5->Load(szDevelopmentPath + ".\\Data\\skill_magic_5.tbl");
+	m_pTbl_Skill_Extension5->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_5.tbl"));
 
 	m_pTbl_Skill_Extension6 = new Table<__TABLE_UPC_SKILL_EXTENSION6>();
-	m_pTbl_Skill_Extension6->Load(szDevelopmentPath + ".\\Data\\skill_magic_6.tbl");
+	m_pTbl_Skill_Extension6->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_6.tbl"));
 
 	m_pTbl_Skill_Extension7 = new Table<__TABLE_UPC_SKILL_EXTENSION7>();
-	m_pTbl_Skill_Extension7->Load(szDevelopmentPath + ".\\Data\\skill_magic_7.tbl");
+	m_pTbl_Skill_Extension7->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_7.tbl"));
 
 	m_pTbl_Skill_Extension8 = new Table<__TABLE_UPC_SKILL_EXTENSION8>();
-	m_pTbl_Skill_Extension8->Load(szDevelopmentPath + ".\\Data\\skill_magic_8.tbl");
+	m_pTbl_Skill_Extension8->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_8.tbl"));
 
 	m_pTbl_Skill_Extension9 = new Table<__TABLE_UPC_SKILL_EXTENSION9>();
-	m_pTbl_Skill_Extension9->Load(szDevelopmentPath + ".\\Data\\skill_magic_9.tbl");
+	m_pTbl_Skill_Extension9->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_9.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
@@ -252,21 +271,21 @@ void Bot::InitializeStaticData()
 #endif
 
 	m_pTbl_Item = new Table<__TABLE_ITEM>();
-	m_pTbl_Item->Load(szDevelopmentPath + ".\\Data\\item_org_us.tbl");
+	m_pTbl_Item->Load(m_szClientPath + skCryptDec("\\Data\\item_org_us.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
 #endif
 
 	m_pTbl_Npc = new Table<__TABLE_NPC>();
-	m_pTbl_Npc->Load(szDevelopmentPath + ".\\Data\\npc_us.tbl");
+	m_pTbl_Npc->Load(m_szClientPath + skCryptDec("\\Data\\npc_us.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
 	m_pTbl_Mob = new Table<__TABLE_MOB_USKO>();
-	m_pTbl_Mob->Load(szDevelopmentPath + ".\\Data\\mob_us.tbl");
+	m_pTbl_Mob->Load(m_szClientPath + skCryptDec("\\Data\\mob_us.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
@@ -312,56 +331,56 @@ void Bot::OnLoaded()
 #endif
 
 #if !defined(_WINDLL)
+	PROCESS_INFORMATION injectedProcessInfo;
+	std::ostringstream strCommandLine;
+	strCommandLine << GetCurrentProcessId();
 
-	if (m_dwInjectedProcessID == 0)
+	StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo);
+
+	if (injectedProcessInfo.hProcess != 0)
 	{
-		std::ostringstream strCommandLine;
-		strCommandLine << GetCurrentProcessId();
-
-		StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), m_injectedProcessInfo);
-
-		if (m_injectedProcessInfo.hProcess != 0)
+		if (m_ePlatformType == PlatformType::USKO)
 		{
-			if (m_ePlatformType == PlatformType::USKO)
+			DWORD dwXignCodeEntryPoint = 0;
+
+			while (dwXignCodeEntryPoint == 0)
+				ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
+
+			SuspendProcess(injectedProcessInfo.hProcess);
+
+			Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
+			Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
+			Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE40000, 0x130000);
+
+			HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
+
+			if (hModuleAdvapi != 0)
 			{
-				DWORD dwXignCodeEntryPoint = 0;
+				LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, skCryptDec("OpenServiceW"));
 
-				while (dwXignCodeEntryPoint == 0)
-					ReadProcessMemory(m_injectedProcessInfo.hProcess, (LPVOID)0xCEB282, &dwXignCodeEntryPoint, 4, 0);
-
-				Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00400000, 0x00A30000);
-				Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00E30000, 0x00140000);
-
-				HMODULE hModuleAdvapi = GetModuleHandle("advapi32");
-
-				if (hModuleAdvapi != 0)
+				if (pOpenServicePtr != 0)
 				{
-					LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, "OpenServiceW");
-
-					if (pOpenServicePtr != 0)
+					BYTE byPatch1[] =
 					{
-						BYTE byPatch[] =
-						{
-							0xC2, 0x0C, 0x00
-						};
+						0xC2, 0x0C, 0x00
+					};
 
-						WriteProcessMemory(m_injectedProcessInfo.hProcess, pOpenServicePtr, byPatch, sizeof(byPatch), 0);
+					WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
 				}
 			}
 
 #ifdef DISABLE_XIGNCODE
-				BYTE byPatch22[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-				WriteProcessMemory(processInfo.hProcess, (LPVOID*)0xCEB282, byPatch22, sizeof(byPatch22), 0);
+			BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
+			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 #endif
-			}
-
-			m_dwInjectedProcessID = m_injectedProcessInfo.dwProcessId;
-
-			CloseHandle(m_injectedProcessInfo.hProcess);
-			CloseHandle(m_injectedProcessInfo.hThread);
 		}
-	}
 
+		m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
+
+		ResumeProcess(injectedProcessInfo.hProcess);
+
+		CloseHandle(injectedProcessInfo.hProcess);
+	}
 #endif
 
 	m_ClientHandler = new ClientHandler(this);
@@ -400,12 +419,12 @@ void Bot::OnConfigurationLoaded()
 	m_ClientHandler->SetConfigurationLoaded(true);
 	m_ClientHandler->StartHandler();
 
-	new std::thread([this]() { UI::Render(this); });
+	UI::Render(this);
 }
 
 DWORD Bot::GetAddress(std::string szAddressName)
 {
-	std::string szAddress = m_iniPointer->GetString("Address", szAddressName.c_str(), "0x000000");
+	std::string szAddress = m_iniPointer->GetString(skCryptDec("Address"), szAddressName.c_str(), skCryptDec("0x000000"));
 	return std::strtoul(szAddress.c_str(), NULL, 16);
 }
 
@@ -416,57 +435,57 @@ Ini* Bot::GetConfiguration()
 
 BYTE Bot::ReadByte(DWORD dwAddress)
 {
-	return Memory::ReadByte(m_dwInjectedProcessID, dwAddress);
+	return Memory::ReadByte(m_dwInjectedProcessId, dwAddress);
 }
 
 DWORD Bot::Read4Byte(DWORD dwAddress)
 {
-	return Memory::Read4Byte(m_dwInjectedProcessID, dwAddress);
+	return Memory::Read4Byte(m_dwInjectedProcessId, dwAddress);
 }
 
 float Bot::ReadFloat(DWORD dwAddress)
 {
-	return Memory::ReadFloat(m_dwInjectedProcessID, dwAddress);
+	return Memory::ReadFloat(m_dwInjectedProcessId, dwAddress);
 }
 
 std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
 {
-	return Memory::ReadString(m_dwInjectedProcessID, dwAddress, nSize);
+	return Memory::ReadString(m_dwInjectedProcessId, dwAddress, nSize);
 }
 
 std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 {
-	return Memory::ReadBytes(m_dwInjectedProcessID, dwAddress, nSize);
+	return Memory::ReadBytes(m_dwInjectedProcessId, dwAddress, nSize);
 }
 
 void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	Memory::WriteByte(m_dwInjectedProcessID, dwAddress, byValue);
+	Memory::WriteByte(m_dwInjectedProcessId, dwAddress, byValue);
 }
 
 void Bot::Write4Byte(DWORD dwAddress, DWORD dwValue)
 {
-	Memory::Write4Byte(m_dwInjectedProcessID, dwAddress, dwValue);
+	Memory::Write4Byte(m_dwInjectedProcessId, dwAddress, dwValue);
 }
 
 void Bot::WriteFloat(DWORD dwAddress, float fValue)
 {
-	Memory::WriteFloat(m_dwInjectedProcessID, dwAddress, fValue);
+	Memory::WriteFloat(m_dwInjectedProcessId, dwAddress, fValue);
 }
 
 void Bot::WriteString(DWORD dwAddress, std::string strValue)
 {
-	Memory::WriteString(m_dwInjectedProcessID, dwAddress, strValue);
+	Memory::WriteString(m_dwInjectedProcessId, dwAddress, strValue);
 }
 
 void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 {
-	Memory::WriteBytes(m_dwInjectedProcessID, dwAddress, byValue);
+	Memory::WriteBytes(m_dwInjectedProcessId, dwAddress, byValue);
 }
 
 void Bot::ExecuteRemoteCode(BYTE* codes, size_t psize)
 {
-	Memory::ExecuteRemoteCode(m_dwInjectedProcessID, codes, psize);
+	Memory::ExecuteRemoteCode(m_dwInjectedProcessId, codes, psize);
 }
 
 bool Bot::IsInjectedProcessLost()
@@ -474,22 +493,26 @@ bool Bot::IsInjectedProcessLost()
 	if (GetInjectedProcessId() == 0)
 		return true;
 
-#ifdef _WINDLL
-	HANDLE hProcess = GetCurrentProcess();
-#else
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-#endif
 
-	if (hProcess == 0)
+	if (hProcess == nullptr)
 		return true;
 
 	DWORD dwExitCode = 0;
 
 	if (GetExitCodeProcess(hProcess, &dwExitCode) == FALSE)
+	{
+		CloseHandle(hProcess);
 		return true;
+	}
 
 	if (dwExitCode != STILL_ACTIVE)
+	{
+		CloseHandle(hProcess);
 		return true;
+	}
+
+	CloseHandle(hProcess);
 
 	return false;
 }

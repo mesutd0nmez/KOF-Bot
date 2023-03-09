@@ -21,7 +21,6 @@ enum PlatformType
 	USKO,
 	CNKO,
 	JPKO,
-	TEST,
 };
 
 enum ConfigurationRequestType

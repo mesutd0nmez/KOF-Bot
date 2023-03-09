@@ -43,12 +43,6 @@
     <Filter Include="Source Files\Client">
       <UniqueIdentifier>{a12b818c-6f41-441a-b416-495cad0eeb1f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\N3Base">
-      <UniqueIdentifier>{011a287c-ae79-460c-8800-433752ee2470}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\N3Base">
-      <UniqueIdentifier>{f08cfad7-0ddf-4984-8c21-f8e66e64a428}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -130,6 +124,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SkCrypter.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Json.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
   </ItemGroup>

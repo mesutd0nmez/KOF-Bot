@@ -2,6 +2,9 @@
 
 #include "Service.h"
 #include "Table.h"
+#include "Json.h"
+
+using JSON = nlohmann::json;
 
 class ClientHandler;
 class Client;
@@ -20,6 +23,8 @@ public:
 	void InitializeStaticData();
 
 	void Process();
+	void LoadAccountList();
+
 	void Close();
 	void Release();
 
@@ -41,6 +46,8 @@ public:
 
 	Table<__TABLE_NPC>* GetNpcTable() { return m_pTbl_Npc; };
 	Table<__TABLE_MOB_USKO>* GetMobTable() { return m_pTbl_Mob; };
+
+	JSON m_AccountList;
 
 private:
 	void OnReady();
@@ -66,12 +73,11 @@ private:
 	Table<__TABLE_NPC>* m_pTbl_Npc;
 	Table<__TABLE_MOB_USKO>* m_pTbl_Mob;
 
-public:
-	DWORD GetInjectedProcessId() { return m_dwInjectedProcessID; };
+	std::string m_szAccountListFilePath;
+	std::string m_szAppDataFolder;
 
-#ifndef _WINDLL
-	PROCESS_INFORMATION GetInjectedProcessInfo() { return m_injectedProcessInfo; };
-#endif
+public:
+	DWORD GetInjectedProcessId() { return m_dwInjectedProcessId; };
 
 	BYTE ReadByte(DWORD dwAddress);
 	DWORD Read4Byte(DWORD dwAddress);
@@ -95,13 +101,8 @@ public:
 private:
 	std::string m_szClientPath;
 	std::string m_szClientExe;
-	DWORD m_dwInjectedProcessID;
+	DWORD m_dwInjectedProcessId;
 	bool m_bTableLoaded;
-	std::chrono::milliseconds	msLastConfigurationSave;
-
-#ifndef _WINDLL
-private:
-	PROCESS_INFORMATION m_injectedProcessInfo;
-#endif
+	std::chrono::milliseconds msLastConfigurationSave;
 };
 

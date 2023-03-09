@@ -9,9 +9,9 @@ class Drawing
 public:
 	static Bot* Bot;
 	static bool Done;
+	static LPCSTR lpWindowName;
 
 private:
-	static LPCSTR lpWindowName;
 	static ImVec2 vWindowSize;
 	static ImGuiWindowFlags WindowFlags;
 	static bool bDraw;

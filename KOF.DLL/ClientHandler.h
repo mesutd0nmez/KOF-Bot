@@ -50,8 +50,8 @@ private:
 	std::string m_szMailSlotRecvName;
 	std::string m_szMailSlotSendName;
 
-	DWORD m_RecvHookAddress;
-	DWORD m_SendHookAddress;
+	LPVOID m_RecvHookAddress;
+	LPVOID m_SendHookAddress;
 #endif
 
 private:
@@ -69,12 +69,34 @@ private:
 
 		static void RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		{
-			m_ClientHandler->onClientRecvProcess(byBuffer, dwLength);
+			try
+			{
+				m_ClientHandler->onClientRecvProcess(byBuffer, dwLength);
+			}
+			catch (const std::exception& e)
+			{
+#ifdef DEBUG
+				printf("OnClientRecvProcess:Exception: %s\n", e.what());
+#else
+				UNREFERENCED_PARAMETER(e);
+#endif
+			}
 		}
 
 		static void SendProcess(BYTE* byBuffer, DWORD dwLength)
 		{
-			m_ClientHandler->onClientSendProcess(byBuffer, dwLength);
+			try
+			{
+				m_ClientHandler->onClientSendProcess(byBuffer, dwLength);
+			}
+			catch (const std::exception& e)
+			{
+#ifdef DEBUG
+				printf("OnClientSendProcess:Exception: %s\n", e.what());
+#else
+				UNREFERENCED_PARAMETER(e);
+#endif
+			}
 		}
 
 		inline static ClientHandler* m_ClientHandler;

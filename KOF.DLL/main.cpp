@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "UI.h"
+#include "Drawing.h"
 #include "Bot.h"
 #include "ClientHandler.h"
-#include "Drawing.h"
 
 Bot* bot = nullptr;
 
@@ -79,10 +79,17 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
     SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 
+#ifdef DEBUG
     std::string szClientPath = DEVELOPMENT_PATH;
     std::string szClientExe = DEVELOPMENT_EXE;
+    PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
+    int iAccountIndex = DEVELOPMENT_ACCOUNT_INDEX;
+#else
+    std::string szClientPath = "";
+    std::string szClientExe = "";
     PlatformType iPlatformType = PlatformType::USKO;
     int iAccountIndex = 0;
+#endif
 
     int argc;
 

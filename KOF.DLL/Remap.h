@@ -46,16 +46,16 @@ public:
 	{
 		SIZE_T numberOfBytesRead = 0;
 
-		HMODULE hNtDllModule = GetModuleHandleW(L"ntdll.dll");
+		HMODULE hNtDllModule = GetModuleHandle(skCryptDec("ntdll.dll"));
 
 		if (hNtDllModule == NULL)
 			return false;
 
-		_ZwCreateSection _NtCreateSection = (_ZwCreateSection)(void*)GetProcAddress(hNtDllModule, "ZwCreateSection");
+		_ZwCreateSection _NtCreateSection = (_ZwCreateSection)(void*)GetProcAddress(hNtDllModule, skCryptDec("ZwCreateSection"));
 
-		_ZwUnmapViewOfSection _NtUnmapViewOfSection = (_ZwUnmapViewOfSection)(void*)GetProcAddress(hNtDllModule, "ZwUnmapViewOfSection");
+		_ZwUnmapViewOfSection _NtUnmapViewOfSection = (_ZwUnmapViewOfSection)(void*)GetProcAddress(hNtDllModule, skCryptDec("ZwUnmapViewOfSection"));
 
-		_ZwMapViewOfSection _NtMapViewOfSection = (_ZwMapViewOfSection)(void*)GetProcAddress(hNtDllModule, "ZwMapViewOfSection");
+		_ZwMapViewOfSection _NtMapViewOfSection = (_ZwMapViewOfSection)(void*)GetProcAddress(hNtDllModule, skCryptDec("ZwMapViewOfSection"));
 
 		if (ReadProcessMemory(ProcessHandle, BaseAddress, CopyBuffer, RegionSize, &numberOfBytesRead) == FALSE) 
 		{

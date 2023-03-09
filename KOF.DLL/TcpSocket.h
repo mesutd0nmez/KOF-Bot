@@ -26,7 +26,7 @@ public:
         int sent = 0;
         if ((sent = send(this->sock, bytes, byteslength, 0)) < 0)
         {
-            perror("send");
+            perror(skCryptDec("send"));
         }
         return sent;
     }

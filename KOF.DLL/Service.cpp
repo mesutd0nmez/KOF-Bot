@@ -39,11 +39,11 @@ void Service::Initialize()
         return;
     }
 
-    std::string szIniPath = to_string(szAppDataPath) + "\\KOF.ini";
+    std::string szIniPath = to_string(szAppDataPath) + skCryptDec("\\KOF.ini");
     m_iniConfiguration = new Ini();
     m_iniConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniConfiguration->GetString("KOF", "Token", m_szToken.c_str());
+    m_szToken = m_iniConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
     Connect(skCryptDec("127.0.0.1"), 8888);
 

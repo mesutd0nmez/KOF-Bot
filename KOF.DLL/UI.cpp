@@ -131,10 +131,12 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void UI::Render(Bot* pBot)
 {
+    Drawing::lpWindowName = skCryptEnc("KOF.Bot");
+
     ImGui_ImplWin32_EnableDpiAwareness();
-    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T("Discord"), nullptr };
+    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(Drawing::lpWindowName), nullptr };
     ::RegisterClassEx(&wc);
-    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T("Discord"), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
+    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(Drawing::lpWindowName), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
 
     if (!CreateDeviceD3D(hwnd))
     {
@@ -186,21 +188,6 @@ void UI::Render(Bot* pBot)
         }
 
         if (Drawing::Done)
-            break;
-
-        if (Drawing::Bot == nullptr)
-            break;
-
-        if (Drawing::Bot->GetClientHandler() == nullptr)
-            break;
-
-        if (!Drawing::Bot->GetClientHandler()->IsWorking())
-            break;
-
-        if (Drawing::Bot->GetInjectedProcessId() == 0)
-            break;
-
-        if (Drawing::Bot->GetInjectedProcessId() != 0 && Drawing::Bot->IsInjectedProcessLost())
             break;
 
         ImGui_ImplDX11_NewFrame();

@@ -23,9 +23,9 @@ typedef LONG(NTAPI* NtSuspendProcess)(IN HANDLE ProcessHandle);
 typedef LONG(NTAPI* NtResumeProcess)(IN HANDLE ProcessHandle);
 
 extern void SuspendProcess(HANDLE hProcess);
-extern void SuspendProcess(DWORD iProcessId);
+extern void SuspendProcess(DWORD dwProcessId);
 extern void ResumeProcess(HANDLE hProcess);
-extern void ResumeProcess(DWORD iProcessId);
+extern void ResumeProcess(DWORD dwProcessId);
 
 extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION& processInfo);
 
