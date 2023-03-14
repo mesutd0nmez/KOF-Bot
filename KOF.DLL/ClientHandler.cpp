@@ -10,7 +10,8 @@
 ClientHandler::ClientHandler(Bot* pBot)
 {
 	m_Bot = pBot;
-	m_ClientHook = nullptr;
+
+	m_World = new World();
 
 	Clear();
 }
@@ -18,17 +19,12 @@ ClientHandler::ClientHandler(Bot* pBot)
 ClientHandler::~ClientHandler()
 {
 	m_Bot = nullptr;
-	m_ClientHook = nullptr;
 
 	Clear();
 }
 
 void ClientHandler::Clear()
 {
-#ifdef DEBUG
-	printf("Client handler clearing\n");
-#endif
-
 	m_bWorking = false;
 
 	m_bConfigurationLoaded = false;
@@ -46,6 +42,8 @@ void ClientHandler::Clear()
 	m_szPassword.clear();
 
 	m_vecOrigDeathEffectFunction.clear();
+
+	m_ClientHook = nullptr;
 }
 
 void ClientHandler::Initialize()
@@ -620,6 +618,11 @@ void ClientHandler::MailSlotRecvProcess()
 		return;
 	}
 
+	//HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("KOF_RECV"));
+
+	//if (NULL == hEvent)
+	//	return;
+
 	while (m_bMailSlotWorking)
 	{
 		try
@@ -643,6 +646,7 @@ void ClientHandler::MailSlotRecvProcess()
 
 			ov.Offset = 0;
 			ov.OffsetHigh = 0;
+			ov.hEvent = NULL;
 
 			fResult = ReadFile(hSlot, &vecMessageBuffer[0], dwCurrentMesageSize, &dwMessageReadSize, &ov);
 
@@ -676,6 +680,11 @@ void ClientHandler::MailSlotSendProcess()
 		return;
 	}
 
+	//HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("KOF_SEND"));
+
+	//if (NULL == hEvent)
+	//	return;
+
 	while (m_bMailSlotWorking)
 	{
 		try
@@ -699,6 +708,7 @@ void ClientHandler::MailSlotSendProcess()
 
 			ov.Offset = 0;
 			ov.OffsetHigh = 0;
+			ov.hEvent = NULL;
 
 			fResult = ReadFile(hSlot, &vecMessageBuffer[0], dwCurrentMesageSize, &dwMessageReadSize, &ov);
 
@@ -851,6 +861,32 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 						SelectCharacter(1);
 					});
 				}
+			}
+		}
+		break;
+
+		case WIZ_SEL_CHAR:
+		{
+			int iRet = pkt.read<uint8_t>();
+
+			if (iRet == 1)
+			{
+				SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+
+				m_PlayerMySelf.iCity = pkt.read<uint8_t>();
+
+				m_PlayerMySelf.fX = (pkt.read<uint16_t>()) / 10.0f;
+				m_PlayerMySelf.fY = (pkt.read<uint16_t>()) / 10.0f;
+				m_PlayerMySelf.fZ = (pkt.read<int16_t>()) / 10.0f;
+
+				uint8_t iVictoryNation = pkt.read<uint8_t>();
+
+				m_World->Load(m_PlayerMySelf.iCity);
+
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_SEL_CHAR Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n", 
+					m_PlayerMySelf.iCity, m_PlayerMySelf.fX, m_PlayerMySelf.fY, m_PlayerMySelf.fZ, iVictoryNation);
+#endif
 			}
 		}
 		break;
@@ -2687,6 +2723,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				break;
 
+
 				default:
 				{
 #ifdef DEBUG
@@ -2695,6 +2732,60 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				break;
 			}
+		}
+		break;
+
+		case WIZ_ZONE_CHANGE:
+		{
+			uint8_t iOpCode = pkt.read<uint8_t>();
+
+			switch (iOpCode)
+			{
+				case ZoneChangeOpcode::ZoneChangeLoading:
+				{
+
+				}
+				break;
+				case ZoneChangeOpcode::ZoneChangeLoaded:
+				{
+
+				}
+				break;
+				case ZoneChangeOpcode::ZoneChangeTeleport:
+				{
+					SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+
+					m_PlayerMySelf.iCity = (uint8_t)pkt.read<int16_t>();
+
+					m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
+					m_PlayerMySelf.fX = (pkt.read<uint16_t>() / 10.0f);
+					m_PlayerMySelf.fY = (pkt.read<uint16_t>() / 10.0f);
+
+					uint8_t iVictoryNation = pkt.read<uint8_t>();
+
+					m_World->Load(m_PlayerMySelf.iCity);
+
+					printf("RecvProcess::WIZ_ZONE_CHANGE: Teleport Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n",
+						m_PlayerMySelf.iCity, m_PlayerMySelf.fX, m_PlayerMySelf.fY, m_PlayerMySelf.fZ, iVictoryNation);
+
+				}
+				break;
+				case ZoneChangeOpcode::ZoneChangeMilitaryCamp:
+				{
+
+				}
+				break;
+			}
+		}
+		break;
+
+		case WIZ_WARP:
+		{
+			SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+
+			m_PlayerMySelf.fX = (pkt.read<uint16_t>() / 10.0f);
+			m_PlayerMySelf.fY = (pkt.read<uint16_t>() / 10.0f);
+			m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
 		}
 		break;
 	}
@@ -3549,7 +3640,7 @@ void ClientHandler::SendCancelSkillPacket(TABLE_UPC_SKILL pSkillData)
 	SendPacket(pkt);
 }
 
-void ClientHandler::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTaragetPosition, int16_t iMoveSpeed, uint8_t iMoveType)
+void ClientHandler::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition, int16_t iMoveSpeed, uint8_t iMoveType)
 {
 	Packet pkt = Packet(WIZ_MOVE);
 
@@ -3559,9 +3650,9 @@ void ClientHandler::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTaragetP
 		<< int16_t(vecStartPosition.m_fZ * 10.0f)
 		<< iMoveSpeed
 		<< iMoveType
-		<< uint16_t(vecTaragetPosition.m_fX * 10.0f)
-		<< uint16_t(vecTaragetPosition.m_fY * 10.0f)
-		<< int16_t(vecTaragetPosition.m_fZ * 10.0f);
+		<< uint16_t(vecTargetPosition.m_fX * 10.0f)
+		<< uint16_t(vecTargetPosition.m_fY * 10.0f)
+		<< int16_t(vecTargetPosition.m_fZ * 10.0f);
 
 	SendPacket(pkt);
 }
@@ -3582,11 +3673,59 @@ void ClientHandler::SetPosition(Vector3 v3Position)
 
 void ClientHandler::SetMovePosition(Vector3 v3MovePosition)
 {
-	WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 2);
-	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), v3MovePosition.m_fX);
-	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), v3MovePosition.m_fY);
-	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")), v3MovePosition.m_fZ);
-	WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 1);
+	//new std::thread([this,v3MovePosition]()
+	//	{ 
+	//		WorldData* pWorldData = m_World->GetWorldData(GetZone());
+
+	//		if (pWorldData == nullptr)
+	//			return;
+
+	//		///TEST
+	//		int iStartX = (int)(GetX() / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
+	//		int iStartY = (int)(GetY() / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
+
+	//		int iEndX = (int)(v3MovePosition.m_fX / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
+	//		int iEndY = (int)(v3MovePosition.m_fY / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
+
+	//		auto vecPath = pWorldData->AStar->findPath({ iStartX, iStartY }, { iEndX, iEndY });
+
+	//		for (auto& coordinate : vecPath)
+	//		{
+	//			int iNextX = (int)(coordinate.x * ((int)pWorldData->fMapLength / pWorldData->iMapSize));
+	//			int iNextY = (int)(coordinate.y * ((int)pWorldData->fMapLength / pWorldData->iMapSize));
+
+	//			WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 2);
+	//			WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), iNextX);
+	//			WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), iNextY);
+	//			WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 1);
+
+	//			Sleep(1000);
+
+	//			//std::cout
+	//			//	<< (int)(coordinate.x * ((int)pWorldData->fMapLength / pWorldData->iMapSize))
+	//			//	<< " "
+	//			//	<< (int)(coordinate.y * ((int)pWorldData->fMapLength / pWorldData->iMapSize))
+	//			//	<< "\n";
+	//		}
+	//	});
+
+
+	if (v3MovePosition.m_fX == 0.0f && v3MovePosition.m_fY == 0.0f && v3MovePosition.m_fZ == 0.0f)
+	{
+		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 0);
+		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), v3MovePosition.m_fX);
+		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), v3MovePosition.m_fY);
+		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")), v3MovePosition.m_fZ);
+		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 0);
+	}
+	else
+	{
+		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 2);
+		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), v3MovePosition.m_fX);
+		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), v3MovePosition.m_fY);
+		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")), v3MovePosition.m_fZ);
+		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 1);
+	}
 }
 
 void ClientHandler::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDistance)
@@ -3657,7 +3796,6 @@ void ClientHandler::SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32
 
 	SendPacket(pkt);
 }
-
 
 void ClientHandler::SendTargetHpRequest(int32_t bTargetID, bool bBroadcast)
 {

@@ -2,9 +2,6 @@
 
 #include "Service.h"
 #include "Table.h"
-#include "Json.h"
-
-using JSON = nlohmann::json;
 
 class ClientHandler;
 class Client;
@@ -93,12 +90,16 @@ public:
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
 
 public:
+	bool IsClosed() { return m_bClosed; }
 	bool IsInjectedProcessLost();
 	bool IsTableLoaded() { return m_bTableLoaded; }
 
 	PlatformType GetPlatformType() { return m_ePlatformType; }
 
+
+
 private:
+	bool m_bClosed;
 	std::string m_szClientPath;
 	std::string m_szClientExe;
 	DWORD m_dwInjectedProcessId;

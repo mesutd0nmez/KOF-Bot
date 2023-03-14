@@ -14,6 +14,12 @@
 #include "Define.h"
 #include "Enum.h"
 #include "Struct.h"
+#include "Json.h"
+using JSON = nlohmann::json;
+
+#include <imgui.h>
+#include <d3d11.h>
+#include <stb_image.h>
 
 #define WaitCondition(condition) \
 	while(condition) \

@@ -14,6 +14,8 @@ void SuspendProcess(HANDLE hProcess)
 		if (!pNtSuspendProcess)
 			return;
 
+		//printf("NtSuspendProcess Client Handle: [%x]\n", hProcess);
+
 		pNtSuspendProcess(hProcess);
 	}
 }
@@ -24,7 +26,7 @@ void SuspendProcess(DWORD dwProcessId)
 
 	if (hProcess != nullptr)
 	{
-		ResumeProcess(hProcess);
+		SuspendProcess(hProcess);
 		CloseHandle(hProcess);
 	}
 }

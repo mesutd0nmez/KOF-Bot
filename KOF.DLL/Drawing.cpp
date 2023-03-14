@@ -7,7 +7,7 @@
 #include "Guard.h"
 
 Bot* Drawing::Bot = nullptr;
-LPCSTR Drawing::lpWindowName = "";
+LPCSTR Drawing::lpWindowName = skCryptEnc("KOF.Bot");
 ImVec2 Drawing::vWindowSize = { 658, 600 };
 ImGuiWindowFlags Drawing::WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 bool Drawing::bDraw = true;
@@ -21,14 +21,14 @@ ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
 ClientHandler* m_pClient = nullptr;
 Ini* m_pConfiguration = nullptr;
 
-int iMinimapWidth = 0;
-int iMinimapHeight = 0;
-ID3D11ShaderResourceView* pMinimapTexture = NULL;
-
 std::map<uint32_t, __TABLE_NPC> m_mapNpcTable;
 std::map<uint32_t, __TABLE_MOB_USKO> m_mapMobTable;
 
 std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
+
+WorldData* m_pWorldData = nullptr;
+
+ID3D11ShaderResourceView* m_pMinimapTexture = nullptr;
 
 void Drawing::Active()
 {
@@ -60,10 +60,16 @@ void Drawing::Draw()
         m_vecAvailableSkill = m_pClient->GetAvailableSkill();
     }
 
+    if (m_pWorldData == nullptr || (m_pWorldData != nullptr && m_pWorldData->iId != m_pClient->GetZone()))
+    {
+        m_pWorldData = m_pClient->GetWorld()->GetWorldData(m_pClient->GetZone());
+
+        if(m_pWorldData != nullptr)
+            UI::LoadTextureFromMemory(m_pWorldData->pMiniMapImageData, &m_pMinimapTexture, m_pWorldData->iMiniMapImageWidth, m_pWorldData->iMiniMapImageHeight);
+    }
+
 	if (isActive())
 	{
-        Drawing::lpWindowName = skCryptEnc("KOF.Bot");
-
 		ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
 		ImGui::SetNextWindowSize(vWindowSize);
 		ImGui::SetNextWindowBgAlpha(1.0f);
@@ -71,6 +77,7 @@ void Drawing::Draw()
 		{
             DrawGameController();
 		}
+
 		ImGui::End();
 	}
 
@@ -132,18 +139,13 @@ void Drawing::DrawGameController()
 
         ImGui::Spacing();
         {
-            /*if (pMinimapTexture == NULL)
+            if (m_pWorldData)
             {
-                UI::LoadTextureFromFile("C:\\Users\\Administrator\\Documents\\GitHub\\koef\\KOF.UI\\data\\image\\moradon_xmas.jpg", &pMinimapTexture, &iMinimapWidth, &iMinimapHeight);
-            }
-
-            if (pMinimapTexture)
-            {
-                ImGui::BeginChild("Minimap", ImVec2((float)(iMinimapWidth + 17.0f), (float)iMinimapHeight + 17.0f), true);
+                ImGui::BeginChild(skCryptDec("Minimap"), ImVec2((float)(m_pWorldData->iMiniMapImageWidth + 17.0f), (float)m_pWorldData->iMiniMapImageHeight + 17.0f), true);
                 {
                     ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
 
-                    ImGui::Image((void*)pMinimapTexture, ImVec2((float)iMinimapWidth, (float)iMinimapHeight));
+                    ImGui::Image((void*)m_pMinimapTexture, ImVec2((float)m_pWorldData->iMiniMapImageWidth, (float)m_pWorldData->iMiniMapImageHeight));
 
                     if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                     {
@@ -153,8 +155,8 @@ void Drawing::DrawGameController()
 
                         m_pClient->SetMovePosition(
                             Vector3(
-                                std::ceil(mousePositionRelative.x * (float)(1024 / iMinimapWidth)), 0.0f,
-                                std::ceil((iMinimapHeight - mousePositionRelative.y) * (float)(1024 / iMinimapHeight))
+                                std::ceil(mousePositionRelative.x * (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)), 0.0f,
+                                std::ceil((m_pWorldData->iMiniMapImageHeight - mousePositionRelative.y) * (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))
                             )
                         );
                     }
@@ -170,8 +172,8 @@ void Drawing::DrawGameController()
                                 continue;
 
                             ImVec2 pNpcPosition = ImVec2(
-                                pOffsetPosition.x + std::ceil(pNpc.fX / (float)(1024 / iMinimapWidth)),
-                                pOffsetPosition.y + std::ceil(iMinimapHeight - (pNpc.fY / (float)(1024 / iMinimapHeight))));
+                                pOffsetPosition.x + std::ceil(pNpc.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pNpc.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                             if (pNpc.iMonsterOrNpc == 1)
                                 ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
@@ -179,6 +181,14 @@ void Drawing::DrawGameController()
                                 ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
                         }
                     }
+
+                    //ImVec2 pPlayerPosition = ImVec2(
+                    //    pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                    //    pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+
+                    //ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
+
+                    //TEST
 
                     Guard playerListLock(m_pClient->m_vecPlayerLock);
                     auto pPlayerList = m_pClient->GetPlayerList();
@@ -191,31 +201,31 @@ void Drawing::DrawGameController()
                                 continue;
 
                             ImVec2 pPlayerPosition = ImVec2(
-                                pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(1024 / iMinimapWidth)),
-                                pOffsetPosition.y + std::ceil(iMinimapHeight - (pPlayer.fY / (float)(1024 / iMinimapHeight))));
+                                pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                             ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
                         }
                     }
 
                     ImVec2 currentPosition = ImVec2(
-                        pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(1024 / iMinimapWidth)),
-                        pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetPosition().m_fY / (float)(1024 / iMinimapHeight))));
+                        pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                        pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (m_pClient->GetPosition().m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                     ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
 
                     if (m_pClient->GetGoX() > 0.0f && m_pClient->GetGoY() > 0.0f)
                     {
                         ImVec2 movePosition = ImVec2(
-                            pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(1024 / iMinimapWidth)),
-                            pOffsetPosition.y + std::ceil(iMinimapHeight - (m_pClient->GetGoY() / (float)(1024 / iMinimapHeight))));
+                            pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                            pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (m_pClient->GetGoY() / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                         ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
                     }
 
                     ImGui::EndChild();
                 }
-            }*/
+            }
         }
 
         ImGui::Spacing();

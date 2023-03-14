@@ -333,3 +333,11 @@ enum ItemMovementType
 	ITEM_MBAG_TO_MBAG = 11
 };
 
+enum ZoneChangeOpcode
+{
+	ZoneChangeLoading = 1,
+	ZoneChangeLoaded = 2,
+	ZoneChangeTeleport = 3,
+	ZoneChangeMilitaryCamp = 4,
+};
+

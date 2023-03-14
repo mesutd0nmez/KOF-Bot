@@ -75,9 +75,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 #ifdef DEBUG
     AllocConsole();
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-#endif
 
     SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
+#endif
 
 #ifdef DEBUG
     std::string szClientPath = DEVELOPMENT_PATH;
@@ -119,15 +119,16 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
     bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
 
-    bool bWorking = true;
-
-    while (bWorking)
+    while (true)
     {
+        if (bot->IsClosed())
+            break;
+
         if(Drawing::Done)
-            bWorking = false;
+            break;
 
         if (bot->GetInjectedProcessId() != 0 && bot->IsInjectedProcessLost())
-            bWorking = false;
+            break;
 
         bot->Process();
     }

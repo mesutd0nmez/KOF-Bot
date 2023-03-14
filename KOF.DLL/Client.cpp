@@ -20,10 +20,6 @@ Client::~Client()
 
 void Client::Clear()
 {
-#ifdef DEBUG
-	printf("Client data clearing.\n");
-#endif
-
 	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
 
 	m_vecNpc.clear();
@@ -40,6 +36,8 @@ void Client::Clear()
 
 	m_vecLootList.clear();
 	m_bIsMovingToLoot = false;
+
+	m_World = nullptr;
 }
 
 DWORD Client::GetAddress(std::string szAddressName)

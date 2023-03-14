@@ -120,13 +120,16 @@
     <ClInclude Include="Remap.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="HardwareID.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="SkCrypter.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Json.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="HardwareId.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="World.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
   </ItemGroup>
@@ -160,6 +163,9 @@
     </ClCompile>
     <ClCompile Include="ClientHandler.cpp">
       <Filter>Source Files\Client</Filter>
+    </ClCompile>
+    <ClCompile Include="World.cpp">
+      <Filter>Source Files\Utility</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

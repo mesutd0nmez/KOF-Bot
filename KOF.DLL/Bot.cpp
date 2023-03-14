@@ -34,6 +34,8 @@ Bot::Bot()
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
+
+	m_bClosed = false;
 }
 
 Bot::~Bot()
@@ -64,6 +66,8 @@ Bot::~Bot()
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
+
+	m_bClosed = true;
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -91,7 +95,7 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 		priv.PrivilegeCount = 1;
 		priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
-		if (LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &priv.Privileges[0].Luid))
+		if (LookupPrivilegeValue(NULL, skCryptDec(SE_DEBUG_NAME), &priv.Privileges[0].Luid))
 			AdjustTokenPrivileges(hToken, FALSE, &priv, 0, NULL, NULL);
 
 		CloseHandle(hToken);
@@ -141,6 +145,8 @@ void Bot::Close()
 #ifdef DEBUG
 	printf("Bot: Closing\n");
 #endif
+
+	m_bClosed = true;
 
 	if (m_ClientHandler)
 		m_ClientHandler->StopHandler();
@@ -243,8 +249,8 @@ void Bot::InitializeStaticData()
 	memset(&pGodMode, 0, sizeof(pGodMode));
 
 	pGodMode.iID = 500344;
-	pGodMode.szName = "God Mode";
-	pGodMode.szEngName = "God Mode";
+	pGodMode.szName = skCryptDec("God Mode");
+	pGodMode.szEngName = skCryptDec("God Mode");
 	pGodMode.iSelfAnimID1 = -1;
 	pGodMode.iSelfFX1 = 2401;
 	pGodMode.iSelfPart1 = -1;
@@ -335,56 +341,56 @@ void Bot::OnLoaded()
 	std::ostringstream strCommandLine;
 	strCommandLine << GetCurrentProcessId();
 
-	StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo);
-
-	if (injectedProcessInfo.hProcess != 0)
+	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
-		if (m_ePlatformType == PlatformType::USKO)
+		Close();
+		return;
+	}
+
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		DWORD dwXignCodeEntryPoint = 0;
+
+		while (dwXignCodeEntryPoint == 0)
+			ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
+
+		SuspendProcess(injectedProcessInfo.hProcess);
+
+		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
+		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
+		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE40000, 0x130000);
+
+		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
+
+		if (hModuleAdvapi != 0)
 		{
-			DWORD dwXignCodeEntryPoint = 0;
+			LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, skCryptDec("OpenServiceW"));
 
-			while (dwXignCodeEntryPoint == 0)
-				ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
-
-			SuspendProcess(injectedProcessInfo.hProcess);
-
-			Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
-			Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
-			Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE40000, 0x130000);
-
-			HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
-
-			if (hModuleAdvapi != 0)
+			if (pOpenServicePtr != 0)
 			{
-				LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, skCryptDec("OpenServiceW"));
-
-				if (pOpenServicePtr != 0)
+				BYTE byPatch1[] =
 				{
-					BYTE byPatch1[] =
-					{
-						0xC2, 0x0C, 0x00
-					};
+					0xC2, 0x0C, 0x00
+				};
 
-					WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
-				}
+				WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
 			}
-
-#ifdef DISABLE_XIGNCODE
-			BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
-#endif
 		}
 
-		m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
-
-		ResumeProcess(injectedProcessInfo.hProcess);
-
-		CloseHandle(injectedProcessInfo.hProcess);
-	}
+#ifdef DISABLE_XIGNCODE
+		BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
+		WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 #endif
+	}
+
+	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
+
+	ResumeProcess(injectedProcessInfo.hProcess);
+	CloseHandle(injectedProcessInfo.hProcess);
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
+#endif
 }
 
 void Bot::OnConfigurationLoaded()
@@ -419,7 +425,7 @@ void Bot::OnConfigurationLoaded()
 	m_ClientHandler->SetConfigurationLoaded(true);
 	m_ClientHandler->StartHandler();
 
-	UI::Render(this);
+	new std::thread([this]() { UI::Render(this); });
 }
 
 DWORD Bot::GetAddress(std::string szAddressName)

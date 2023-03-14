@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Ini.h"
+#include "World.h"
 
 class Bot;
 class Client
@@ -121,6 +122,11 @@ protected:
 protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
+
+public:
+	World* GetWorld() { return m_World; }
+protected:
+	World* m_World;
 
 };
 

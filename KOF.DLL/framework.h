@@ -17,3 +17,4 @@
 #include <set>
 #include <shellapi.h>
 #include <limits>
+#include <tlhelp32.h>
