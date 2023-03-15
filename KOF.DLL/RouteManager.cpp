@@ -13,7 +13,7 @@ RouteManager::~RouteManager()
 
 void RouteManager::Load()
 {
-    std::string routePath = std::filesystem::current_path().string() + skCryptDec("\\route\\");
+    std::string routePath = std::filesystem::current_path().string() + skCryptDec("\\data\\") + skCryptDec("\\route\\");
 
     for (const auto& entry : std::filesystem::directory_iterator(routePath))
     {
@@ -98,7 +98,7 @@ void RouteManager::Save(std::string szRouteName, uint8_t iMapIndex, std::vector<
 			jRouteData[szStepListAttribute.c_str()].push_back(jRoute);
 		}
 
-		std::string routePath = std::filesystem::current_path().string() + skCryptDec("\\route\\");
+		std::string routePath = std::filesystem::current_path().string()+ skCryptDec("\\data\\") + skCryptDec("\\route\\");
 		std::ofstream o(routePath + szRouteName + skCryptDec(".json"));
 		o << std::setw(4) << jRouteData << std::endl;
 

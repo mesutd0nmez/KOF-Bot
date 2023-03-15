@@ -37,6 +37,8 @@ Bot::Bot()
 	m_RouteManager = nullptr;
 
 	m_World = new World();
+
+	m_jSupplyList.clear();
 }
 
 Bot::~Bot()
@@ -73,6 +75,8 @@ Bot::~Bot()
 	m_RouteManager = nullptr;
 
 	m_World = nullptr;
+
+	m_jSupplyList.clear();
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -212,6 +216,9 @@ void Bot::Release()
 
 	if (m_pTbl_Mob)
 		m_pTbl_Mob->Release();
+
+	if (m_pTbl_ItemSell)
+		m_pTbl_ItemSell->Release();
 }
 
 ClientHandler* Bot::GetClientHandler()
@@ -311,6 +318,13 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
 #endif
 
+	m_pTbl_ItemSell = new Table<__TABLE_ITEM_SELL>();
+	m_pTbl_ItemSell->Load(m_szClientPath + skCryptDec("\\Data\\itemsell_table.tbl"));
+
+#ifdef DEBUG
+	printf("InitializeStaticData: Loaded %d selling item\n", m_pTbl_ItemSell->GetDataSize());
+#endif
+
 #ifdef DEBUG
 	printf("InitializeStaticData: Finished\n");
 #endif
@@ -329,6 +343,35 @@ void Bot::InitializeRouteData()
 
 #ifdef DEBUG
 	printf("InitializeRouteData: Finished\n");
+#endif
+}
+
+void Bot::InitializeSupplyData()
+{
+#ifdef DEBUG
+	printf("InitializeSupplyData: Started\n");
+#endif
+
+	try
+	{
+		std::ifstream i(
+			std::filesystem::current_path().string() 
+			+ skCryptDec("\\data\\") 
+			+ skCryptDec("supply.json"));
+
+		m_jSupplyList = JSON::parse(i);
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
+
+#ifdef DEBUG
+	printf("InitializeSupplyData: Finished\n");
 #endif
 }
 
@@ -559,4 +602,50 @@ bool Bot::IsInjectedProcessLost()
 	CloseHandle(hProcess);
 
 	return false;
+}
+
+std::vector<SShopItem> Bot::GetShopItemTable(int32_t iSellingGroup)
+{
+	auto pSellTable = GetItemSellTable()->GetData();
+
+	std::vector<SShopItem> vecShopWindow;
+
+	if (pSellTable.size() == 0)
+		return vecShopWindow;
+
+	uint8_t iPage = 0;
+	for (auto& e : pSellTable)
+	{
+		if (e.second.iSellingGroup == iSellingGroup)
+		{
+			vecShopWindow.push_back(SShopItem(iPage, 0, e.second.iItem0));
+			vecShopWindow.push_back(SShopItem(iPage, 1, e.second.iItem1));
+			vecShopWindow.push_back(SShopItem(iPage, 2, e.second.iItem2));
+			vecShopWindow.push_back(SShopItem(iPage, 3, e.second.iItem3));
+			vecShopWindow.push_back(SShopItem(iPage, 4, e.second.iItem4));
+			vecShopWindow.push_back(SShopItem(iPage, 5, e.second.iItem5));
+			vecShopWindow.push_back(SShopItem(iPage, 6, e.second.iItem6));
+			vecShopWindow.push_back(SShopItem(iPage, 7, e.second.iItem7));
+			vecShopWindow.push_back(SShopItem(iPage, 8, e.second.iItem8));
+			vecShopWindow.push_back(SShopItem(iPage, 9, e.second.iItem9));
+			vecShopWindow.push_back(SShopItem(iPage, 10, e.second.iItem10));
+			vecShopWindow.push_back(SShopItem(iPage, 11, e.second.iItem11));
+			vecShopWindow.push_back(SShopItem(iPage, 12, e.second.iItem12));
+			vecShopWindow.push_back(SShopItem(iPage, 13, e.second.iItem13));
+			vecShopWindow.push_back(SShopItem(iPage, 14, e.second.iItem14));
+			vecShopWindow.push_back(SShopItem(iPage, 15, e.second.iItem15));
+			vecShopWindow.push_back(SShopItem(iPage, 16, e.second.iItem16));
+			vecShopWindow.push_back(SShopItem(iPage, 17, e.second.iItem17));
+			vecShopWindow.push_back(SShopItem(iPage, 18, e.second.iItem18));
+			vecShopWindow.push_back(SShopItem(iPage, 19, e.second.iItem19));
+			vecShopWindow.push_back(SShopItem(iPage, 20, e.second.iItem20));
+			vecShopWindow.push_back(SShopItem(iPage, 21, e.second.iItem21));
+			vecShopWindow.push_back(SShopItem(iPage, 22, e.second.iItem22));
+			vecShopWindow.push_back(SShopItem(iPage, 23, e.second.iItem23));
+
+			iPage += 1;
+		}
+	}
+
+	return vecShopWindow;
 }

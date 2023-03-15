@@ -24,6 +24,15 @@ struct Vector3
 	float m_fY;
 };
 
+struct SShopItem
+{
+	SShopItem(uint8_t iPage, uint8_t iPos, int32_t iItemId) : m_iPage(iPage), m_iPos(iPos), m_iItemId(iItemId) {};
+
+	uint8_t m_iPage;
+	uint8_t m_iPos;
+	int32_t m_iItemId;
+};
+
 struct SNpcData
 {
 	uint32_t iProtoID;
@@ -447,3 +456,33 @@ typedef struct  __TABLE_MOB_CNKO
 	uint8_t				iUnknown2;
 } TABLE_MOBS_CNKO;
 
+
+typedef struct  __TABLE_ITEM_SELL
+{
+	uint32_t			iID;
+	uint32_t			iSellingGroup;
+	uint32_t			iItem0;
+	uint32_t			iItem1;
+	uint32_t			iItem2;
+	uint32_t			iItem3;
+	uint32_t			iItem4;
+	uint32_t			iItem5;
+	uint32_t			iItem6;
+	uint32_t			iItem7;
+	uint32_t			iItem8;
+	uint32_t			iItem9;
+	uint32_t			iItem10;
+	uint32_t			iItem11;
+	uint32_t			iItem12;
+	uint32_t			iItem13;
+	uint32_t			iItem14;
+	uint32_t			iItem15;
+	uint32_t			iItem16;
+	uint32_t			iItem17;
+	uint32_t			iItem18;
+	uint32_t			iItem19;
+	uint32_t			iItem20;
+	uint32_t			iItem21;
+	uint32_t			iItem22;
+	uint32_t			iItem23;
+} TABLE_ITEM_SELLS;

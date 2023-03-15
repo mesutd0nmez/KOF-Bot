@@ -244,7 +244,6 @@ Vector3 Client::GetTargetPosition()
 {
 	if (m_iTargetID >= 5000)
 	{
-		Guard lock(m_vecNpcLock);
 		auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 			[this](const TNpc& a) { return a.iID == m_iTargetID; });
 
@@ -253,7 +252,6 @@ Vector3 Client::GetTargetPosition()
 	}
 	else
 	{
-		Guard lock(m_vecPlayerLock);
 		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[this](const TPlayer& a) { return a.iID == m_iTargetID; });
 
@@ -335,6 +333,17 @@ TInventory* Client::GetInventoryItem(uint32_t iItemID)
 	}
 
 	return NULL;
+}
+
+int32_t Client::GetInventoryEmptySlot()
+{
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		if (m_PlayerMySelf.tInventory[i].iItemID == 0)
+			return i;
+	}
+
+	return -1;
 }
 
 TInventory* Client::GetInventoryItemSlot(uint8_t iSlotPosition)

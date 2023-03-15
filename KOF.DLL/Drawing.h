@@ -30,6 +30,8 @@ public:
 	static void DrawMainProtectionArea();
 	static void DrawMainFeaturesArea();
 	static void DrawMainAutoLootArea();
+	static void DrawMainSupplyArea();
+	static void DrawMainSettingsArea();
 
 	static void DrawRoutePlannerArea();
 

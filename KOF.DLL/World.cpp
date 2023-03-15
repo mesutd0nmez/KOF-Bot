@@ -23,6 +23,7 @@ void World::Load(uint8_t iIndex)
 		{
 			std::string szFileName = 
 				std::filesystem::current_path().string() 
+				+ skCryptDec("\\data\\")
 				+ skCryptDec("\\world\\") 
 				+ std::to_string(iIndex) 
 				+ skCryptDec(".json");
@@ -49,7 +50,8 @@ void World::Load(uint8_t iIndex)
 
 			std::string szMapImageFilePath =
 				std::filesystem::current_path().string()
-				+ skCryptDec("\\world\\")
+				+ skCryptDec("\\data\\")
+				+ skCryptDec("\\image\\")
 				+ pWorldData.szMapImageFile;
 
 			pWorldData.pMapImageData = stbi_load(
@@ -69,7 +71,8 @@ void World::Load(uint8_t iIndex)
 
 			std::string szMinimapImageFilePath =
 				std::filesystem::current_path().string()
-				+ skCryptDec("\\world\\")
+				+ skCryptDec("\\data\\")
+				+ skCryptDec("\\image\\")
 				+ pWorldData.szMiniMapImageFile;
 
 			pWorldData.pMiniMapImageData = stbi_load(

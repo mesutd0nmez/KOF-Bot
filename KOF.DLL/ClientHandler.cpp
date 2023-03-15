@@ -121,6 +121,7 @@ void ClientHandler::OnReady()
 
 	new std::thread([this]() { m_Bot->InitializeStaticData(); });
 	new std::thread([this]() { m_Bot->InitializeRouteData(); });
+	new std::thread([this]() { m_Bot->InitializeSupplyData(); });
 
 	if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 	{
@@ -1066,7 +1067,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			}
 			else
 			{
-				Guard lock(m_vecPlayerLock);
 				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 					[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -1426,7 +1426,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					}
 					else
 					{
-						Guard lock(m_vecPlayerLock);
 						auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 							[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -1806,7 +1805,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					Guard lock(m_vecNpcLock);
 					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[iID](const TNpc& a) { return a.iID == iID; });
 
@@ -1821,7 +1819,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				else
 				{
-					Guard lock(m_vecPlayerLock);
 					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 						[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -1875,7 +1872,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					if (iTargetID >= 5000)
 					{
-						Guard lock(m_vecNpcLock);
 						auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 							[iTargetID](const TNpc& a) { return a.iID == iTargetID; });
 
@@ -1890,7 +1886,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					}
 					else
 					{
-						Guard lock(m_vecPlayerLock);
 						auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 							[iTargetID](const TPlayer& a) { return a.iID == iTargetID; });
 
@@ -1945,7 +1940,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					Guard lock(m_vecNpcLock);
 					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[iID](const TNpc& a) { return a.iID == iID; });
 
@@ -1964,7 +1958,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				else
 				{
-					Guard lock(m_vecPlayerLock);
 					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 						[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -2008,7 +2001,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			}
 			else
 			{
-				Guard lock(m_vecPlayerLock);
 				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 					[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -2046,7 +2038,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			uint16_t iSpeed = pkt.read<uint16_t>();
 
-			Guard lock(m_vecNpcLock);
 			auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 				[iID](const TNpc& a) { return a.iID == iID; });
 
@@ -2132,7 +2123,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							{
 								if (iTargetID < 5000)
 								{
-									Guard lock(m_vecPlayerLock);
 									auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 										[iTargetID](const TPlayer& a) { return a.iID == iTargetID; });
 
@@ -2247,7 +2237,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							}
 							else
 							{
-								Guard lock(m_vecPlayerLock);
 								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -2275,7 +2264,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 							}
 							else
 							{
-								Guard lock(m_vecPlayerLock);
 								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -2369,8 +2357,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					uint32_t iGold = pkt.read<uint32_t>();
 					uint32_t iTransactionFee = pkt.read<uint32_t>();
 					uint8_t iSellingGroup = pkt.read<uint8_t>();
-
-					SendShoppingMall(ShoppingMallType::STORE_CLOSE);
 
 #ifdef DEBUG
 					printf("RecvProcess::WIZ_ITEM_TRADE: %d,%d,%d\n", iGold, iTransactionFee, iSellingGroup);
@@ -2518,7 +2504,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			{
 				if (iID >= 5000)
 				{
-					Guard lock(m_vecNpcLock);
 					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[iID](const TNpc& a) { return a.iID == iID; });
 
@@ -2533,7 +2518,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				}
 				else
 				{
-					Guard lock(m_vecPlayerLock);
 					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 						[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -2628,7 +2612,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					break;
 				}
 
-				Guard lock(m_vecLootListLock);
 				m_vecLootList.erase(
 					std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 						[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -3065,7 +3048,7 @@ void ClientHandler::ConnectLoginServer(bool bDisconnect)
 	DWORD dwCN3UIEditPwBase = Read4Byte(dwCUILoginIntro + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW")));
 
 	WriteString(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT")), m_szAccountId.c_str());
-	Write4Byte(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH")), m_szPassword.size());
+	Write4Byte(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH")), m_szAccountId.size());
 	WriteString(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT")), m_szPassword.c_str());
 	Write4Byte(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH")), m_szPassword.size());
 
@@ -3689,14 +3672,14 @@ void ClientHandler::SendShoppingMall(ShoppingMallType eType)
 
 	switch (eType)
 	{
-	case ShoppingMallType::STORE_CLOSE:
-		pkt << uint8_t(eType);
-		break;
+		case ShoppingMallType::STORE_CLOSE:
+			pkt << uint8_t(eType);
+			break;
 
-	case ShoppingMallType::STORE_PROCESS:
-	case ShoppingMallType::STORE_LETTER:
-		pkt << uint8_t(eType) << uint8_t(1);
-		break;
+		case ShoppingMallType::STORE_PROCESS:
+		case ShoppingMallType::STORE_LETTER:
+			pkt << uint8_t(eType) << uint8_t(1);
+			break;
 	}
 
 	SendPacket(pkt);
@@ -4056,7 +4039,6 @@ void ClientHandler::SearchTargetProcess()
 
 			if (GetTarget() == -1)
 			{
-				Guard lock(m_vecNpcLock);
 				std::vector<TNpc> vecFilteredNpc;
 
 				if (bAutoTarget)
@@ -4110,7 +4092,6 @@ void ClientHandler::SearchTargetProcess()
 			}
 			else
 			{
-				Guard lock(m_vecNpcLock);
 				auto pTarget = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 					[this](const TNpc& a)
 					{
@@ -4187,7 +4168,6 @@ void ClientHandler::AutoLootProcess()
 					std::chrono::system_clock::now().time_since_epoch()
 				);
 
-				Guard lock(m_vecLootListLock);
 				std::copy_if(m_vecLootList.begin(), m_vecLootList.end(),
 					std::back_inserter(vecFilteredLoot),
 					[msNow](const TLoot& c)
@@ -4216,7 +4196,6 @@ void ClientHandler::AutoLootProcess()
 							continue;
 						}
 
-						Guard lock(m_vecNpcLock);
 						auto pNpc = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 							[pFindedLoot](const TNpc& a)
 							{
@@ -4660,6 +4639,8 @@ void ClientHandler::MinorProcess()
 #endif
 }
 
+#define GET_VARIABLE_NAME(Variable1,Variable2) (#Variable1#Variable2)
+
 void ClientHandler::RouteProcess()
 {
 #ifdef DEBUG
@@ -4679,12 +4660,11 @@ void ClientHandler::RouteProcess()
 				continue;
 
 			Guard guard(m_vecRouteLock);
-
 			Route pRoute = m_vecRoute.front();
 
-			float fDistance = GetDistance(Vector3(GetX(false), 0.0f, GetY(false)), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+			float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
 
-			if (fDistance > 1.0f)
+			if (fDistance > 3.0f)
 				SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
 			else
 			{
@@ -4695,17 +4675,109 @@ void ClientHandler::RouteProcess()
 						m_vecRoute.erase(m_vecRoute.begin());
 					}
 					break;
+
 					case RouteStepType::STEP_TOWN:
 					{
 						SendTownPacket();
 						m_vecRoute.erase(m_vecRoute.begin());
 					}
 					break;
+
 					case RouteStepType::STEP_SUPPLY:
 					{
+						auto jSupplyList = m_Bot->GetSupplyList();
+
+						if (jSupplyList.size() > 0)
+						{
+							std::vector<int> vecSupplyList = GetConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+
+							std::string szItemIdAttribute = skCryptDec("itemid");
+							std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+							std::string szCountAttribute = skCryptDec("count");
+
+							auto pSort = [szSellingGroupAttribute](JSON& a, JSON& b)
+							{
+								return a[szSellingGroupAttribute.c_str()] > b[szSellingGroupAttribute.c_str()];
+							};
+
+							std::sort(jSupplyList.begin(), jSupplyList.end(), pSort);
+
+							int32_t iLastNpcEventId = 0;
+
+							for (size_t i = 0; i < jSupplyList.size(); i++)
+							{
+								int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int>();
+
+								bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iItemId) != vecSupplyList.end();
+
+								if (!bSelected)
+									continue;
+
+								int iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int>();
+
+								auto findedNpc = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+									[iSellingGroup](const TNpc& a) { return a.iSellingGroup == iSellingGroup; });
+
+								if (findedNpc != m_vecNpc.end())
+								{
+									while (GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(findedNpc->fX, 0.0f, findedNpc->fY)) > 3.0f)
+									{
+										std::this_thread::sleep_for(std::chrono::milliseconds(100));
+										SetMovePosition(Vector3(findedNpc->fX, 0.0f, findedNpc->fY));
+									}
+
+									if (iLastNpcEventId != findedNpc->iID)
+									{
+										SendNpcEvent(findedNpc->iID);
+										iLastNpcEventId = findedNpc->iID;
+
+										std::this_thread::sleep_for(std::chrono::milliseconds(500));
+									}
+
+									std::vector<SShopItem> vecShopItemTable = m_Bot->GetShopItemTable(iSellingGroup);
+
+									if (vecShopItemTable.size() == 0)
+										continue;
+
+									uint8_t iInventoryPosition = -1;
+									int16_t iItemCount = GetConfiguration()->GetInt(
+										skCryptDec("Supply"),
+										std::to_string(iItemId).c_str(),
+										jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
+
+									TInventory* pInventoryItem = GetInventoryItem(iItemId);
+
+									if (pInventoryItem)
+									{
+										iInventoryPosition = pInventoryItem->iPos;
+										iItemCount = std::abs(pInventoryItem->iCount - iItemCount);
+									}
+									else
+									{
+										iInventoryPosition = GetInventoryEmptySlot();
+									}
+
+									if (iInventoryPosition == -1 || iItemCount == 0)
+										continue;
+
+									auto findedShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
+										[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
+
+									if (findedShopItem != vecShopItemTable.end())
+									{
+										SendItemTradeBuy(iSellingGroup, findedNpc->iID, findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos);
+										std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+									}
+								}
+							}
+						}
+
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+
 						m_vecRoute.erase(m_vecRoute.begin());
 					}
 					break;
+
 					case RouteStepType::STEP_INN:
 					{
 						m_vecRoute.erase(m_vecRoute.begin());
@@ -4756,4 +4828,64 @@ void ClientHandler::ClearRoute()
 {
 	Guard guard(m_vecRouteLock);
 	m_vecRoute.clear();
+}
+
+void ClientHandler::SendNpcEvent(int32_t iTargetID)
+{
+	Packet pkt = Packet(WIZ_NPC_EVENT);
+
+	pkt << uint8_t(1) << int32_t(iTargetID) << int32_t(-1);
+
+	SendPacket(pkt);
+}
+
+void ClientHandler::SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition)
+{
+	Packet pkt = Packet(WIZ_ITEM_TRADE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint32_t(iSellingGroup)
+		<< uint32_t(iNpcId)
+
+		<< uint8_t(1) //TODO: Multiple Item Count
+
+		<< int32_t(iItemId)
+		<< uint8_t(iInventoryPosition)
+		<< int16_t(iCount)
+		<< uint8_t(iShopPage)
+		<< uint8_t(iShopPosition);
+
+	SendPacket(pkt);
+}
+
+void ClientHandler::SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount)
+{
+	Packet pkt = Packet(WIZ_ITEM_TRADE);
+
+	pkt
+		<< uint8_t(2)
+		<< uint32_t(iSellingGroup)
+		<< uint32_t(iNpcId)
+
+		<< uint8_t(1) //TODO: Multiple Item Count
+
+		<< int32_t(iItemId)
+		<< uint8_t(iInventoryPosition)
+		<< int16_t(iCount);
+
+	SendPacket(pkt);
+}
+
+void ClientHandler::SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId)
+{
+	Packet pkt = Packet(WIZ_ITEM_REPAIR);
+
+	pkt
+		<< uint8_t(iDirection)
+		<< uint8_t(iInventoryPosition)
+		<< int32_t(iNpcId)
+		<< int32_t(iItemId);
+
+	SendPacket(pkt);
 }

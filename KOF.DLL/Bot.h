@@ -21,6 +21,7 @@ public:
 	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
 	void InitializeStaticData();
 	void InitializeRouteData();
+	void InitializeSupplyData();
 
 	void Process();
 	void LoadAccountList();
@@ -47,6 +48,10 @@ public:
 	Table<__TABLE_NPC>* GetNpcTable() { return m_pTbl_Npc; };
 	Table<__TABLE_MOB_USKO>* GetMobTable() { return m_pTbl_Mob; };
 
+
+	Table<__TABLE_ITEM_SELL>* GetItemSellTable() { return m_pTbl_ItemSell; };
+	std::vector<SShopItem> GetShopItemTable(int32_t iSellingGroup);
+
 	JSON m_AccountList;
 
 private:
@@ -72,6 +77,7 @@ private:
 	Table<__TABLE_ITEM>* m_pTbl_Item;
 	Table<__TABLE_NPC>* m_pTbl_Npc;
 	Table<__TABLE_MOB_USKO>* m_pTbl_Mob;
+	Table<__TABLE_ITEM_SELL>* m_pTbl_ItemSell;
 
 	std::string m_szAccountListFilePath;
 	std::string m_szAppDataFolder;
@@ -118,5 +124,12 @@ public:
 
 protected:
 	World* m_World;
+
+public:
+	JSON GetSupplyList() { return m_jSupplyList; };
+
+protected:
+	JSON m_jSupplyList;
+
 };
 

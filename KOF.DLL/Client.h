@@ -65,6 +65,7 @@ public:
 	int32_t GetInventoryItemCount(uint32_t iItemID);
 	TInventory* GetInventoryItem(uint32_t iItemID);
 	TInventory* GetInventoryItemSlot(uint8_t iSlotPosition);
+	int32_t GetInventoryEmptySlot();
 
 protected:
 	DWORD GetAddress(std::string szAddressName);

@@ -204,6 +204,12 @@ public:
 private:
 	std::vector<Route> m_vecRoute;
 	std::recursive_mutex m_vecRouteLock;
+
+private:
+	void SendNpcEvent(int32_t iTargetID);
+	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition);
+	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount);
+	void SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId);
 };
 
 
