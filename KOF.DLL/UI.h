@@ -1,8 +1,6 @@
 #ifndef UI_H
 #define UI_H
 
-#include <imgui.h>
-#include <d3d11.h>
 #include "Bot.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -24,8 +22,8 @@ private:
 public:
 	static void Render(Bot* pBot);
 
-	static bool LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height);
-
+	static bool LoadTextureFromFile(std::string filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height);
+	static bool LoadTextureFromMemory(unsigned char* image_data, ID3D11ShaderResourceView** out_srv, int width, int height);
 };
 
 #endif

@@ -10,7 +10,6 @@ Service::Service()
 Service::~Service()
 {
     Clear();
-
     CloseSocket();
 }
 
@@ -24,6 +23,8 @@ void Service::Clear()
 
     m_ePlatformType = PlatformType::USKO;
     m_iSelectedAccount = 0;
+
+    m_isServiceClosed = false;
 }
 
 void Service::Initialize()
@@ -39,17 +40,19 @@ void Service::Initialize()
         return;
     }
 
-    std::string szIniPath = to_string(szAppDataPath) + "\\KOF.ini";
+    std::string szIniPath = to_string(szAppDataPath) + skCryptDec("\\KOF.ini");
     m_iniConfiguration = new Ini();
     m_iniConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniConfiguration->GetString("KOF", "Token", m_szToken.c_str());
+    m_szToken = m_iniConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
-//#ifdef DEBUG
-//    Connect(skCryptDec("127.0.0.1"), 8888);
-//#else
+    Connect(skCryptDec("127.0.0.1"), 8888);
+
+/*#ifdef DEBUG
+    Connect(skCryptDec("127.0.0.1"), 8888);
+#else
     Connect(skCryptDec("162.19.137.94"), 8888);
-//#endif 
+#endif*/ 
 }
 
 void Service::OnConnect()
@@ -72,6 +75,8 @@ void Service::OnClose(int32_t iErrorCode)
 #ifdef DEBUG
     printf("Connection closed: %d\n", iErrorCode);
 #endif
+
+    m_isServiceClosed = true;
 }
 
 void Service::HandlePacket(Packet& pkt)
@@ -176,6 +181,11 @@ void Service::HandlePacket(Packet& pkt)
 
         case PacketHeader::PING:
         {
+            uint32_t iLastPingTime;
+
+            pkt.DByte();
+            pkt >> iLastPingTime;
+
             SendPong();
             OnPong();
         }
@@ -193,25 +203,63 @@ void Service::SendReady()
 
 void Service::SendLogin(std::string szToken)
 {
-    HardwareID hardwareID;
+    HardwareId HWID{};
 
-    if (hardwareID.Query())
+    Packet pkt = Packet(PacketHeader::LOGIN);
+
+    pkt.DByte();
+    pkt
+        << uint8_t(LoginType::TOKEN)
+        << szToken.c_str()
+        << to_string(HWID.System.Name)
+        << to_string(HWID.CPU.ProcessorId)
+        << to_string(HWID.SMBIOS.SerialNumber);
+
+    std::string szHddSerial;
+    for (size_t i = 0; i < HWID.Disk.size(); i++)
     {
-        Packet pkt = Packet(PacketHeader::LOGIN);
+        HardwareId::DiskObject& Disk{ HWID.Disk.at(i) };
 
-        pkt.DByte();
-        pkt
-            << uint8_t(LoginType::TOKEN)
-            << szToken.c_str()
-            << hardwareID.GetSystemName()
-            << hardwareID.GetProcesorId()
-            << hardwareID.GetBaseBoardSerial()
-            << hardwareID.GetHddSerial()
-            << hardwareID.GetUUID()
-            << hardwareID.GetSystemSerialNumber();
-
-        Send(pkt);
+        if (HWID.Disk.at(i).MediaType == 3 || HWID.Disk.at(i).MediaType == 4)
+        {
+            if (i == 0)
+                szHddSerial += to_string(Disk.SerialNumber);
+            else
+                szHddSerial += "||" + to_string(Disk.SerialNumber);
+        }
     }
+
+    pkt
+        << szHddSerial
+        << to_string(HWID.Registry.ComputerHardwareId)
+        << to_string(HWID.System.OSSerialNumber);
+
+    std::string szPartNumber;
+    for (size_t i = 0; i < HWID.PhysicalMemory.size(); i++)
+    {
+        HardwareId::PhysicalMemoryObject& Memory{ HWID.PhysicalMemory.at(i) };
+
+        if (i == 0)
+            szPartNumber += to_string(Memory.PartNumber);
+        else
+            szPartNumber += "||" + to_string(Memory.PartNumber);
+    }
+
+    pkt
+        << szPartNumber;
+
+    std::string szGPUs;
+    for (size_t i = 0; i < HWID.GPU.size(); i++)
+    {
+        if (i == 0)
+            szGPUs += to_string(HWID.GPU.at(i).Name);
+        else
+            szGPUs += "||" + to_string(HWID.GPU.at(i).Name);
+    }
+
+    pkt << szGPUs;
+
+    Send(pkt);
 }
 
 void Service::SendPointerRequest()
@@ -229,6 +277,7 @@ void Service::SendPong()
     Packet pkt = Packet(PacketHeader::PING);
 
     pkt.DByte();
+    pkt << uint32_t(time(0));
 
     Send(pkt);
 }

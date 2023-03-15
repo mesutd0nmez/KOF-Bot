@@ -4,7 +4,6 @@
 #include "Socket.h"
 #include "Ini.h"
 
-
 class Service : Socket
 {
 public:
@@ -46,11 +45,18 @@ protected:
 	Ini* m_iniUserConfiguration;
 	std::string m_szToken;
 
+private:
+	Ini* m_iniConfiguration;
+
+public:
 	PlatformType m_ePlatformType;
 	int32_t m_iSelectedAccount;
 
 private:
-	Ini* m_iniConfiguration;
+	bool m_isServiceClosed;
+
+public:
+	bool IsServiceClosed() { return m_isServiceClosed; };
 
 };
 

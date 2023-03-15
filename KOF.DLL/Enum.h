@@ -21,7 +21,6 @@ enum PlatformType
 	USKO,
 	CNKO,
 	JPKO,
-	TEST,
 };
 
 enum ConfigurationRequestType
@@ -333,4 +332,13 @@ enum ItemMovementType
 	ITEM_MBAG_TO_INVEN = 10,
 	ITEM_MBAG_TO_MBAG = 11
 };
+
+enum ZoneChangeOpcode
+{
+	ZoneChangeLoading = 1,
+	ZoneChangeLoaded = 2,
+	ZoneChangeTeleport = 3,
+	ZoneChangeMilitaryCamp = 4,
+};
+
 

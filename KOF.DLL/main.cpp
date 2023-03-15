@@ -1,79 +1,95 @@
 #include "pch.h"
 #include "UI.h"
+#include "Drawing.h"
 #include "Bot.h"
 #include "ClientHandler.h"
-#include "ReflectiveInjection.h"
 
-#ifdef _WINDLL
+Bot* bot = nullptr;
 
-extern HINSTANCE hAppInstance;
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
+BOOL WINAPI MyConsoleCtrlHandler(DWORD dwCtrlType)
 {
-    BOOL bReturnValue = TRUE;
-
-    switch (dwReason)
+    if (dwCtrlType == CTRL_CLOSE_EVENT)
     {
-        case DLL_QUERY_HMODULE:
-            if (lpReserved != NULL)
-                *(HMODULE*)lpReserved = hAppInstance;
-            break;
-
-        case DLL_PROCESS_ATTACH:
-            hAppInstance = hinstDLL;
-
-//            AllocConsole();
-//            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-//
-//#ifndef DEBUG
-//            ShowWindow(GetConsoleWindow(), SW_HIDE);
-//#endif
-            break;
-
-        case DLL_PROCESS_DETACH:
+        if (bot)
         {
-//#ifdef DEBUG
-//            FreeConsole();
-//#endif
+            TerminateMyProcess(bot->GetInjectedProcessId(), -1);
         }
-        break;
-
-        case DLL_THREAD_ATTACH:
-        case DLL_THREAD_DETACH:
-            break;
     }
 
-    return bReturnValue;
+    return TRUE;
 }
-#else
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
 #ifdef DEBUG
     AllocConsole();
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+
+    SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 #endif
 
-    Bot* bot = new Bot();
+#ifdef DEBUG
+    std::string szClientPath = DEVELOPMENT_PATH;
+    std::string szClientExe = DEVELOPMENT_EXE;
+    PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
+    int iAccountIndex = DEVELOPMENT_ACCOUNT_INDEX;
+#else
+    std::string szClientPath = "";
+    std::string szClientExe = "";
+    PlatformType iPlatformType = PlatformType::USKO;
+    int iAccountIndex = 0;
+#endif
 
-    bot->Initialize(PlatformType::USKO, 0);
+    int argc;
 
-    bool bWorking = true;
+    LPWSTR* szArglist = CommandLineToArgvW(GetCommandLineW(), &argc);
 
-    while (bWorking)
+    char** argv = new char* [argc];
+
+    for (int i = 0; i < argc; i++)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        int lgth = wcslen(szArglist[i]);
+
+        argv[i] = new char[lgth + 1];
+
+        for (int j = 0; j <= lgth; j++)
+            argv[i][j] = char(szArglist[i][j]);
+    }
+
+    if (argc == 5)
+    {
+        szClientPath = to_string(szArglist[1]);
+        szClientExe = to_string(szArglist[2]);
+        iPlatformType = (PlatformType)std::stoi(szArglist[3]);
+        iAccountIndex = std::stoi(szArglist[4]);
+    }
+
+    bot = new Bot();
+
+    bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
+
+    while (true)
+    {
+        if (bot->IsClosed())
+            break;
+
+        if (Drawing::Done)
+            break;
 
         if (bot->GetInjectedProcessId() != 0 && bot->IsInjectedProcessLost())
-            bWorking = false;
+            break;
 
         bot->Process();
     }
 
+    TerminateMyProcess(bot->GetInjectedProcessId(), -1);
+
 #ifdef DEBUG
+    fclose(stdout);
     FreeConsole();
 #endif
 
+    LocalFree(szArglist);
+
     return 0;
 }
-
-#endif

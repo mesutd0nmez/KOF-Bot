@@ -20,10 +20,6 @@ Client::~Client()
 
 void Client::Clear()
 {
-#ifdef DEBUG
-	printf("Client data clearing.\n");
-#endif
-
 	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
 
 	m_vecNpc.clear();
@@ -59,7 +55,7 @@ int32_t Client::GetID(bool bFromServer)
 	if(bFromServer)
 		return m_PlayerMySelf.iID;
 
-	return Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_ID"));
+	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ID")));
 }
 
 std::string Client::GetName(bool bFromServer)
@@ -68,12 +64,12 @@ std::string Client::GetName(bool bFromServer)
 		return m_PlayerMySelf.szName;
 	else
 	{
-		int iNameLen = Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NAME_LEN"));
+		int iNameLen = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME_LEN")));
 
 		if (iNameLen > 15)
-			return ReadString(Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NAME")), iNameLen);
+			return ReadString(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME"))), iNameLen);
 
-		return ReadString(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NAME"), iNameLen);
+		return ReadString(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME")), iNameLen);
 	}
 }
 
@@ -82,7 +78,7 @@ int16_t Client::GetHp(bool bFromServer)
 	if (bFromServer)
 		return (int16_t)m_PlayerMySelf.iHP;
 
-	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_HP"));
+	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_HP")));
 }
 
 int16_t Client::GetMaxHp(bool bFromServer)
@@ -90,7 +86,7 @@ int16_t Client::GetMaxHp(bool bFromServer)
 	if (bFromServer)
 		return (int16_t)m_PlayerMySelf.iHPMax;
 
-	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MAXHP"));
+	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXHP")));
 }
 
 int16_t Client::GetMp(bool bFromServer)
@@ -98,7 +94,7 @@ int16_t Client::GetMp(bool bFromServer)
 	if (bFromServer)
 		return (int16_t)m_PlayerMySelf.iMSP;
 
-	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MP"));
+	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MP")));
 }
 
 int16_t Client::GetMaxMp(bool bFromServer)
@@ -106,7 +102,7 @@ int16_t Client::GetMaxMp(bool bFromServer)
 	if (bFromServer)
 		return (int16_t)m_PlayerMySelf.iMSPMax;
 
-	return (int16_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MAXMP"));
+	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXMP")));
 }
 
 uint8_t Client::GetZone(bool bFromServer)
@@ -114,7 +110,7 @@ uint8_t Client::GetZone(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.iCity;
 
-	return (uint8_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_ZONE"));
+	return (uint8_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ZONE")));
 }
 
 uint32_t Client::GetGold(bool bFromServer)
@@ -122,7 +118,7 @@ uint32_t Client::GetGold(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.iGold;
 
-	return Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOLD"));
+	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOLD")));
 }
 
 uint8_t Client::GetLevel(bool bFromServer)
@@ -130,7 +126,7 @@ uint8_t Client::GetLevel(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.iLevel;
 
-	return ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_LEVEL"));
+	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_LEVEL")));
 }
 
 Nation Client::GetNation(bool bFromServer)
@@ -138,7 +134,7 @@ Nation Client::GetNation(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.eNation;
 
-	return (Nation)ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_NATION"));
+	return (Nation)ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NATION")));
 }
 
 Class Client::GetClass(bool bFromServer)
@@ -146,7 +142,7 @@ Class Client::GetClass(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.eClass;
 
-	return (Class)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_CLASS"));
+	return (Class)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_CLASS")));
 }
 
 uint64_t Client::GetExp(bool bFromServer)
@@ -154,7 +150,7 @@ uint64_t Client::GetExp(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.iExp;
 
-	return (uint64_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_EXP"));
+	return (uint64_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_EXP")));
 }
 
 uint64_t Client::GetMaxExp(bool bFromServer)
@@ -162,27 +158,27 @@ uint64_t Client::GetMaxExp(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.iExpNext;
 
-	return (uint64_t)Read4Byte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_MAXEXP"));
+	return (uint64_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXEXP")));
 }
 
 bool Client::IsDisconnect()
 {
-	return Read4Byte(Read4Byte(GetAddress("KO_PTR_PKT")) + GetAddress("KO_OFF_DISCONNECT")) == 0;
+	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_PKT"))) + GetAddress(skCryptDec("KO_OFF_DISCONNECT"))) == 0;
 };
 
 float Client::GetGoX()
 {
-	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOX"));
+	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")));
 }
 
 float Client::GetGoY()
 {
-	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOY"));
+	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")));
 }
 
 float Client::GetGoZ()
 {
-	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_GOZ"));
+	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")));
 }
 
 float Client::GetX(bool bFromServer)
@@ -190,7 +186,7 @@ float Client::GetX(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.fX;
 
-	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_X"));
+	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")));
 }
 
 float Client::GetZ(bool bFromServer)
@@ -198,7 +194,7 @@ float Client::GetZ(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.fZ;
 
-	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Z"));
+	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")));
 }
 
 float Client::GetY(bool bFromServer)
@@ -206,7 +202,7 @@ float Client::GetY(bool bFromServer)
 	if (bFromServer)
 		return m_PlayerMySelf.fY;
 
-	return ReadFloat(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_Y"));
+	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")));
 }
 
 uint8_t Client::GetAuthority(bool bFromServer)
@@ -214,7 +210,7 @@ uint8_t Client::GetAuthority(bool bFromServer)
 	if (bFromServer)
 		return (uint8_t)m_PlayerMySelf.iAuthority;
 
-	return ReadByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"));
+	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_AUTHORITY")));
 }
 
 std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
@@ -248,7 +244,6 @@ Vector3 Client::GetTargetPosition()
 {
 	if (m_iTargetID >= 5000)
 	{
-		Guard lock(m_vecNpcLock);
 		auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 			[this](const TNpc& a) { return a.iID == m_iTargetID; });
 
@@ -257,7 +252,6 @@ Vector3 Client::GetTargetPosition()
 	}
 	else
 	{
-		Guard lock(m_vecPlayerLock);
 		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[this](const TPlayer& a) { return a.iID == m_iTargetID; });
 
@@ -275,7 +269,7 @@ int32_t Client::GetTarget()
 
 void Client::SetAuthority(uint8_t iAuthority)
 {
-	WriteByte(Read4Byte(GetAddress("KO_PTR_CHR")) + GetAddress("KO_OFF_AUTHORITY"), iAuthority);
+	WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_AUTHORITY")), iAuthority);
 }
 
 bool Client::IsBuffActive(int32_t iBuffType)
@@ -339,6 +333,17 @@ TInventory* Client::GetInventoryItem(uint32_t iItemID)
 	}
 
 	return NULL;
+}
+
+int32_t Client::GetInventoryEmptySlot()
+{
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		if (m_PlayerMySelf.tInventory[i].iItemID == 0)
+			return i;
+	}
+
+	return -1;
 }
 
 TInventory* Client::GetInventoryItemSlot(uint8_t iSlotPosition)

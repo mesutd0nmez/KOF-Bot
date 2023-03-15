@@ -4,12 +4,13 @@
 #include "UI.h"
 #include "Memory.h"
 #include "Remap.h"
+#include "Drawing.h"
 
 Bot::Bot()
 {
 	m_ClientHandler = nullptr;
 
-	m_dwInjectedProcessID = 0;
+	m_dwInjectedProcessId = 0;
 
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
@@ -27,6 +28,17 @@ Bot::Bot()
 	m_pTbl_Mob = nullptr;
 
 	msLastConfigurationSave = std::chrono::milliseconds(0);
+
+	m_szClientPath.clear();
+	m_szClientExe.clear();
+
+	m_bClosed = false;
+
+	m_RouteManager = nullptr;
+
+	m_World = new World();
+
+	m_jSupplyList.clear();
 }
 
 Bot::~Bot()
@@ -35,7 +47,7 @@ Bot::~Bot()
 
 	m_ClientHandler = nullptr;
 
-	m_dwInjectedProcessID = 0;
+	m_dwInjectedProcessId = 0;
 
 	m_bTableLoaded = false;
 
@@ -54,6 +66,25 @@ Bot::~Bot()
 	m_pTbl_Mob = nullptr;
 
 	msLastConfigurationSave = std::chrono::milliseconds(0);
+
+	m_szClientPath.clear();
+	m_szClientExe.clear();
+
+	m_bClosed = true;
+
+	m_RouteManager = nullptr;
+
+	m_World = nullptr;
+
+	m_jSupplyList.clear();
+}
+
+void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
+{
+	m_szClientPath = szClientPath;
+	m_szClientExe = szClientExe;
+
+	Initialize(ePlatformType, iSelectedAccount);
 }
 
 void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -73,26 +104,56 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 		priv.PrivilegeCount = 1;
 		priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
-		if (LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &priv.Privileges[0].Luid))
+		if (LookupPrivilegeValue(NULL, skCryptDec(SE_DEBUG_NAME), &priv.Privileges[0].Luid))
 			AdjustTokenPrivileges(hToken, FALSE, &priv, 0, NULL, NULL);
 
 		CloseHandle(hToken);
 	}
 
-#ifdef _WINDLL
-	m_dwInjectedProcessID = GetCurrentProcessId();
-#endif
+	wchar_t* wszAppDataFolder;
+	SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, NULL, &wszAppDataFolder);
+	m_szAppDataFolder = to_string(wszAppDataFolder);
 
 	m_ePlatformType = ePlatformType;
 	m_iSelectedAccount = iSelectedAccount;
 
-	new std::thread([this]() { GetService()->Initialize(); });
+	LoadAccountList();
+
+	GetService()->Initialize();
 }
 
 void Bot::Process()
 {
-	if (m_ClientHandler)
-		m_ClientHandler->Process();
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+	if (IsServiceClosed())
+	{
+		Close();
+	}
+	else
+	{
+		if (m_ClientHandler)
+			m_ClientHandler->Process();
+	}
+}
+
+void Bot::LoadAccountList()
+{
+	try
+	{
+		m_szAccountListFilePath = m_szAppDataFolder + skCryptDec("\\KOF.Accounts.json");
+
+		std::ifstream i(m_szAccountListFilePath.c_str());
+		m_AccountList = JSON::parse(i);
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
 }
 
 void Bot::Close()
@@ -100,6 +161,10 @@ void Bot::Close()
 #ifdef DEBUG
 	printf("Bot: Closing\n");
 #endif
+
+	Drawing::Done = true;
+
+	m_bClosed = true;
 
 	if (m_ClientHandler)
 		m_ClientHandler->StopHandler();
@@ -151,6 +216,9 @@ void Bot::Release()
 
 	if (m_pTbl_Mob)
 		m_pTbl_Mob->Release();
+
+	if (m_pTbl_ItemSell)
+		m_pTbl_ItemSell->Release();
 }
 
 ClientHandler* Bot::GetClientHandler()
@@ -164,37 +232,35 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Started\n");
 #endif
 
-	std::string szDevelopmentPath = DEVELOPMENT_PATH;
-
 	m_pTbl_Skill = new Table<__TABLE_UPC_SKILL>();
-	m_pTbl_Skill->Load(szDevelopmentPath + ".\\Data\\skill_magic_main_us.tbl");
+	m_pTbl_Skill->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_main_us.tbl"));
 
 	m_pTbl_Skill_Extension1 = new Table<__TABLE_UPC_SKILL_EXTENSION1>();
-	m_pTbl_Skill_Extension1->Load(szDevelopmentPath + ".\\Data\\skill_magic_1.tbl");
+	m_pTbl_Skill_Extension1->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_1.tbl"));
 
 	m_pTbl_Skill_Extension2 = new Table<__TABLE_UPC_SKILL_EXTENSION2>();
-	m_pTbl_Skill_Extension2->Load(szDevelopmentPath + ".\\Data\\skill_magic_2.tbl");
+	m_pTbl_Skill_Extension2->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_2.tbl"));
 
 	m_pTbl_Skill_Extension3 = new Table<__TABLE_UPC_SKILL_EXTENSION3>();
-	m_pTbl_Skill_Extension3->Load(szDevelopmentPath + ".\\Data\\skill_magic_3.tbl");
+	m_pTbl_Skill_Extension3->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_3.tbl"));
 
 	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
-	m_pTbl_Skill_Extension4->Load(szDevelopmentPath + ".\\Data\\skill_magic_4.tbl");
+	m_pTbl_Skill_Extension4->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_4.tbl"));
 
 	m_pTbl_Skill_Extension5 = new Table<__TABLE_UPC_SKILL_EXTENSION5>();
-	m_pTbl_Skill_Extension5->Load(szDevelopmentPath + ".\\Data\\skill_magic_5.tbl");
+	m_pTbl_Skill_Extension5->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_5.tbl"));
 
 	m_pTbl_Skill_Extension6 = new Table<__TABLE_UPC_SKILL_EXTENSION6>();
-	m_pTbl_Skill_Extension6->Load(szDevelopmentPath + ".\\Data\\skill_magic_6.tbl");
+	m_pTbl_Skill_Extension6->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_6.tbl"));
 
 	m_pTbl_Skill_Extension7 = new Table<__TABLE_UPC_SKILL_EXTENSION7>();
-	m_pTbl_Skill_Extension7->Load(szDevelopmentPath + ".\\Data\\skill_magic_7.tbl");
+	m_pTbl_Skill_Extension7->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_7.tbl"));
 
 	m_pTbl_Skill_Extension8 = new Table<__TABLE_UPC_SKILL_EXTENSION8>();
-	m_pTbl_Skill_Extension8->Load(szDevelopmentPath + ".\\Data\\skill_magic_8.tbl");
+	m_pTbl_Skill_Extension8->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_8.tbl"));
 
 	m_pTbl_Skill_Extension9 = new Table<__TABLE_UPC_SKILL_EXTENSION9>();
-	m_pTbl_Skill_Extension9->Load(szDevelopmentPath + ".\\Data\\skill_magic_9.tbl");
+	m_pTbl_Skill_Extension9->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_9.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
@@ -204,8 +270,8 @@ void Bot::InitializeStaticData()
 	memset(&pGodMode, 0, sizeof(pGodMode));
 
 	pGodMode.iID = 500344;
-	pGodMode.szName = "God Mode";
-	pGodMode.szEngName = "God Mode";
+	pGodMode.szName = skCryptDec("God Mode");
+	pGodMode.szEngName = skCryptDec("God Mode");
 	pGodMode.iSelfAnimID1 = -1;
 	pGodMode.iSelfFX1 = 2401;
 	pGodMode.iSelfPart1 = -1;
@@ -232,24 +298,31 @@ void Bot::InitializeStaticData()
 #endif
 
 	m_pTbl_Item = new Table<__TABLE_ITEM>();
-	m_pTbl_Item->Load(szDevelopmentPath + ".\\Data\\item_org_us.tbl");
+	m_pTbl_Item->Load(m_szClientPath + skCryptDec("\\Data\\item_org_us.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
 #endif
 
 	m_pTbl_Npc = new Table<__TABLE_NPC>();
-	m_pTbl_Npc->Load(szDevelopmentPath + ".\\Data\\npc_us.tbl");
+	m_pTbl_Npc->Load(m_szClientPath + skCryptDec("\\Data\\npc_us.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
 	m_pTbl_Mob = new Table<__TABLE_MOB_USKO>();
-	m_pTbl_Mob->Load(szDevelopmentPath + ".\\Data\\mob_us.tbl");
+	m_pTbl_Mob->Load(m_szClientPath + skCryptDec("\\Data\\mob_us.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
+#endif
+
+	m_pTbl_ItemSell = new Table<__TABLE_ITEM_SELL>();
+	m_pTbl_ItemSell->Load(m_szClientPath + skCryptDec("\\Data\\itemsell_table.tbl"));
+
+#ifdef DEBUG
+	printf("InitializeStaticData: Loaded %d selling item\n", m_pTbl_ItemSell->GetDataSize());
 #endif
 
 #ifdef DEBUG
@@ -257,6 +330,49 @@ void Bot::InitializeStaticData()
 #endif
 
 	m_bTableLoaded = true;
+}
+
+void Bot::InitializeRouteData()
+{
+#ifdef DEBUG
+	printf("InitializeRouteData: Started\n");
+#endif
+
+	m_RouteManager = new RouteManager();
+	m_RouteManager->Load();
+
+#ifdef DEBUG
+	printf("InitializeRouteData: Finished\n");
+#endif
+}
+
+void Bot::InitializeSupplyData()
+{
+#ifdef DEBUG
+	printf("InitializeSupplyData: Started\n");
+#endif
+
+	try
+	{
+		std::ifstream i(
+			std::filesystem::current_path().string() 
+			+ skCryptDec("\\data\\") 
+			+ skCryptDec("supply.json"));
+
+		m_jSupplyList = JSON::parse(i);
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
+
+#ifdef DEBUG
+	printf("InitializeSupplyData: Finished\n");
+#endif
 }
 
 void Bot::OnReady()
@@ -276,6 +392,12 @@ void Bot::OnPong()
 #ifdef DEBUG
 	printf("Bot: OnPong\n");
 #endif
+
+	if (m_iniUserConfiguration)
+	{
+		if (m_iniUserConfiguration->onSaveEvent)
+			m_iniUserConfiguration->onSaveEvent();
+	}
 }
 
 void Bot::OnAuthenticated()
@@ -291,56 +413,61 @@ void Bot::OnLoaded()
 	printf("Bot: OnLoaded\n");
 #endif
 
-#ifndef _WINDLL
+#if !defined(_WINDLL)
+	PROCESS_INFORMATION injectedProcessInfo;
 	std::ostringstream strCommandLine;
 	strCommandLine << GetCurrentProcessId();
 
-	StartProcess(DEVELOPMENT_PATH, "KnightOnLine.exe", strCommandLine.str(), m_injectedProcessInfo);
-
-	if (m_injectedProcessInfo.hProcess != 0)
+	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
-		
+		Close();
+		return;
+	}
 
+	if (m_ePlatformType == PlatformType::USKO)
+	{
 		DWORD dwXignCodeEntryPoint = 0;
 
 		while (dwXignCodeEntryPoint == 0)
-			ReadProcessMemory(m_injectedProcessInfo.hProcess, (LPVOID)0xCEB282, &dwXignCodeEntryPoint, 4, 0);
+			ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
 
-		SuspendProcess(m_injectedProcessInfo.hProcess);
+		SuspendProcess(injectedProcessInfo.hProcess);
 
-		Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00400000, 0x00A30000);
-		Remap::PatchSection(m_injectedProcessInfo.hProcess, (LPVOID*)0x00E30000, 0x00140000);
+		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
+		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
+		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE40000, 0x130000);
 
-		HMODULE hModuleAdvapi = GetModuleHandle("advapi32");
+		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
 
 		if (hModuleAdvapi != 0)
 		{
-			LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, "OpenServiceW");
+			LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, skCryptDec("OpenServiceW"));
 
 			if (pOpenServicePtr != 0)
 			{
-				BYTE byPatch[] =
+				BYTE byPatch1[] =
 				{
 					0xC2, 0x0C, 0x00
 				};
 
-				WriteProcessMemory(m_injectedProcessInfo.hProcess, pOpenServicePtr, byPatch, sizeof(byPatch), 0);
+				WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
 			}
 		}
 
 #ifdef DISABLE_XIGNCODE
-		BYTE byPatch22[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-		WriteProcessMemory(processInfo.hProcess, (LPVOID*)0xCEB282, byPatch22, sizeof(byPatch22), 0);
+		BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
+		WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 #endif
-
-		ResumeProcess(m_injectedProcessInfo.hProcess);
-
-		m_dwInjectedProcessID = m_injectedProcessInfo.dwProcessId;
 	}
-#endif
+
+	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
+
+	ResumeProcess(injectedProcessInfo.hProcess);
+	CloseHandle(injectedProcessInfo.hProcess);
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
+#endif
 }
 
 void Bot::OnConfigurationLoaded()
@@ -363,9 +490,13 @@ void Bot::OnConfigurationLoaded()
 
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
+#ifdef DEBUG
+		printf("User configuration saving\n");
+#endif
+
 		std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
-		if ((msCurrentTime - msLastConfigurationSave) > std::chrono::milliseconds(3000))
+		if ((msCurrentTime - msLastConfigurationSave) > std::chrono::milliseconds(1000))
 		{
 			SendSaveUserConfiguration(1, GetClientHandler()->GetName());
 			msLastConfigurationSave = msCurrentTime;
@@ -380,7 +511,7 @@ void Bot::OnConfigurationLoaded()
 
 DWORD Bot::GetAddress(std::string szAddressName)
 {
-	std::string szAddress = m_iniPointer->GetString("Address", szAddressName.c_str(), "0x000000");
+	std::string szAddress = m_iniPointer->GetString(skCryptDec("Address"), szAddressName.c_str(), skCryptDec("0x000000"));
 	return std::strtoul(szAddress.c_str(), NULL, 16);
 }
 
@@ -391,57 +522,57 @@ Ini* Bot::GetConfiguration()
 
 BYTE Bot::ReadByte(DWORD dwAddress)
 {
-	return Memory::ReadByte(m_dwInjectedProcessID, dwAddress);
+	return Memory::ReadByte(m_dwInjectedProcessId, dwAddress);
 }
 
 DWORD Bot::Read4Byte(DWORD dwAddress)
 {
-	return Memory::Read4Byte(m_dwInjectedProcessID, dwAddress);
+	return Memory::Read4Byte(m_dwInjectedProcessId, dwAddress);
 }
 
 float Bot::ReadFloat(DWORD dwAddress)
 {
-	return Memory::ReadFloat(m_dwInjectedProcessID, dwAddress);
+	return Memory::ReadFloat(m_dwInjectedProcessId, dwAddress);
 }
 
 std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
 {
-	return Memory::ReadString(m_dwInjectedProcessID, dwAddress, nSize);
+	return Memory::ReadString(m_dwInjectedProcessId, dwAddress, nSize);
 }
 
 std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 {
-	return Memory::ReadBytes(m_dwInjectedProcessID, dwAddress, nSize);
+	return Memory::ReadBytes(m_dwInjectedProcessId, dwAddress, nSize);
 }
 
 void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	Memory::WriteByte(m_dwInjectedProcessID, dwAddress, byValue);
+	Memory::WriteByte(m_dwInjectedProcessId, dwAddress, byValue);
 }
 
 void Bot::Write4Byte(DWORD dwAddress, DWORD dwValue)
 {
-	Memory::Write4Byte(m_dwInjectedProcessID, dwAddress, dwValue);
+	Memory::Write4Byte(m_dwInjectedProcessId, dwAddress, dwValue);
 }
 
 void Bot::WriteFloat(DWORD dwAddress, float fValue)
 {
-	Memory::WriteFloat(m_dwInjectedProcessID, dwAddress, fValue);
+	Memory::WriteFloat(m_dwInjectedProcessId, dwAddress, fValue);
 }
 
 void Bot::WriteString(DWORD dwAddress, std::string strValue)
 {
-	Memory::WriteString(m_dwInjectedProcessID, dwAddress, strValue);
+	Memory::WriteString(m_dwInjectedProcessId, dwAddress, strValue);
 }
 
 void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 {
-	Memory::WriteBytes(m_dwInjectedProcessID, dwAddress, byValue);
+	Memory::WriteBytes(m_dwInjectedProcessId, dwAddress, byValue);
 }
 
 void Bot::ExecuteRemoteCode(BYTE* codes, size_t psize)
 {
-	Memory::ExecuteRemoteCode(m_dwInjectedProcessID, codes, psize);
+	Memory::ExecuteRemoteCode(m_dwInjectedProcessId, codes, psize);
 }
 
 bool Bot::IsInjectedProcessLost()
@@ -449,22 +580,72 @@ bool Bot::IsInjectedProcessLost()
 	if (GetInjectedProcessId() == 0)
 		return true;
 
-#ifdef _WINDLL
-	HANDLE hProcess = GetCurrentProcess();
-#else
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-#endif
 
-	if (hProcess == 0)
+	if (hProcess == nullptr)
 		return true;
 
 	DWORD dwExitCode = 0;
 
 	if (GetExitCodeProcess(hProcess, &dwExitCode) == FALSE)
+	{
+		CloseHandle(hProcess);
 		return true;
+	}
 
 	if (dwExitCode != STILL_ACTIVE)
+	{
+		CloseHandle(hProcess);
 		return true;
+	}
+
+	CloseHandle(hProcess);
 
 	return false;
+}
+
+std::vector<SShopItem> Bot::GetShopItemTable(int32_t iSellingGroup)
+{
+	auto pSellTable = GetItemSellTable()->GetData();
+
+	std::vector<SShopItem> vecShopWindow;
+
+	if (pSellTable.size() == 0)
+		return vecShopWindow;
+
+	uint8_t iPage = 0;
+	for (auto& e : pSellTable)
+	{
+		if (e.second.iSellingGroup == iSellingGroup)
+		{
+			vecShopWindow.push_back(SShopItem(iPage, 0, e.second.iItem0));
+			vecShopWindow.push_back(SShopItem(iPage, 1, e.second.iItem1));
+			vecShopWindow.push_back(SShopItem(iPage, 2, e.second.iItem2));
+			vecShopWindow.push_back(SShopItem(iPage, 3, e.second.iItem3));
+			vecShopWindow.push_back(SShopItem(iPage, 4, e.second.iItem4));
+			vecShopWindow.push_back(SShopItem(iPage, 5, e.second.iItem5));
+			vecShopWindow.push_back(SShopItem(iPage, 6, e.second.iItem6));
+			vecShopWindow.push_back(SShopItem(iPage, 7, e.second.iItem7));
+			vecShopWindow.push_back(SShopItem(iPage, 8, e.second.iItem8));
+			vecShopWindow.push_back(SShopItem(iPage, 9, e.second.iItem9));
+			vecShopWindow.push_back(SShopItem(iPage, 10, e.second.iItem10));
+			vecShopWindow.push_back(SShopItem(iPage, 11, e.second.iItem11));
+			vecShopWindow.push_back(SShopItem(iPage, 12, e.second.iItem12));
+			vecShopWindow.push_back(SShopItem(iPage, 13, e.second.iItem13));
+			vecShopWindow.push_back(SShopItem(iPage, 14, e.second.iItem14));
+			vecShopWindow.push_back(SShopItem(iPage, 15, e.second.iItem15));
+			vecShopWindow.push_back(SShopItem(iPage, 16, e.second.iItem16));
+			vecShopWindow.push_back(SShopItem(iPage, 17, e.second.iItem17));
+			vecShopWindow.push_back(SShopItem(iPage, 18, e.second.iItem18));
+			vecShopWindow.push_back(SShopItem(iPage, 19, e.second.iItem19));
+			vecShopWindow.push_back(SShopItem(iPage, 20, e.second.iItem20));
+			vecShopWindow.push_back(SShopItem(iPage, 21, e.second.iItem21));
+			vecShopWindow.push_back(SShopItem(iPage, 22, e.second.iItem22));
+			vecShopWindow.push_back(SShopItem(iPage, 23, e.second.iItem23));
+
+			iPage += 1;
+		}
+	}
+
+	return vecShopWindow;
 }

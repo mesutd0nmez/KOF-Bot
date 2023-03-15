@@ -131,10 +131,12 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void UI::Render(Bot* pBot)
 {
+    LPCSTR lpWindowName = skCryptEnc("KOF.Bot");
+
     ImGui_ImplWin32_EnableDpiAwareness();
-    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T("Discord"), nullptr };
+    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(lpWindowName), nullptr };
     ::RegisterClassEx(&wc);
-    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T("Discord"), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
+    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(lpWindowName), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
 
     if (!CreateDeviceD3D(hwnd))
     {
@@ -168,11 +170,11 @@ void UI::Render(Bot* pBot)
 
     const ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    bool bDone = false;
+    Drawing::Done = false;
 
     Drawing::Bot = pBot;
 
-    while (!bDone)
+    while (!Drawing::Done)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
@@ -182,25 +184,10 @@ void UI::Render(Bot* pBot)
             ::TranslateMessage(&msg);
             ::DispatchMessage(&msg);
             if (msg.message == WM_QUIT)
-                bDone = true;
+                Drawing::Done = true;
         }
 
-        if (bDone)
-            break;
-
-        if (Drawing::Bot == nullptr)
-            break;
-
-        if (Drawing::Bot->GetClientHandler() == nullptr)
-            break;
-
-        if (!Drawing::Bot->GetClientHandler()->IsWorking())
-            break;
-
-        if (Drawing::Bot->GetInjectedProcessId() == 0)
-            break;
-
-        if (Drawing::Bot->GetInjectedProcessId() != 0 && Drawing::Bot->IsInjectedProcessLost())
+        if (Drawing::Done)
             break;
 
         ImGui_ImplDX11_NewFrame();
@@ -208,6 +195,7 @@ void UI::Render(Bot* pBot)
         ImGui::NewFrame();
         {
             Drawing::Draw();
+            Drawing::DrawRoutePlanner();
         }
         ImGui::EndFrame();
 
@@ -231,6 +219,8 @@ void UI::Render(Bot* pBot)
 #endif
     }
 
+    Drawing::Done = true;
+
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -244,12 +234,12 @@ void UI::Render(Bot* pBot)
 #endif
 }
 
-bool UI::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height)
+bool UI::LoadTextureFromFile(std::string filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height)
 {
     // Load from disk into a raw RGBA buffer
     int image_width = 0;
     int image_height = 0;
-    unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
+    unsigned char* image_data = stbi_load(filename.c_str(), &image_width, &image_height, NULL, 4);
     if (image_data == NULL)
         return false;
 
@@ -291,6 +281,47 @@ bool UI::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** ou
     *out_width = image_width;
     *out_height = image_height;
     stbi_image_free(image_data);
+
+    return true;
+}
+
+bool UI::LoadTextureFromMemory(unsigned char* image_data, ID3D11ShaderResourceView** out_srv, int width, int height)
+{
+    if (image_data == NULL)
+        return false;
+
+    // Create texture
+    D3D11_TEXTURE2D_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Width = width;
+    desc.Height = height;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+
+    ID3D11Texture2D* pTexture = NULL;
+    D3D11_SUBRESOURCE_DATA subResource;
+    subResource.pSysMem = image_data;
+    subResource.SysMemPitch = desc.Width * 4;
+    subResource.SysMemSlicePitch = 0;
+    pd3dDevice->CreateTexture2D(&desc, &subResource, &pTexture);
+
+    // Create texture view
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+    ZeroMemory(&srvDesc, sizeof(srvDesc));
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = desc.MipLevels;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+
+    pd3dDevice->CreateShaderResourceView(pTexture, &srvDesc, out_srv);
+
+    if (pTexture)
+        pTexture->Release();
 
     return true;
 }

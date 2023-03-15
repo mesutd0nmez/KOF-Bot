@@ -2,6 +2,8 @@
 
 #include "Service.h"
 #include "Table.h"
+#include "RouteManager.h"
+#include "World.h"
 
 class ClientHandler;
 class Client;
@@ -15,10 +17,15 @@ public:
 	Service* GetService() { return static_cast<Service*>(this); }
 
 public:
+	void Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount);
 	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
 	void InitializeStaticData();
+	void InitializeRouteData();
+	void InitializeSupplyData();
 
 	void Process();
+	void LoadAccountList();
+
 	void Close();
 	void Release();
 
@@ -40,6 +47,12 @@ public:
 
 	Table<__TABLE_NPC>* GetNpcTable() { return m_pTbl_Npc; };
 	Table<__TABLE_MOB_USKO>* GetMobTable() { return m_pTbl_Mob; };
+
+
+	Table<__TABLE_ITEM_SELL>* GetItemSellTable() { return m_pTbl_ItemSell; };
+	std::vector<SShopItem> GetShopItemTable(int32_t iSellingGroup);
+
+	JSON m_AccountList;
 
 private:
 	void OnReady();
@@ -64,13 +77,13 @@ private:
 	Table<__TABLE_ITEM>* m_pTbl_Item;
 	Table<__TABLE_NPC>* m_pTbl_Npc;
 	Table<__TABLE_MOB_USKO>* m_pTbl_Mob;
+	Table<__TABLE_ITEM_SELL>* m_pTbl_ItemSell;
+
+	std::string m_szAccountListFilePath;
+	std::string m_szAppDataFolder;
 
 public:
-	DWORD GetInjectedProcessId() { return m_dwInjectedProcessID; };
-
-#ifndef _WINDLL
-	PROCESS_INFORMATION GetInjectedProcessInfo() { return m_injectedProcessInfo; };
-#endif
+	DWORD GetInjectedProcessId() { return m_dwInjectedProcessId; };
 
 	BYTE ReadByte(DWORD dwAddress);
 	DWORD Read4Byte(DWORD dwAddress);
@@ -86,17 +99,37 @@ public:
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
 
 public:
+	bool IsClosed() { return m_bClosed; }
 	bool IsInjectedProcessLost();
 	bool IsTableLoaded() { return m_bTableLoaded; }
 
-private:
-	DWORD m_dwInjectedProcessID;
-	bool m_bTableLoaded;
-	std::chrono::milliseconds	msLastConfigurationSave;
+	PlatformType GetPlatformType() { return m_ePlatformType; }
 
-#ifndef _WINDLL
 private:
-	PROCESS_INFORMATION m_injectedProcessInfo;
-#endif
+	bool m_bClosed;
+	std::string m_szClientPath;
+	std::string m_szClientExe;
+	DWORD m_dwInjectedProcessId;
+	bool m_bTableLoaded;
+	std::chrono::milliseconds msLastConfigurationSave;
+
+public:
+	RouteManager* GetRouteManager() { return m_RouteManager; };
+
+private:
+	RouteManager* m_RouteManager;
+
+public:
+	World* GetWorld() { return m_World; }
+
+protected:
+	World* m_World;
+
+public:
+	JSON GetSupplyList() { return m_jSupplyList; };
+
+protected:
+	JSON m_jSupplyList;
+
 };
 

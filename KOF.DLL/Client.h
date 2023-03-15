@@ -12,25 +12,25 @@ public:
 	void Clear();
 
 public:
-	int32_t GetID(bool bFromServer = false);
-	std::string GetName(bool bFromServer = false);
-	int16_t GetHp(bool bFromServer = false);
-	int16_t GetMaxHp(bool bFromServer = false);
-	int16_t GetMp(bool bFromServer = false);
-	int16_t GetMaxMp(bool bFromServer = false);
-	uint8_t GetZone(bool bFromServer = false);
-	uint32_t GetGold(bool bFromServer = false);
-	uint8_t GetLevel(bool bFromServer = false);
-	Nation GetNation(bool bFromServer = false);
-	Class GetClass(bool bFromServer = false);
-	uint64_t GetExp(bool bFromServer = false);
-	uint64_t GetMaxExp(bool bFromServer = false);
+	int32_t GetID(bool bFromServer = true);
+	std::string GetName(bool bFromServer = true);
+	int16_t GetHp(bool bFromServer = true);
+	int16_t GetMaxHp(bool bFromServer = true);
+	int16_t GetMp(bool bFromServer = true);
+	int16_t GetMaxMp(bool bFromServer = true);
+	uint8_t GetZone(bool bFromServer = true);
+	uint32_t GetGold(bool bFromServer = true);
+	uint8_t GetLevel(bool bFromServer = true);
+	Nation GetNation(bool bFromServer = true);
+	Class GetClass(bool bFromServer = true);
+	uint64_t GetExp(bool bFromServer = true);
+	uint64_t GetMaxExp(bool bFromServer = true);
 
 	bool IsDisconnect();
 
-	float GetX(bool bFromServer = false);
-	float GetZ(bool bFromServer = false);
-	float GetY(bool bFromServer = false);
+	float GetX(bool bFromServer = true);
+	float GetZ(bool bFromServer = true);
+	float GetY(bool bFromServer = true);
 
 	float GetGoX();
 	float GetGoY();
@@ -44,8 +44,6 @@ public:
 
 	Vector3 GetPosition();
 	Vector3 GetTargetPosition();
-
-	void SetTarget(int32_t iTargetID);
 	int32_t GetTarget();
 
 	bool IsBuffActive(int32_t iBuffType);
@@ -67,6 +65,7 @@ public:
 	int32_t GetInventoryItemCount(uint32_t iItemID);
 	TInventory* GetInventoryItem(uint32_t iItemID);
 	TInventory* GetInventoryItemSlot(uint8_t iSlotPosition);
+	int32_t GetInventoryEmptySlot();
 
 protected:
 	DWORD GetAddress(std::string szAddressName);
@@ -123,6 +122,7 @@ protected:
 protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
+
 
 };
 

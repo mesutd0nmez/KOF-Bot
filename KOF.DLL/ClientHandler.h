@@ -2,6 +2,7 @@
 
 #include "Client.h"
 #include "Packet.h"
+#include "RouteManager.h"
 
 class Bot;
 class ClientHandler : public Client
@@ -50,8 +51,8 @@ private:
 	std::string m_szMailSlotRecvName;
 	std::string m_szMailSlotSendName;
 
-	DWORD m_RecvHookAddress;
-	DWORD m_SendHookAddress;
+	LPVOID m_RecvHookAddress;
+	LPVOID m_SendHookAddress;
 #endif
 
 private:
@@ -69,33 +70,40 @@ private:
 
 		static void RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		{
-			m_ClientHandler->onClientRecvProcess(byBuffer, dwLength);
+			try
+			{
+				m_ClientHandler->onClientRecvProcess(byBuffer, dwLength);
+			}
+			catch (const std::exception& e)
+			{
+#ifdef DEBUG
+				printf("OnClientRecvProcess:Exception: %s\n", e.what());
+#else
+				UNREFERENCED_PARAMETER(e);
+#endif
+			}
 		}
 
 		static void SendProcess(BYTE* byBuffer, DWORD dwLength)
 		{
-			m_ClientHandler->onClientSendProcess(byBuffer, dwLength);
+			try
+			{
+				m_ClientHandler->onClientSendProcess(byBuffer, dwLength);
+			}
+			catch (const std::exception& e)
+			{
+#ifdef DEBUG
+				printf("OnClientSendProcess:Exception: %s\n", e.what());
+#else
+				UNREFERENCED_PARAMETER(e);
+#endif
+			}
 		}
 
 		inline static ClientHandler* m_ClientHandler;
 	};
 
 	ClientHook* m_ClientHook;
-
-#ifdef _WINDLL
-private:
-	typedef void(__thiscall* SendFunction)(DWORD, uint8_t*, uint32_t);
-	typedef int(__thiscall* LoginRequestFunction1)(DWORD);
-	typedef int(__thiscall* LoginRequestFunction2)(DWORD);
-	typedef int(__thiscall* DisconnectFunction)(DWORD);
-	typedef int(__thiscall* LoginServerFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectSkipFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectLeftFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectRightFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectFunction)(DWORD);
-	typedef int(__cdecl* PushPhaseFunction)(int);
-	typedef void(__thiscall* EquipOreadsFunction)(int, int, char);
-#endif
 
 private:
 	void PushPhase(DWORD dwAddress);
@@ -168,6 +176,8 @@ private:
 	void HealthPotionProcess();
 	void ManaPotionProcess();
 
+	void RouteProcess();
+
 private:
 	bool m_bWorking;
 
@@ -175,7 +185,6 @@ private:
 private:
 	bool m_bMailSlotWorking;
 #endif
-
 
 private:
 	std::string m_szAccountId;
@@ -186,6 +195,21 @@ public:
 
 private:
 	std::vector<uint8_t> m_vecOrigDeathEffectFunction;
+
+public:
+	void SetRoute(std::vector<Route> vecRoute);
+	bool IsRouting() { return m_vecRoute.size() > 0; };
+	void ClearRoute();
+
+private:
+	std::vector<Route> m_vecRoute;
+	std::recursive_mutex m_vecRouteLock;
+
+private:
+	void SendNpcEvent(int32_t iTargetID);
+	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition);
+	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount);
+	void SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId);
 };
 
 

@@ -4,39 +4,41 @@
 
 void SuspendProcess(HANDLE hProcess)
 {
-	HMODULE hModuleNtdll = GetModuleHandle("ntdll");
+	HMODULE hModuleNtdll = GetModuleHandle(skCryptDec("ntdll"));
 
 	if (hModuleNtdll != 0)
 	{
 		NtSuspendProcess pNtSuspendProcess = (NtSuspendProcess)GetProcAddress(
-			hModuleNtdll, "NtSuspendProcess");
+			hModuleNtdll, skCryptDec("NtSuspendProcess"));
 
 		if (!pNtSuspendProcess)
 			return;
+
+		//printf("NtSuspendProcess Client Handle: [%x]\n", hProcess);
 
 		pNtSuspendProcess(hProcess);
 	}
 }
 
-void SuspendProcess(DWORD iProcessId)
+void SuspendProcess(DWORD dwProcessId)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, iProcessId);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
 
-	if (hProcess != 0)
+	if (hProcess != nullptr)
 	{
-		ResumeProcess(hProcess);
+		SuspendProcess(hProcess);
 		CloseHandle(hProcess);
 	}
 }
 
 void ResumeProcess(HANDLE hProcess)
 {
-	HMODULE hModuleNtdll = GetModuleHandle("ntdll");
+	HMODULE hModuleNtdll = GetModuleHandle(skCryptDec("ntdll"));
 
 	if (hModuleNtdll != 0)
 	{
 		NtResumeProcess pResumeProcess = (NtResumeProcess)GetProcAddress(
-			hModuleNtdll, "NtResumeProcess");
+			hModuleNtdll, skCryptDec("NtResumeProcess"));
 
 		if (!pResumeProcess)
 			return;
@@ -45,11 +47,11 @@ void ResumeProcess(HANDLE hProcess)
 	}
 }
 
-void ResumeProcess(DWORD iProcessId)
+void ResumeProcess(DWORD dwProcessId)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, iProcessId);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
 
-	if (hProcess != 0)
+	if (hProcess != nullptr)
 	{
 		ResumeProcess(hProcess);
 		CloseHandle(hProcess);
@@ -64,18 +66,22 @@ BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szComm
 	std::string strFileName(szFile.begin(), szFile.end());
 
 	std::ostringstream fileArgs;
-	fileArgs << szWorkingDirectory.c_str() << "\\" << strFileName.c_str();
+	fileArgs << szWorkingDirectory.c_str() << skCryptDec("\\") << strFileName.c_str();
 
 	std::string file = fileArgs.str();
 
 	std::ostringstream cmdArgs;
-	cmdArgs << "\"" << szWorkingDirectory.c_str() << "\\" << strFileName.c_str() << "\"";
+	cmdArgs << skCryptDec("\"") << szWorkingDirectory.c_str() << skCryptDec("\\") << strFileName.c_str() << skCryptDec("\"");
 	cmdArgs << " ";
 	cmdArgs << szCommandLine.c_str();
 
 	std::string cmd = cmdArgs.str();
 
-	BOOL result = CreateProcess(&file[0], &cmd[0], NULL, NULL, TRUE, 0, NULL, &szWorkingDirectory[0], &info, &processInfo);
+	SECURITY_ATTRIBUTES securityInfo = { sizeof(securityInfo) };
+
+	securityInfo.bInheritHandle = FALSE;
+
+	BOOL result = CreateProcess(&file[0], &cmd[0], &securityInfo, NULL, FALSE, 0, NULL, &szWorkingDirectory[0], &info, &processInfo);
 
 	if (!result)
 		return FALSE;
@@ -89,7 +95,7 @@ std::string to_string(wchar_t const* wcstr)
 	auto const target_char_count = std::wcsrtombs(nullptr, &wcstr, 0, &s);
 	if (target_char_count == static_cast<std::size_t>(-1))
 	{
-		throw std::logic_error("Illegal byte sequence");
+		throw std::logic_error(skCryptDec("Illegal byte sequence"));
 	}
 
 	// +1 because std::string adds a null terminator which isn't part of size
@@ -103,17 +109,16 @@ std::string to_string(std::wstring const& wstr)
 	return to_string(wstr.c_str());
 }
 
-std::vector<std::string> Tokenize(std::string const& str, const char delimeter)
+BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
 {
-	std::vector<std::string> out;
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
 
-	std::stringstream ss(str);
+	if (hProcess == nullptr)
+		return false;
 
-	std::string s;
-	while (std::getline(ss, s, delimeter))
-	{
-		out.push_back(s);
-	}
+	BOOL bStatus = TerminateProcess(hProcess, uExitCode);
 
-	return out;
+	CloseHandle(hProcess);
+
+	return bStatus;
 }

@@ -14,6 +14,12 @@
 #include "Define.h"
 #include "Enum.h"
 #include "Struct.h"
+#include "Json.h"
+using JSON = nlohmann::json;
+
+#include <imgui.h>
+#include <d3d11.h>
+#include <stb_image.h>
 
 #define WaitCondition(condition) \
 	while(condition) \
@@ -23,15 +29,15 @@ typedef LONG(NTAPI* NtSuspendProcess)(IN HANDLE ProcessHandle);
 typedef LONG(NTAPI* NtResumeProcess)(IN HANDLE ProcessHandle);
 
 extern void SuspendProcess(HANDLE hProcess);
-extern void SuspendProcess(DWORD iProcessId);
+extern void SuspendProcess(DWORD dwProcessId);
 extern void ResumeProcess(HANDLE hProcess);
-extern void ResumeProcess(DWORD iProcessId);
+extern void ResumeProcess(DWORD dwProcessId);
 
 extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION& processInfo);
 
 extern std::string to_string(wchar_t const* wcstr);
 extern std::string to_string(std::wstring const& wstr);
 
-extern std::vector<std::string> Tokenize(std::string const& str, const char delimeter);
+extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
 
 #endif //PCH_H
