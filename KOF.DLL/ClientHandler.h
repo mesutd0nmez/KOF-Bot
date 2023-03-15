@@ -105,21 +105,6 @@ private:
 
 	ClientHook* m_ClientHook;
 
-#ifdef _WINDLL
-private:
-	typedef void(__thiscall* SendFunction)(DWORD, uint8_t*, uint32_t);
-	typedef int(__thiscall* LoginRequestFunction1)(DWORD);
-	typedef int(__thiscall* LoginRequestFunction2)(DWORD);
-	typedef int(__thiscall* DisconnectFunction)(DWORD);
-	typedef int(__thiscall* LoginServerFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectSkipFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectLeftFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectRightFunction)(DWORD);
-	typedef int(__thiscall* CharacterSelectFunction)(DWORD);
-	typedef int(__cdecl* PushPhaseFunction)(int);
-	typedef void(__thiscall* EquipOreadsFunction)(int, int, char);
-#endif
-
 private:
 	void PushPhase(DWORD dwAddress);
 	void SetLoginInformation(std::string szAccountId, std::string szPassword);

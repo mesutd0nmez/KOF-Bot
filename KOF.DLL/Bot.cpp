@@ -447,7 +447,9 @@ void Bot::OnConfigurationLoaded()
 
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
+#ifdef DEBUG
 		printf("User configuration saving\n");
+#endif
 
 		std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
