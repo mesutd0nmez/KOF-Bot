@@ -9,17 +9,19 @@ class Drawing
 public:
 	static Bot* Bot;
 	static bool Done;
-	static LPCSTR lpWindowName;
 
 private:
-	static ImVec2 vWindowSize;
-	static ImGuiWindowFlags WindowFlags;
 	static bool bDraw;
+	static bool bDrawRoutePlanner;
+
+	static void InitializeSceneData();
 
 public:
 	static void Active();
 	static bool isActive();
 	static void Draw();
+	static void DrawRoutePlanner();
+
 
 	static void DrawGameController();
 	static void CenteredText(std::string strValue);
@@ -28,6 +30,8 @@ public:
 	static void DrawMainProtectionArea();
 	static void DrawMainFeaturesArea();
 	static void DrawMainAutoLootArea();
+
+	static void DrawRoutePlannerArea();
 
 	static void DrawAutomatedAttackSkillTree();
 	static void DrawAutomatedCharacterSkillTree();

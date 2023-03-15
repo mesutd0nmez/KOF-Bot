@@ -52,5 +52,11 @@ public:
 	PlatformType m_ePlatformType;
 	int32_t m_iSelectedAccount;
 
+private:
+	bool m_isServiceClosed;
+
+public:
+	bool IsServiceClosed() { return m_isServiceClosed; };
+
 };
 

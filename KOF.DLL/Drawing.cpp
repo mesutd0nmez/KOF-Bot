@@ -5,18 +5,12 @@
 #include "ClientHandler.h"
 #include "UI.h"
 #include "Guard.h"
+#include "RouteManager.h"
 
 Bot* Drawing::Bot = nullptr;
-LPCSTR Drawing::lpWindowName = skCryptEnc("KOF.Bot");
-ImVec2 Drawing::vWindowSize = { 658, 600 };
-ImGuiWindowFlags Drawing::WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 bool Drawing::bDraw = true;
+bool Drawing::bDrawRoutePlanner = false;
 bool Drawing::Done = false;
-
-float fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
-float fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
-
-ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
 
 ClientHandler* m_pClient = nullptr;
 Ini* m_pConfiguration = nullptr;
@@ -28,7 +22,13 @@ std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 WorldData* m_pWorldData = nullptr;
 
+ID3D11ShaderResourceView* m_pMapTexture = nullptr;
 ID3D11ShaderResourceView* m_pMinimapTexture = nullptr;
+
+char m_szRouteName[255] = "";
+
+std::string m_szSelectedRoute = "";
+std::vector<Route> m_vecRoute;
 
 void Drawing::Active()
 {
@@ -40,7 +40,7 @@ bool Drawing::isActive()
 	return bDraw == true;
 }
 
-void Drawing::Draw()
+void Drawing::InitializeSceneData()
 {
     m_pConfiguration = Drawing::Bot->GetConfiguration();
     m_pClient = Drawing::Bot->GetClientHandler();
@@ -62,29 +62,384 @@ void Drawing::Draw()
 
     if (m_pWorldData == nullptr || (m_pWorldData != nullptr && m_pWorldData->iId != m_pClient->GetZone()))
     {
-        m_pWorldData = m_pClient->GetWorld()->GetWorldData(m_pClient->GetZone());
+        World* pWorld = Drawing::Bot->GetWorld();
 
-        if(m_pWorldData != nullptr)
+        if (pWorld)
+        {
+            m_pWorldData = pWorld->GetWorldData(m_pClient->GetZone());
+        } 
+
+        if (m_pWorldData != nullptr)
+        {
             UI::LoadTextureFromMemory(m_pWorldData->pMiniMapImageData, &m_pMinimapTexture, m_pWorldData->iMiniMapImageWidth, m_pWorldData->iMiniMapImageHeight);
+            UI::LoadTextureFromMemory(m_pWorldData->pMapImageData, &m_pMapTexture, m_pWorldData->iMapImageWidth, m_pWorldData->iMapImageHeight);
+        }
     }
 
+    if (Drawing::bDrawRoutePlanner == false)
+        m_vecRoute.clear();
+}
+
+void Drawing::Draw()
+{
 	if (isActive())
 	{
+        InitializeSceneData();
+
+        std::string lpWindowName = skCryptEnc("KOF.Bot");
+        ImVec2 vWindowSize = { 658, 700 };
+        ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
+
+        float fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
+        float fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
+
+        ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
+
+        vec2InitialPos.x -= vWindowSize.x / 2;
+        vec2InitialPos.y -= vWindowSize.y / 2;
+
 		ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
 		ImGui::SetNextWindowSize(vWindowSize);
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::Begin(Drawing::lpWindowName, &bDraw, WindowFlags);
+		ImGui::Begin(lpWindowName.c_str(), &bDraw, WindowFlags);
 		{
             DrawGameController();
 		}
 
-		ImGui::End();
+        ImGui::End();
 	}
 
 #ifdef _WINDLL
 	if (GetAsyncKeyState(VK_INSERT) & 1)
 		bDraw = !bDraw;
 #endif
+}
+
+void Drawing::DrawRoutePlanner()
+{
+    if (isActive())
+    {
+        InitializeSceneData();
+
+        if (!Drawing::bDrawRoutePlanner)
+            return;
+
+        LPCSTR lpWindowName = skCryptEnc("KOF.RoutePlanner");
+        ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
+
+        float fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
+        float fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
+
+        ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
+
+        ImVec2 vWindowSize = { 1030, 855 };
+
+        vec2InitialPos.x -= vWindowSize.x / 2;
+        vec2InitialPos.y -= vWindowSize.y / 2;
+
+        ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
+        ImGui::SetNextWindowSize(vWindowSize);
+        ImGui::SetNextWindowBgAlpha(1.0f);
+        ImGui::Begin(lpWindowName, &Drawing::bDrawRoutePlanner, WindowFlags);
+        {
+            DrawRoutePlannerArea();
+        }
+
+        ImGui::End();
+    }
+
+#ifdef _WINDLL
+    if (GetAsyncKeyState(VK_INSERT) & 1)
+        bDraw = !bDraw;
+#endif
+}
+
+void Drawing::DrawRoutePlannerArea()
+{
+    ImGui::BeginChild(skCryptDec("RoutePlanner.Map"), ImVec2((float)(m_pWorldData->iMapImageWidth + 17.0f), (float)m_pWorldData->iMapImageHeight + 17.0f), true);
+    {
+        ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
+
+        ImGui::Image((void*)m_pMapTexture, ImVec2((float)m_pWorldData->iMapImageWidth, (float)m_pWorldData->iMapImageHeight));
+
+        if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
+            ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
+            ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
+
+            Route pRoute;
+            pRoute.fX = std::ceil(mousePositionRelative.x * (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth));
+            pRoute.fY = std::ceil((m_pWorldData->iMapImageHeight - mousePositionRelative.y) * (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight));
+            pRoute.eStepType = RouteStepType::STEP_MOVE;
+
+            m_vecRoute.push_back(pRoute);
+        }
+
+        ImVec2 currentPosition = ImVec2(
+            pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+            pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_pClient->GetPosition().m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+
+        ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
+        ImGui::GetWindowDrawList()->AddText(currentPosition, IM_COL32(0, 255, 0, 255), skCryptDec("Current Position"));
+
+        size_t iRouteSize = m_vecRoute.size();
+
+        for (size_t i = 0; i < iRouteSize; i++)
+        {
+            ImVec2 nextPosition = ImVec2(
+                pOffsetPosition.x + std::ceil(m_vecRoute[i].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+                pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+
+            if (i > 0)
+            {
+                ImVec2 prevPosition = ImVec2(
+                    pOffsetPosition.x + std::ceil(m_vecRoute[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+                    pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+
+                ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 3.0f);
+            }
+
+            switch (m_vecRoute[i].eStepType)
+            {
+            case RouteStepType::STEP_MOVE:
+            {
+                if (i == 0)
+                {
+                    ImVec2 startPosition = ImVec2(
+                        pOffsetPosition.x + std::ceil(m_vecRoute[i].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+                        pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+
+                    ImGui::GetWindowDrawList()->AddCircle(startPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                    std::string szStartPoint = skCryptDec("Start Point(") + std::to_string((int)startPosition.x) + skCryptDec(" - ") + std::to_string((int)startPosition.y) + skCryptDec(")");
+                    ImGui::GetWindowDrawList()->AddText(startPosition, IM_COL32(0, 0, 255, 255), szStartPoint.c_str());
+                }
+                else
+                {
+                    std::string szMovePoint = skCryptDec("Move Point(") + std::to_string((int)nextPosition.x) + skCryptDec(" - ") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(0, 255, 0, 255), szMovePoint.c_str());
+                }
+            }
+            break;
+
+            case RouteStepType::STEP_TOWN:
+            {
+                std::string szTownPoint = skCryptDec("Town Point(") + std::to_string((int)nextPosition.x) + skCryptDec(" - ") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szTownPoint.c_str());
+            }
+            break;
+
+            case RouteStepType::STEP_SUPPLY:
+            {
+                std::string szSupplyPoint = skCryptDec("Supply Point(") + std::to_string((int)nextPosition.x) + skCryptDec(" - ") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(75, 0, 130, 255), szSupplyPoint.c_str());
+            }
+            break;
+
+            case RouteStepType::STEP_INN:
+            {
+                std::string szInnPoint = skCryptDec("Inn Point(") + std::to_string((int)nextPosition.x) + skCryptDec(" - ") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(128, 0, 0, 255), szInnPoint.c_str());
+            }
+            break;
+            }
+        }
+
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild(skCryptDec("RoutePlanner.Controller"), ImVec2(190, 817), true);
+    {
+        RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
+
+        RouteManager::RouteList pRouteList;
+        if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+        {
+            ImGui::TextUnformatted(skCryptDec("Management"));
+            ImGui::Separator();
+
+            ImGui::Spacing();
+            {
+                ImGui::SetNextItemWidth(174);
+
+                if (ImGui::BeginCombo(skCryptDec("##RoutePlanner.RouteList"), m_szSelectedRoute.c_str()))
+                {
+                    for (auto e : pRouteList)
+                    {
+                        const bool is_selected = (m_szSelectedRoute == e.first);
+
+                        if (ImGui::Selectable(e.first.c_str(), is_selected))
+                        {
+                            m_szSelectedRoute = e.first;
+                        }
+
+                        if (is_selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                if (ImGui::Button(skCryptDec("Load Plan"), ImVec2(174.0f, 0.0f)))
+                {
+                    auto pPlan = pRouteList.find(m_szSelectedRoute);
+
+                    if (pPlan != pRouteList.end())
+                    {
+                        m_vecRoute = pPlan->second;
+                        strcpy(m_szRouteName, m_szSelectedRoute.c_str());
+                    }
+                }
+
+                if (ImGui::Button(skCryptDec("Delete Plan"), ImVec2(174.0f, 0.0f)))
+                {
+                    pRouteManager->Delete(m_szSelectedRoute, m_pClient->GetZone());
+
+                    std::string szSelectedRouteConfiguration = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+
+                    if (szSelectedRouteConfiguration == m_szSelectedRoute)
+                    {
+                        Drawing::Bot->GetConfiguration()->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                    }
+
+                    if (m_szRouteName == m_szSelectedRoute)
+                    {
+                        m_vecRoute.clear();
+                        strcpy(m_szRouteName, "");
+                    }
+
+                    m_szSelectedRoute = "";
+                }
+            }
+        }
+
+        ImGui::TextUnformatted(skCryptDec("Action"));
+        ImGui::Separator();
+
+        size_t iRouteCount = m_vecRoute.size();
+
+        ImGui::Spacing();
+        {
+            if (iRouteCount == 0)
+                ImGui::BeginDisabled();
+
+            if (m_pClient->IsRouting())
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+                if (ImGui::Button(skCryptDec("Stop"), ImVec2(174.0f, 0.0f)))
+                {
+                    m_pClient->ClearRoute();
+                    m_pClient->SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+                }
+                ImGui::PopStyleColor(1);
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+                if (ImGui::Button(skCryptDec("Run"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (m_vecRoute.size() > 0)
+                        m_pClient->SetRoute(m_vecRoute);
+                }
+                ImGui::PopStyleColor(1);
+            }
+
+            if (ImGui::Button(skCryptDec("Undo"), ImVec2(83.0f, 0.0f)))
+            {
+                if(iRouteCount > 0)
+                    m_vecRoute.pop_back();
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button(skCryptDec("Reset"), ImVec2(83.0f, 0.0f)))
+            {
+                m_vecRoute.clear();
+            }
+
+            if (iRouteCount == 0)
+                ImGui::EndDisabled();
+        }
+
+        ImGui::TextUnformatted(skCryptDec("Step Point"));
+        ImGui::Separator();
+
+        ImGui::Spacing();
+        {
+            if (iRouteCount == 0)
+                ImGui::BeginDisabled();
+
+            if (ImGui::Button(skCryptDec("Move Point"), ImVec2(174.0f, 0.0f)))
+            {
+                if (iRouteCount > 0)
+                {
+                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_MOVE;
+                }
+            }
+
+            if (ImGui::Button(skCryptDec("Town Point"), ImVec2(174.0f, 0.0f)))
+            {
+                if (iRouteCount > 0)
+                {
+                    m_vecRoute[m_vecRoute.size()-1].eStepType = RouteStepType::STEP_TOWN;
+                }  
+            }
+
+            if (ImGui::Button(skCryptDec("Supply Point"), ImVec2(174.0f, 0.0f)))
+            {
+                if (iRouteCount > 0)
+                {
+                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_SUPPLY;
+                }
+            }
+
+            if (ImGui::Button(skCryptDec("Inn Point"), ImVec2(174.0f, 0.0f)))
+            {
+                if (iRouteCount > 0)
+                {
+                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_INN;
+                }
+            }
+
+            if (iRouteCount == 0)
+                ImGui::EndDisabled();
+        }
+
+        ImGui::TextUnformatted(skCryptDec("Save"));
+        ImGui::Separator();
+
+        ImGui::Spacing();
+        {
+            if (iRouteCount == 0)
+                ImGui::BeginDisabled();
+
+
+            ImGui::SetNextItemWidth(174);
+            ImGui::InputText(skCryptDec("##FileName"), &m_szRouteName[0], 100);
+
+            size_t routeNameSize = strlen(m_szRouteName);
+
+            if (routeNameSize == 0)
+                ImGui::BeginDisabled();
+
+            if (ImGui::Button(skCryptDec("Save Plan"), ImVec2(174.0f, 0.0f)))
+            {
+                if (pRouteManager)
+                {
+                    pRouteManager->Save(m_szRouteName, m_pClient->GetZone(), m_vecRoute);
+                }
+            }
+
+            if (routeNameSize == 0)
+                ImGui::EndDisabled();
+
+            if (iRouteCount == 0)
+                ImGui::EndDisabled();
+        }
+    }
+    ImGui::EndChild();
 }
 
 void Drawing::CenteredText(std::string strValue)
@@ -105,7 +460,7 @@ void Drawing::RightText(std::string strValue)
 
 void Drawing::DrawGameController()
 {
-    ImGui::BeginChild(1, ImVec2(283, 563), true);
+    ImGui::BeginChild(1, ImVec2(283, 663), true);
     {
         ImGui::TextUnformatted(m_pClient->GetName().c_str());
         ImGui::SameLine();
@@ -182,14 +537,6 @@ void Drawing::DrawGameController()
                         }
                     }
 
-                    //ImVec2 pPlayerPosition = ImVec2(
-                    //    pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                    //    pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
-
-                    //ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
-
-                    //TEST
-
                     Guard playerListLock(m_pClient->m_vecPlayerLock);
                     auto pPlayerList = m_pClient->GetPlayerList();
 
@@ -225,6 +572,75 @@ void Drawing::DrawGameController()
 
                     ImGui::EndChild();
                 }
+            }
+        }
+
+        ImGui::Spacing();
+        {
+            ImGui::TextUnformatted(skCryptDec("Planned Route"));
+            ImGui::Separator();
+
+            RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
+
+            ImGui::SetNextItemWidth(266);
+            std::string szSelectedRoute = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+            if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.RouteList"), szSelectedRoute.c_str()))
+            {
+                RouteManager::RouteList pRouteList;
+                if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+                {
+                    for (auto e : pRouteList)
+                    {
+                        const bool is_selected = (szSelectedRoute == e.first);
+
+                        if (ImGui::Selectable(e.first.c_str(), is_selected))
+                        {
+                            Drawing::Bot->GetConfiguration()->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), e.first.c_str());
+                        }
+
+                        if (is_selected)
+                            ImGui::SetItemDefaultFocus();
+                    }
+                }
+                
+
+                ImGui::EndCombo();
+            }
+
+            if (m_pClient->IsRouting())
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+                if (ImGui::Button(skCryptDec("Stop"), ImVec2(129.0f, 0.0f)))
+                {
+                    m_pClient->ClearRoute();
+                    m_pClient->SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+                }
+                ImGui::PopStyleColor(1);
+            }
+            else
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+                if (ImGui::Button(skCryptDec("Run"), ImVec2(129.0f, 0.0f)))
+                {
+                    RouteManager::RouteList pRouteList;
+                    if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+                    {
+                        auto pRoute = pRouteList.find(szSelectedRoute);
+
+                        if (pRoute != pRouteList.end())
+                        {
+                            m_pClient->SetRoute(pRoute->second);
+                        }
+                    }
+                }
+                ImGui::PopStyleColor(1);
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button(skCryptDec("Planner"), ImVec2(129.0f, 0.0f)))
+            {
+                bDrawRoutePlanner = true;
             }
         }
 
@@ -318,7 +734,7 @@ void Drawing::DrawGameController()
 
     ImGui::SameLine();
 
-    ImGui::BeginChild(2, ImVec2(350, 563), true);
+    ImGui::BeginChild(2, ImVec2(350, 663), true);
     {
         if (ImGui::BeginTabBar(skCryptDec("##KOF.Toolbar"), ImGuiTabBarFlags_None))
         {

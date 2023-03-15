@@ -4,6 +4,7 @@
 #include "UI.h"
 #include "Memory.h"
 #include "Remap.h"
+#include "Drawing.h"
 
 Bot::Bot()
 {
@@ -36,6 +37,10 @@ Bot::Bot()
 	m_szClientExe.clear();
 
 	m_bClosed = false;
+
+	m_RouteManager = nullptr;
+
+	m_World = new World();
 }
 
 Bot::~Bot()
@@ -68,6 +73,10 @@ Bot::~Bot()
 	m_szClientExe.clear();
 
 	m_bClosed = true;
+
+	m_RouteManager = nullptr;
+
+	m_World = nullptr;
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -117,8 +126,15 @@ void Bot::Process()
 {
 	std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-	if (m_ClientHandler)
-		m_ClientHandler->Process();
+	if (IsServiceClosed())
+	{
+		Close();
+	}
+	else
+	{
+		if (m_ClientHandler)
+			m_ClientHandler->Process();
+	}
 }
 
 void Bot::LoadAccountList()
@@ -145,6 +161,8 @@ void Bot::Close()
 #ifdef DEBUG
 	printf("Bot: Closing\n");
 #endif
+
+	Drawing::Done = true;
 
 	m_bClosed = true;
 
@@ -304,6 +322,20 @@ void Bot::InitializeStaticData()
 	m_bTableLoaded = true;
 }
 
+void Bot::InitializeRouteData()
+{
+#ifdef DEBUG
+	printf("InitializeRouteData: Started\n");
+#endif
+
+	m_RouteManager = new RouteManager();
+	m_RouteManager->Load();
+
+#ifdef DEBUG
+	printf("InitializeRouteData: Finished\n");
+#endif
+}
+
 void Bot::OnReady()
 {
 #ifdef DEBUG
@@ -321,6 +353,8 @@ void Bot::OnPong()
 #ifdef DEBUG
 	printf("Bot: OnPong\n");
 #endif
+	if(m_iniUserConfiguration->onSaveEvent)
+		m_iniUserConfiguration->onSaveEvent();
 }
 
 void Bot::OnAuthenticated()
@@ -413,9 +447,11 @@ void Bot::OnConfigurationLoaded()
 
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
+		printf("User configuration saving\n");
+
 		std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
-		if ((msCurrentTime - msLastConfigurationSave) > std::chrono::milliseconds(3000))
+		if ((msCurrentTime - msLastConfigurationSave) > std::chrono::milliseconds(1000))
 		{
 			SendSaveUserConfiguration(1, GetClientHandler()->GetName());
 			msLastConfigurationSave = msCurrentTime;

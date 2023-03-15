@@ -6,12 +6,11 @@
 #include "Bot.h"
 #include "Service.h"
 #include "Guard.h"
+#include "Drawing.h"
 
 ClientHandler::ClientHandler(Bot* pBot)
 {
 	m_Bot = pBot;
-
-	m_World = new World();
 
 	Clear();
 }
@@ -44,6 +43,8 @@ void ClientHandler::Clear()
 	m_vecOrigDeathEffectFunction.clear();
 
 	m_ClientHook = nullptr;
+
+	m_vecRoute.clear();
 }
 
 void ClientHandler::Initialize()
@@ -71,6 +72,7 @@ void ClientHandler::StartHandler()
 	new std::thread([this]() { ProtectionProcess(); });
 	new std::thread([this]() { GodModeProcess(); });
 	new std::thread([this]() { MinorProcess(); });
+	new std::thread([this]() { RouteProcess(); });
 }
 
 void ClientHandler::StopHandler()
@@ -91,7 +93,6 @@ void ClientHandler::Process()
 #ifdef DEBUG
 		printf("Client connection closed\n");
 #endif
-
 		StopHandler();
 
 		if (m_Bot->GetPlatformType() == PlatformType::CNKO)
@@ -119,6 +120,7 @@ void ClientHandler::OnReady()
 #endif
 
 	new std::thread([this]() { m_Bot->InitializeStaticData(); });
+	new std::thread([this]() { m_Bot->InitializeRouteData(); });
 
 	if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 	{
@@ -618,11 +620,6 @@ void ClientHandler::MailSlotRecvProcess()
 		return;
 	}
 
-	//HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("KOF_RECV"));
-
-	//if (NULL == hEvent)
-	//	return;
-
 	while (m_bMailSlotWorking)
 	{
 		try
@@ -679,11 +676,6 @@ void ClientHandler::MailSlotSendProcess()
 #endif
 		return;
 	}
-
-	//HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("KOF_SEND"));
-
-	//if (NULL == hEvent)
-	//	return;
 
 	while (m_bMailSlotWorking)
 	{
@@ -881,7 +873,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 				uint8_t iVictoryNation = pkt.read<uint8_t>();
 
-				m_World->Load(m_PlayerMySelf.iCity);
+				m_Bot->GetWorld()->Load(m_PlayerMySelf.iCity);
 
 #ifdef DEBUG
 				printf("RecvProcess::WIZ_SEL_CHAR Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n", 
@@ -2763,7 +2755,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					uint8_t iVictoryNation = pkt.read<uint8_t>();
 
-					m_World->Load(m_PlayerMySelf.iCity);
+					m_Bot->GetWorld()->Load(m_PlayerMySelf.iCity);
 
 					printf("RecvProcess::WIZ_ZONE_CHANGE: Teleport Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n",
 						m_PlayerMySelf.iCity, m_PlayerMySelf.fX, m_PlayerMySelf.fY, m_PlayerMySelf.fZ, iVictoryNation);
@@ -4724,6 +4716,75 @@ void ClientHandler::MinorProcess()
 #endif
 }
 
+void ClientHandler::RouteProcess()
+{
+#ifdef DEBUG
+	printf("ClientHandler::RouteProcess Started\n");
+#endif
+
+	while (m_bWorking)
+	{
+		try
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+			if (IsBlinking())
+				continue;
+
+			if (m_vecRoute.size() == 0)
+				continue;
+
+			Guard guard(m_vecRouteLock);
+
+			Route pRoute = m_vecRoute.front();
+
+			float fDistance = GetDistance(Vector3(GetX(false), 0.0f, GetY(false)), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+
+			if (fDistance > 1.0f)
+				SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+			else
+			{
+				switch (pRoute.eStepType)
+				{
+					case RouteStepType::STEP_MOVE:
+					{
+						m_vecRoute.erase(m_vecRoute.begin());
+					}
+					break;
+					case RouteStepType::STEP_TOWN:
+					{
+						SendTownPacket();
+						m_vecRoute.erase(m_vecRoute.begin());
+					}
+					break;
+					case RouteStepType::STEP_SUPPLY:
+					{
+						m_vecRoute.erase(m_vecRoute.begin());
+					}
+					break;
+					case RouteStepType::STEP_INN:
+					{
+						m_vecRoute.erase(m_vecRoute.begin());
+					}
+					break;
+				}
+			}
+		}
+		catch (const std::exception& e)
+		{
+#ifdef DEBUG
+			printf("RouteProcess:Exception: %s\n", e.what());
+#else
+			UNREFERENCED_PARAMETER(e);
+#endif
+		}
+	}
+
+#ifdef DEBUG
+	printf("ClientHandler::RouteProcess Stopped\n");
+#endif
+}
+
 void ClientHandler::PatchDeathEffect(bool bValue)
 {
 	if (bValue)
@@ -4739,4 +4800,16 @@ void ClientHandler::PatchDeathEffect(bool bValue)
 		if (m_vecOrigDeathEffectFunction.size() > 0)
 			WriteBytes(GetAddress(skCryptDec("KO_DEATH_EFFECT")), m_vecOrigDeathEffectFunction);
 	}
+}
+
+void ClientHandler::SetRoute(std::vector<Route> vecRoute)
+{
+	Guard guard(m_vecRouteLock);
+	m_vecRoute = vecRoute;
+}
+
+void ClientHandler::ClearRoute()
+{
+	Guard guard(m_vecRouteLock);
+	m_vecRoute.clear();
 }

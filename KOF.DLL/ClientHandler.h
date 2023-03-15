@@ -2,6 +2,7 @@
 
 #include "Client.h"
 #include "Packet.h"
+#include "RouteManager.h"
 
 class Bot;
 class ClientHandler : public Client
@@ -190,6 +191,8 @@ private:
 	void HealthPotionProcess();
 	void ManaPotionProcess();
 
+	void RouteProcess();
+
 private:
 	bool m_bWorking;
 
@@ -197,7 +200,6 @@ private:
 private:
 	bool m_bMailSlotWorking;
 #endif
-
 
 private:
 	std::string m_szAccountId;
@@ -208,6 +210,15 @@ public:
 
 private:
 	std::vector<uint8_t> m_vecOrigDeathEffectFunction;
+
+public:
+	void SetRoute(std::vector<Route> vecRoute);
+	bool IsRouting() { return m_vecRoute.size() > 0; };
+	void ClearRoute();
+
+private:
+	std::vector<Route> m_vecRoute;
+	std::recursive_mutex m_vecRouteLock;
 };
 
 

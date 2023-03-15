@@ -2,6 +2,8 @@
 
 #include "Service.h"
 #include "Table.h"
+#include "RouteManager.h"
+#include "World.h"
 
 class ClientHandler;
 class Client;
@@ -18,6 +20,7 @@ public:
 	void Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount);
 	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
 	void InitializeStaticData();
+	void InitializeRouteData();
 
 	void Process();
 	void LoadAccountList();
@@ -96,8 +99,6 @@ public:
 
 	PlatformType GetPlatformType() { return m_ePlatformType; }
 
-
-
 private:
 	bool m_bClosed;
 	std::string m_szClientPath;
@@ -105,5 +106,17 @@ private:
 	DWORD m_dwInjectedProcessId;
 	bool m_bTableLoaded;
 	std::chrono::milliseconds msLastConfigurationSave;
+
+public:
+	RouteManager* GetRouteManager() { return m_RouteManager; };
+
+private:
+	RouteManager* m_RouteManager;
+
+public:
+	World* GetWorld() { return m_World; }
+
+protected:
+	World* m_World;
 };
 

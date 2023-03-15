@@ -10,7 +10,6 @@ Service::Service()
 Service::~Service()
 {
     Clear();
-
     CloseSocket();
 }
 
@@ -24,6 +23,8 @@ void Service::Clear()
 
     m_ePlatformType = PlatformType::USKO;
     m_iSelectedAccount = 0;
+
+    m_isServiceClosed = false;
 }
 
 void Service::Initialize()
@@ -74,6 +75,8 @@ void Service::OnClose(int32_t iErrorCode)
 #ifdef DEBUG
     printf("Connection closed: %d\n", iErrorCode);
 #endif
+
+    m_isServiceClosed = true;
 }
 
 void Service::HandlePacket(Packet& pkt)
@@ -178,6 +181,11 @@ void Service::HandlePacket(Packet& pkt)
 
         case PacketHeader::PING:
         {
+            uint32_t iLastPingTime;
+
+            pkt.DByte();
+            pkt >> iLastPingTime;
+
             SendPong();
             OnPong();
         }
@@ -269,6 +277,7 @@ void Service::SendPong()
     Packet pkt = Packet(PacketHeader::PING);
 
     pkt.DByte();
+    pkt << uint32_t(time(0));
 
     Send(pkt);
 }

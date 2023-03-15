@@ -39,7 +39,6 @@ void World::Load(uint8_t iIndex)
 			std::string szMiniMapImageAttribute = skCryptDec("MiniMapImage");
 			std::string szMapSizeAttribute = skCryptDec("MapSize");
 			std::string szMapLengthAttribute = skCryptDec("MapLength");
-			std::string szEventsAttribute = skCryptDec("Events");
 
 			pWorldData.iId = jWorldData[szIdAttribute.c_str()].get<uint8_t>();
 			pWorldData.szName = jWorldData[szNameAttribute.c_str()].get<std::string>();
@@ -47,25 +46,6 @@ void World::Load(uint8_t iIndex)
 			pWorldData.szMiniMapImageFile = jWorldData[szMiniMapImageAttribute.c_str()].get<std::string>();
 			pWorldData.iMapSize = jWorldData[szMapSizeAttribute.c_str()].get<int32_t>();
 			pWorldData.fMapLength = jWorldData[szMapLengthAttribute.c_str()].get<float>();
-
-			/*pWorldData.vecCollision = jWorldData[szEventsAttribute.c_str()].get<std::vector<std::vector<short>>>();
-
-			pWorldData.AStar = new AStar::Generator();
-
-			for (int i = 0; i < pWorldData.vecCollision.size(); i++)
-			{
-				for (int j = 0; j < pWorldData.vecCollision[i].size(); j++)
-				{
-					if (pWorldData.vecCollision[i][j] == 0)
-					{
-						pWorldData.AStar->addCollision(AStar::Vec2i{ i,j });
-					}
-				}
-			}
-
-			pWorldData.AStar->setWorldSize({ pWorldData.iMapSize, pWorldData.iMapSize });
-			pWorldData.AStar->setHeuristic(AStar::Heuristic::euclidean);
-			pWorldData.AStar->setDiagonalMovement(true);*/
 
 			std::string szMapImageFilePath =
 				std::filesystem::current_path().string()

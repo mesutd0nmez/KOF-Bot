@@ -131,12 +131,12 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void UI::Render(Bot* pBot)
 {
-    Drawing::lpWindowName = skCryptEnc("KOF.Bot");
+    LPCSTR lpWindowName = skCryptEnc("KOF.Bot");
 
     ImGui_ImplWin32_EnableDpiAwareness();
-    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(Drawing::lpWindowName), nullptr };
+    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(lpWindowName), nullptr };
     ::RegisterClassEx(&wc);
-    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(Drawing::lpWindowName), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
+    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(lpWindowName), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
 
     if (!CreateDeviceD3D(hwnd))
     {
@@ -195,6 +195,7 @@ void UI::Render(Bot* pBot)
         ImGui::NewFrame();
         {
             Drawing::Draw();
+            Drawing::DrawRoutePlanner();
         }
         ImGui::EndFrame();
 

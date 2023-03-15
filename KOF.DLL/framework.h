@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <tchar.h>
 #include <fstream>
+#include <string>
+#include <iostream>
+#include <filesystem>
 #include <sstream>
 #include <ShlObj_core.h>
 #include <vector>

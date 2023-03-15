@@ -36,8 +36,6 @@ void Client::Clear()
 
 	m_vecLootList.clear();
 	m_bIsMovingToLoot = false;
-
-	m_World = nullptr;
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
