@@ -3029,10 +3029,6 @@ TPlayer ClientHandler::InitializePlayer(Packet& pkt)
 
 void ClientHandler::PushPhase(DWORD dwAddress)
 {
-#ifdef _WINDLL
-	PushPhaseFunction pPushPhaseFunction = (PushPhaseFunction)GetAddress("KO_PTR_PUSH_PHASE");
-	pPushPhaseFunction(*reinterpret_cast<int*>(dwAddress));
-#else
 	BYTE byCode[] =
 	{
 		0x60,
@@ -3044,7 +3040,7 @@ void ClientHandler::PushPhase(DWORD dwAddress)
 		0xB0,0x01,
 		0x61,
 		0xC2,0x04,0x0,
-	};
+};
 
 	CopyBytes(byCode + 10, dwAddress);
 
@@ -3052,7 +3048,6 @@ void ClientHandler::PushPhase(DWORD dwAddress)
 	CopyBytes(byCode + 15, dwPushPhase);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-#endif
 }
 
 void ClientHandler::SetLoginInformation(std::string szAccountId, std::string szPassword)
@@ -3074,19 +3069,6 @@ void ClientHandler::ConnectLoginServer(bool bDisconnect)
 	WriteString(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT")), m_szPassword.c_str());
 	Write4Byte(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH")), m_szPassword.size());
 
-#ifdef _WINDLL
-	if (bDisconnect)
-	{
-		DisconnectFunction pDisconnectFunction = (DisconnectFunction)GetAddress("KO_PTR_LOGIN_DC_REQUEST");
-		pDisconnectFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_INTRO")));
-	}
-
-	LoginRequestFunction1 pLoginRequestFunction1 = (LoginRequestFunction1)GetAddress("KO_PTR_LOGIN_REQUEST1");
-	pLoginRequestFunction1(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_INTRO")));
-
-	LoginRequestFunction2 pLoginRequestFunction2 = (LoginRequestFunction2)GetAddress("KO_PTR_LOGIN_REQUEST2");
-	pLoginRequestFunction2(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_INTRO")));
-#else
 	if (bDisconnect)
 	{
 		BYTE byCode[] =
@@ -3103,7 +3085,7 @@ void ClientHandler::ConnectLoginServer(bool bDisconnect)
 			0xFF,0xD7,
 			0x61,
 			0xC3,
-		};
+};
 
 		DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
 		CopyBytes(byCode + 3, dwPtrIntro);
@@ -3148,7 +3130,6 @@ void ClientHandler::ConnectLoginServer(bool bDisconnect)
 
 		ExecuteRemoteCode(byCode, sizeof(byCode));
 	}
-#endif
 }
 
 void ClientHandler::ConnectGameServer(BYTE byServerId)
@@ -3158,10 +3139,6 @@ void ClientHandler::ConnectGameServer(BYTE byServerId)
 
 	Write4Byte(dwCUILoginIntro + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_SERVER_INDEX")), byServerId);
 
-#ifdef _WINDLL
-	LoginServerFunction pLoginServerFunction = (LoginServerFunction)GetAddress("KO_PTR_SERVER_SELECT");
-	pLoginServerFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_INTRO")));
-#else
 	BYTE byCode[] =
 	{
 		0x60,
@@ -3170,7 +3147,7 @@ void ClientHandler::ConnectGameServer(BYTE byServerId)
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-	};
+};
 
 	DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
 	CopyBytes(byCode + 3, dwPtrIntro);
@@ -3179,16 +3156,10 @@ void ClientHandler::ConnectGameServer(BYTE byServerId)
 	CopyBytes(byCode + 8, dwPtrServerSelect);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-#endif
 }
 
 void ClientHandler::SelectCharacterSkip()
 {
-#ifdef _WINDLL
-	CharacterSelectSkipFunction pCharacterSelectSkipFunction = (CharacterSelectSkipFunction)GetAddress("KO_PTR_CHARACTER_SELECT_SKIP");
-	pCharacterSelectSkipFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
-#else
-
 	BYTE byCode[] =
 	{
 		0x60,
@@ -3197,7 +3168,7 @@ void ClientHandler::SelectCharacterSkip()
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-	};
+};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3206,16 +3177,10 @@ void ClientHandler::SelectCharacterSkip()
 	CopyBytes(byCode + 8, dwPtrCharacterSelectSkip);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-
-#endif
 }
 
 void ClientHandler::SelectCharacterLeft()
 {
-#ifdef _WINDLL
-	CharacterSelectLeftFunction pCharacterSelectLeftFunction = (CharacterSelectLeftFunction)GetAddress("KO_PTR_CHARACTER_SELECT_LEFT");
-	pCharacterSelectLeftFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
-#else
 	BYTE byCode[] =
 	{
 		0x60,
@@ -3224,7 +3189,7 @@ void ClientHandler::SelectCharacterLeft()
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-	};
+};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3233,15 +3198,10 @@ void ClientHandler::SelectCharacterLeft()
 	CopyBytes(byCode + 8, dwPtrCharacterSelectLeft);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-#endif
 }
 
 void ClientHandler::SelectCharacterRight()
 {
-#ifdef _WINDLL
-	CharacterSelectRightFunction pCharacterSelectRightFunction = (CharacterSelectRightFunction)GetAddress("KO_PTR_CHARACTER_SELECT_RIGHT");
-	pCharacterSelectRightFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
-#else
 	BYTE byCode[] =
 	{
 		0x60,
@@ -3250,7 +3210,7 @@ void ClientHandler::SelectCharacterRight()
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-	};
+};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3259,15 +3219,10 @@ void ClientHandler::SelectCharacterRight()
 	CopyBytes(byCode + 8, dwPtrCharacterSelectRight);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-#endif
 }
 
 void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
 {
-#ifdef _WINDLL
-	CharacterSelectFunction pCharacterSelectFunction = (CharacterSelectFunction)GetAddress("KO_PTR_CHARACTER_SELECT_ENTER");
-	pCharacterSelectFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_CHARACTER_SELECT")));
-#else
 	BYTE byCode[] =
 	{
 		0x60,
@@ -3276,7 +3231,7 @@ void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-	};
+};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3285,15 +3240,10 @@ void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
 	CopyBytes(byCode + 8, dwPtrCharacterSelectEnter);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-#endif
 }
 
 void ClientHandler::SendPacket(Packet vecBuffer)
 {
-#ifdef _WINDLL
-	SendFunction pSendFunction = (SendFunction)GetAddress("KO_SND_FNC");
-	pSendFunction(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), vecBuffer.contents(), vecBuffer.size());
-#else
 
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
@@ -3337,7 +3287,6 @@ void ClientHandler::SendPacket(Packet vecBuffer)
 	ExecuteRemoteCode(byCode, sizeof(byCode));
 	VirtualFreeEx(hProcess, pPacketAddress, 0, MEM_RELEASE);
 	CloseHandle(hProcess);
-#endif
 }
 
 void ClientHandler::LoadSkillData()
@@ -3808,11 +3757,6 @@ void ClientHandler::SetTarget(int32_t iTargetID)
 
 void ClientHandler::EquipOreads(int32_t iItemID)
 {
-#ifdef _WINDLL
-	EquipOreadsFunction pEquipOreadsFunction = (EquipOreadsFunction)GetAddress("KO_PTR_EQUIP_ITEM");
-	pEquipOreadsFunction(*reinterpret_cast<int*>(GetAddress("KO_PTR_CHR")), iItemID, 0);
-#else
-#endif
 }
 
 void ClientHandler::SetOreads(bool bValue)

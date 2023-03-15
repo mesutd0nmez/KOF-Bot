@@ -10,11 +10,7 @@ Bot::Bot()
 {
 	m_ClientHandler = nullptr;
 
-#ifdef _WINDLL
-	m_dwInjectedProcessId = GetCurrentProcessId();
-#else
 	m_dwInjectedProcessId = 0;
-#endif
 
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
@@ -353,8 +349,12 @@ void Bot::OnPong()
 #ifdef DEBUG
 	printf("Bot: OnPong\n");
 #endif
-	if(m_iniUserConfiguration->onSaveEvent)
-		m_iniUserConfiguration->onSaveEvent();
+
+	if (m_iniUserConfiguration)
+	{
+		if (m_iniUserConfiguration->onSaveEvent)
+			m_iniUserConfiguration->onSaveEvent();
+	}
 }
 
 void Bot::OnAuthenticated()

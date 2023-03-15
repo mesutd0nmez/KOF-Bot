@@ -6,57 +6,6 @@
 
 Bot* bot = nullptr;
 
-#ifdef _WINDLL
-
-extern HINSTANCE hAppInstance;
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
-{
-    BOOL bReturnValue = TRUE;
-
-    switch (dwReason)
-    {
-        case DLL_QUERY_HMODULE:
-            if (lpReserved != NULL)
-                *(HMODULE*)lpReserved = hAppInstance;
-            break;
-
-        case DLL_PROCESS_ATTACH:
-            hAppInstance = hinstDLL;
-
-#ifdef DEBUG
-            AllocConsole();
-            freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-#endif
-
-#ifdef DEBUG
-            printf("EntryPoint\n");
-#endif
-            new std::thread([]()
-            {
-                Bot* bot = new Bot();
-                bot->Initialize(PlatformType::USKO, 0);
-            });
-
-            break;
-
-        case DLL_PROCESS_DETACH:
-        {
-#ifdef DEBUG
-            fclose(stdout);
-            FreeConsole();
-#endif
-        }
-        break;
-
-        case DLL_THREAD_ATTACH:
-        case DLL_THREAD_DETACH:
-            break;
-    }
-
-    return bReturnValue;
-}
-#else
-
 BOOL WINAPI MyConsoleCtrlHandler(DWORD dwCtrlType)
 {
     if (dwCtrlType == CTRL_CLOSE_EVENT)
@@ -65,7 +14,7 @@ BOOL WINAPI MyConsoleCtrlHandler(DWORD dwCtrlType)
         {
             TerminateMyProcess(bot->GetInjectedProcessId(), -1);
         }
-    } 
+    }
 
     return TRUE;
 }
@@ -97,7 +46,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
     char** argv = new char* [argc];
 
-    for (int i = 0; i < argc; i++) 
+    for (int i = 0; i < argc; i++)
     {
         int lgth = wcslen(szArglist[i]);
 
@@ -124,7 +73,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         if (bot->IsClosed())
             break;
 
-        if(Drawing::Done)
+        if (Drawing::Done)
             break;
 
         if (bot->GetInjectedProcessId() != 0 && bot->IsInjectedProcessLost())
@@ -144,5 +93,3 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
     return 0;
 }
-
-#endif
