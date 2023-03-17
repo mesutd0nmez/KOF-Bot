@@ -33,6 +33,37 @@ struct SShopItem
 	int32_t m_iItemId;
 };
 
+struct SSItemBuy
+{
+	SSItemBuy(int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition) : 
+		m_iItemId(iItemId), m_iInventoryPosition(iInventoryPosition), m_iCount(iCount), m_iShopPage(iShopPage), m_iShopPosition(iShopPosition) {};
+
+	int32_t m_iItemId;
+	uint8_t m_iInventoryPosition;
+	int16_t m_iCount;
+	uint8_t m_iShopPage;
+	uint8_t m_iShopPosition;
+};
+
+struct SSItemSell
+{
+	SSItemSell(int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount) :
+		m_iItemId(iItemId), m_iInventoryPosition(iInventoryPosition), m_iCount(iCount) {};
+
+	int32_t m_iItemId;
+	uint8_t m_iInventoryPosition;
+	int16_t m_iCount;
+};
+
+struct SSupplyBuyList
+{
+	SSupplyBuyList(int32_t iNpcId, Vector3 vec3NpcPosition, std::vector<SSItemBuy> vecItemBuy) : m_iNpcId(iNpcId), m_vec3NpcPosition(vec3NpcPosition), m_vecItemBuy(vecItemBuy) {};
+
+	int32_t m_iNpcId;
+	Vector3 m_vec3NpcPosition;
+	std::vector<SSItemBuy> m_vecItemBuy;
+};
+
 struct SNpcData
 {
 	uint32_t iProtoID;

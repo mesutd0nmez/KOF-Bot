@@ -17,11 +17,12 @@ private:
 	static void InitializeSceneData();
 
 public:
+	static void Initialize();
+
 	static void Active();
 	static bool isActive();
 	static void Draw();
 	static void DrawRoutePlanner();
-
 
 	static void DrawGameController();
 	static void CenteredText(std::string strValue);

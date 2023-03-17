@@ -215,7 +215,6 @@ uint8_t Client::GetAuthority(bool bFromServer)
 
 std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
 {
-	Guard lock(m_mapSkillUseTimeLock);
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it != m_mapSkillUseTime.end())
@@ -226,7 +225,6 @@ std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
 
 void Client::SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime)
 {
-	Guard lock(m_mapSkillUseTimeLock);
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it == m_mapSkillUseTime.end())
@@ -274,7 +272,6 @@ void Client::SetAuthority(uint8_t iAuthority)
 
 bool Client::IsBuffActive(int32_t iBuffType)
 { 
-	Guard lock(m_mapActiveBuffListLock);
 	return m_mapActiveBuffList.find(iBuffType) != m_mapActiveBuffList.end(); 
 };
 
@@ -311,47 +308,133 @@ uint8_t Client::GetSkillPoint(int32_t Slot)
 	return m_PlayerMySelf.iSkillInfo[Slot];
 }
 
+bool Client::GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills)
+{
+	if (m_vecAvailableSkill.size() == 0)
+		return false;
+
+	*vecAvailableSkills = &m_vecAvailableSkill;
+
+	return true;
+}
+
+bool Client::GetNpcList(std::vector<TNpc>** vecNpcList)
+{ 
+	if (m_vecNpc.size() == 0)
+		return false;
+
+	*vecNpcList = &m_vecNpc;
+
+	return true; 
+}
+
+bool Client::GetPlayerList(std::vector<TPlayer>** vecPlayerList)
+{ 
+	if(m_vecPlayer.size() == 0)
+		return false;
+
+	*vecPlayerList = &m_vecPlayer;
+
+	return true;
+}
+
 int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 {
 	int32_t iItemCount = 0;
 
-	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
+
+	for (size_t i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		if (m_PlayerMySelf.tInventory[i].iItemID == iItemID)
-			iItemCount += m_PlayerMySelf.tInventory[i].iCount;
-	}
+		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+
+		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == iItemID)
+			iItemCount += Read4Byte(iItemBase + 0x70);
+}
 
 	return iItemCount;
 }
 
-TInventory* Client::GetInventoryItem(uint32_t iItemID)
+TInventory Client::GetInventoryItem(uint32_t iItemID)
 {
-	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	TInventory pInventory;
+	memset(&pInventory, 0, sizeof(pInventory));
+
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
+
+	for (size_t i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		if (m_PlayerMySelf.tInventory[i].iItemID == iItemID)
-			return &m_PlayerMySelf.tInventory[i];
+		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+
+		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == iItemID)
+		{
+			pInventory.iPos = i;
+			pInventory.iItemID = iItemID;
+			pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
+			pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+
+			return pInventory;
+		}
 	}
 
-	return NULL;
+	return pInventory;
 }
 
 int32_t Client::GetInventoryEmptySlot()
 {
-	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
+
+	for (size_t i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		if (m_PlayerMySelf.tInventory[i].iItemID == 0)
+		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+
+		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == 0)
+		{
 			return i;
-	}
+		}
+}
 
 	return -1;
 }
 
-TInventory* Client::GetInventoryItemSlot(uint8_t iSlotPosition)
+int32_t Client::GetInventoryEmptySlot(std::vector<int32_t> vecExcept)
 {
-	if (m_PlayerMySelf.tInventory[iSlotPosition].iItemID != 0)
-		return &m_PlayerMySelf.tInventory[iSlotPosition];
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
 
-	return NULL;
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		if (std::find(vecExcept.begin(), vecExcept.end(), i)
+			!= vecExcept.end())
+			continue;
+
+		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+
+		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == 0)
+			return i;
+}
+
+	return -1;
+}
+
+TInventory Client::GetInventoryItemSlot(uint8_t iSlotPosition)
+{
+	TInventory pInventory;
+	memset(&pInventory, 0, sizeof(pInventory));
+
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * iSlotPosition)));
+
+	if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) != 0)
+	{
+		pInventory.iPos = iSlotPosition;
+		pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C));
+		pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
+		pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+
+		return pInventory;
+	}
+
+	return pInventory;
 }
 
 BYTE Client::ReadByte(DWORD dwAddress)

@@ -51,7 +51,16 @@ public:
             m_Data.insert(Val_Table(dwID, pType));
     }
 
-    std::map<uint32_t, Type> GetData() { return m_Data; }
+    bool GetData(std::map<uint32_t, Type>** mapDataOut) 
+    { 
+        if (m_Data.size() == 0)
+            return false;
+
+        *mapDataOut = &m_Data;
+
+        return true;
+    }
+
     size_t GetDataSize() { return m_Data.size(); }
     size_t GetColumnSize() { return m_DataType.size(); }
 
