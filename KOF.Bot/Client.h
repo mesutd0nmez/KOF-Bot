@@ -57,15 +57,15 @@ public:
 
 	uint8_t GetSkillPoint(int32_t Slot);
 
-	std::vector<__TABLE_UPC_SKILL> GetAvailableSkill() { return m_vecAvailableSkill; };
-
-	std::vector<TNpc> GetNpcList() { return m_vecNpc; }
-	std::vector<TPlayer> GetPlayerList() { return m_vecPlayer; }
+	bool GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills);
+	bool GetNpcList(std::vector<TNpc>** vecNpcList);
+	bool GetPlayerList(std::vector<TPlayer>** vecPlayerList);
 
 	int32_t GetInventoryItemCount(uint32_t iItemID);
-	TInventory* GetInventoryItem(uint32_t iItemID);
-	TInventory* GetInventoryItemSlot(uint8_t iSlotPosition);
+	TInventory GetInventoryItem(uint32_t iItemID);
+	TInventory GetInventoryItemSlot(uint8_t iSlotPosition);
 	int32_t GetInventoryEmptySlot();
+	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
 
 protected:
 	DWORD GetAddress(std::string szAddressName);
@@ -85,11 +85,7 @@ public:
 protected:
 
 	std::map<int32_t, uint32_t> m_mapActiveBuffList;
-	std::recursive_mutex m_mapActiveBuffListLock;
-
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
-	std::recursive_mutex m_mapSkillUseTimeLock;
-
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 	int32_t m_iTargetID;
@@ -107,16 +103,10 @@ public:
 	void WriteFloat(DWORD dwAddress, float fValue);
 	void WriteString(DWORD dwAddress, std::string strValue);
 	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
-
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
-
-private:
-	std::vector<TLoot> GetLootList() { return m_vecLootList; }
 
 protected:
 	std::vector<TLoot> m_vecLootList;
-	std::recursive_mutex m_vecLootListLock;
-
 	bool m_bIsMovingToLoot;
 
 protected:

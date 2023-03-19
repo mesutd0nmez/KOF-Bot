@@ -15,11 +15,6 @@ bool Drawing::Done = false;
 ClientHandler* m_pClient = nullptr;
 Ini* m_pConfiguration = nullptr;
 
-std::map<uint32_t, __TABLE_NPC> m_mapNpcTable;
-std::map<uint32_t, __TABLE_MOB_USKO> m_mapMobTable;
-
-std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
-
 WorldData* m_pWorldData = nullptr;
 
 ID3D11ShaderResourceView* m_pMapTexture = nullptr;
@@ -29,6 +24,9 @@ char m_szRouteName[255] = "";
 
 std::string m_szSelectedRoute = "";
 std::vector<Route> m_vecRoute;
+
+float m_fScreenWidth = 0.0f;
+float m_fScreenHeight = 0.0f;
 
 void Drawing::Active()
 {
@@ -40,25 +38,16 @@ bool Drawing::isActive()
 	return bDraw == true;
 }
 
+void Drawing::Initialize()
+{
+    m_fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
+    m_fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
+}
+
 void Drawing::InitializeSceneData()
 {
     m_pConfiguration = Drawing::Bot->GetConfiguration();
     m_pClient = Drawing::Bot->GetClientHandler();
-
-    if (m_mapNpcTable.size() == 0 && Drawing::Bot->IsTableLoaded())
-    {
-        m_mapNpcTable = Drawing::Bot->GetNpcTable()->GetData();
-    }
-
-    if (m_mapMobTable.size() == 0 && Drawing::Bot->IsTableLoaded())
-    {
-        m_mapMobTable = Drawing::Bot->GetMobTable()->GetData();
-    }
-
-    if (m_vecAvailableSkill.size() == 0 && Drawing::Bot->IsTableLoaded())
-    {
-        m_vecAvailableSkill = m_pClient->GetAvailableSkill();
-    }
 
     if (m_pWorldData == nullptr || (m_pWorldData != nullptr && m_pWorldData->iId != m_pClient->GetZone()))
     {
@@ -87,13 +76,11 @@ void Drawing::Draw()
         InitializeSceneData();
 
         std::string lpWindowName = skCryptEnc("KOF.Bot");
+       
         ImVec2 vWindowSize = { 658, 700 };
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 
-        float fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
-        float fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
-
-        ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
+        ImVec2 vec2InitialPos = { m_fScreenWidth, m_fScreenHeight };
 
         vec2InitialPos.x -= vWindowSize.x / 2;
         vec2InitialPos.y -= vWindowSize.y / 2;
@@ -124,13 +111,11 @@ void Drawing::DrawRoutePlanner()
         if (!Drawing::bDrawRoutePlanner)
             return;
 
-        LPCSTR lpWindowName = skCryptEnc("KOF.RoutePlanner");
+        std::string lpWindowName = skCryptEnc("KOF.RoutePlanner");
+
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 
-        float fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
-        float fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
-
-        ImVec2 vec2InitialPos = { fScreenWidth, fScreenHeight };
+        ImVec2 vec2InitialPos = { m_fScreenWidth, m_fScreenHeight };
 
         ImVec2 vWindowSize = { 1030, 855 };
 
@@ -140,7 +125,7 @@ void Drawing::DrawRoutePlanner()
         ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
         ImGui::SetNextWindowSize(vWindowSize);
         ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin(lpWindowName, &Drawing::bDrawRoutePlanner, WindowFlags);
+        ImGui::Begin(lpWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
         {
             DrawRoutePlannerArea();
         }
@@ -176,9 +161,11 @@ void Drawing::DrawRoutePlannerArea()
             m_vecRoute.push_back(pRoute);
         }
 
+        Vector3 vec3CurrentPosition = m_pClient->GetPosition();
+
         ImVec2 currentPosition = ImVec2(
-            pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
-            pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_pClient->GetPosition().m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+            pOffsetPosition.x + std::ceil(vec3CurrentPosition.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+            pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (vec3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
         ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
         ImGui::GetWindowDrawList()->AddText(currentPosition, IM_COL32(0, 255, 0, 255), skCryptDec("Current Position"));
@@ -197,7 +184,11 @@ void Drawing::DrawRoutePlannerArea()
                     pOffsetPosition.x + std::ceil(m_vecRoute[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
                     pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
-                ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                if (m_vecRoute[i - 1].eStepType != RouteStepType::STEP_TOWN)
+                {
+                    ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 2.0f);
+                }
+                
             }
 
             switch (m_vecRoute[i].eStepType)
@@ -517,11 +508,10 @@ void Drawing::DrawGameController()
                     }
 
                     Guard npcListLock(m_pClient->m_vecNpcLock);
-                    auto pNpcList = m_pClient->GetNpcList();
-
-                    if (pNpcList.size() > 0)
+                    std::vector<TNpc>* vecNpcList;
+                    if (m_pClient->GetNpcList(&vecNpcList))
                     {
-                        for (const TNpc& pNpc : pNpcList)
+                        for (const TNpc& pNpc : *vecNpcList)
                         {
                             if (m_pClient->GetDistance(pNpc.fX, pNpc.fY) > MAX_VIEW_RANGE)
                                 continue;
@@ -538,11 +528,10 @@ void Drawing::DrawGameController()
                     }
 
                     Guard playerListLock(m_pClient->m_vecPlayerLock);
-                    auto pPlayerList = m_pClient->GetPlayerList();
-
-                    if (pPlayerList.size() > 0)
+                    std::vector<TPlayer>* vecPlayerList;
+                    if (m_pClient->GetPlayerList(&vecPlayerList))
                     {
-                        for (const TPlayer& pPlayer : pPlayerList)
+                        for (const TPlayer& pPlayer : *vecPlayerList)
                         {
                             if (m_pClient->GetDistance(pPlayer.fX, pPlayer.fY) > MAX_VIEW_RANGE)
                                 continue;
@@ -555,19 +544,24 @@ void Drawing::DrawGameController()
                         }
                     }
 
+                    Vector3 vec3CurrentPosition = m_pClient->GetPosition();
+
                     ImVec2 currentPosition = ImVec2(
-                        pOffsetPosition.x + std::ceil(m_pClient->GetPosition().m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                        pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (m_pClient->GetPosition().m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                        pOffsetPosition.x + std::ceil(vec3CurrentPosition.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                        pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (vec3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                     ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
 
-                    if (m_pClient->GetGoX() > 0.0f && m_pClient->GetGoY() > 0.0f)
+                    float fGoX = m_pClient->GetGoX();
+                    float fGoY = m_pClient->GetGoY();
+
+                    if (fGoX > 0.0f && fGoY > 0.0f)
                     {
                         ImVec2 movePosition = ImVec2(
-                            pOffsetPosition.x + std::ceil(m_pClient->GetGoX() / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                            pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (m_pClient->GetGoY() / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                            pOffsetPosition.x + std::ceil(fGoX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                            pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (fGoY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                        ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                        ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 2.0f);
                     }
 
                     std::string szSelectedRouteConfiguration = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
@@ -595,7 +589,10 @@ void Drawing::DrawGameController()
                                         pOffsetPosition.x + std::ceil(pPlan->second[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
                                         pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlan->second[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                                    ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                                    if (pPlan->second[i - 1].eStepType != RouteStepType::STEP_TOWN)
+                                    {
+                                        ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 2.0f);
+                                    }        
                                 }
                             }
                         }
@@ -862,14 +859,8 @@ void Drawing::DrawGameController()
 
             if (ImGui::BeginTabItem(skCryptDec("Skill")))
             {
-                if (m_vecAvailableSkill.size() == 0)
-                    ImGui::BeginDisabled();
-
                 DrawAutomatedAttackSkillTree();
                 DrawAutomatedCharacterSkillTree();
-
-                if (m_vecAvailableSkill.size() == 0)
-                    ImGui::EndDisabled();
 
                 ImGui::EndTabItem();
             }
@@ -1024,11 +1015,11 @@ void Drawing::DrawMainFeaturesArea()
 
                     //TODO: Need For Class
 
-                    auto iItem = m_pClient->GetInventoryItem(110110001); // +1 Dagger 
+                    TInventory iItem = m_pClient->GetInventoryItem(110110001); // +1 Dagger 
 
-                    if (iItem)
+                    if (iItem.iItemID != 0)
                     {
-                        m_pClient->SendItemMovePacket(1, ITEM_INVEN_INVEN, iItem->iItemID, iItem->iPos - 14, 35);
+                        m_pClient->SendItemMovePacket(1, ITEM_INVEN_INVEN, iItem.iItemID, iItem.iPos - 14, 35);
                     }
                 }
 
@@ -1246,30 +1237,33 @@ void Drawing::DrawAutomatedAttackSkillTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
-
-        for (const auto& x : m_vecAvailableSkill)
+        std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+        if (m_pClient->GetAvailableSkill(&vecAvailableSkills))
         {
-            if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
-                continue;
-
-            ImGui::PushID(x.iID);
-
-            bool bSelected = std::find(vecAttackList.begin(), vecAttackList.end(), x.iID) != vecAttackList.end();
-
-            if (ImGui::Selectable(x.szName.c_str(), &bSelected))
+            for (const auto& x : *vecAvailableSkills)
             {
-                if (bSelected)
-                    vecAttackList.push_back(x.iID);
-                else
-                    vecAttackList.erase(std::find(vecAttackList.begin(), vecAttackList.end(), x.iID));
+                if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+                    continue;
 
-                m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), vecAttackList);
+                ImGui::PushID(x.iID);
+
+                bool bSelected = std::find(vecAttackList.begin(), vecAttackList.end(), x.iID) != vecAttackList.end();
+
+                if (ImGui::Selectable(x.szName.c_str(), &bSelected))
+                {
+                    if (bSelected)
+                        vecAttackList.push_back(x.iID);
+                    else
+                        vecAttackList.erase(std::find(vecAttackList.begin(), vecAttackList.end(), x.iID));
+
+                    m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), vecAttackList);
+                }
+
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip(x.szDesc.c_str());
+
+                ImGui::PopID();
             }
-
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip(x.szDesc.c_str());
-
-            ImGui::PopID();
         }
 
         ImGui::TreePop();
@@ -1290,29 +1284,33 @@ void Drawing::DrawAutomatedCharacterSkillTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
-        for (const auto& x : m_vecAvailableSkill)
+        std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+        if (m_pClient->GetAvailableSkill(&vecAvailableSkills))
         {
-            if (x.iTarget != SkillTargetType::TARGET_SELF && x.iTarget != SkillTargetType::TARGET_PARTY_ALL && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME)
-                continue;
-
-            ImGui::PushID(x.iID);
-
-            bool bSelected = std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID) != vecCharacterSkillList.end();
-
-            if (ImGui::Selectable(x.szName.c_str(), &bSelected))
+            for (const auto& x : *vecAvailableSkills)
             {
-                if (bSelected)
-                    vecCharacterSkillList.push_back(x.iID);
-                else
-                    vecCharacterSkillList.erase(std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID));
+                if (x.iTarget != SkillTargetType::TARGET_SELF && x.iTarget != SkillTargetType::TARGET_PARTY_ALL && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME)
+                    continue;
 
-                m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), vecCharacterSkillList);
+                ImGui::PushID(x.iID);
+
+                bool bSelected = std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID) != vecCharacterSkillList.end();
+
+                if (ImGui::Selectable(x.szName.c_str(), &bSelected))
+                {
+                    if (bSelected)
+                        vecCharacterSkillList.push_back(x.iID);
+                    else
+                        vecCharacterSkillList.erase(std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID));
+
+                    m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), vecCharacterSkillList);
+                }
+
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip(x.szDesc.c_str());
+
+                ImGui::PopID();
             }
-
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip(x.szDesc.c_str());
-
-            ImGui::PopID();
         }
 
         ImGui::TreePop();
@@ -1334,14 +1332,13 @@ void Drawing::DrawMonsterListTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(skCryptDec("Target Monster List"), flags))
     {
-        std::vector<SNpcData> vecNpcList;
+        std::vector<SNpcData> vecTargetList;
 
         std::vector<int> vecSelectedNpcList = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
 
         Guard lock(m_pClient->m_vecNpcLock);
-        auto mapNpcList = m_pClient->GetNpcList();
-
-        if (mapNpcList.size() > 0)
+        std::vector<TNpc>* vecNpcList;
+        if (m_pClient->GetNpcList(&vecNpcList))
         {
             for (const auto& x : vecSelectedNpcList)
             {
@@ -1350,18 +1347,18 @@ void Drawing::DrawMonsterListTree()
                 pNpcData.iProtoID = x;
                 pNpcData.fDistance = 0.0f;
 
-                const auto pFindedNpc = std::find_if(mapNpcList.begin(), mapNpcList.end(),
+                const auto pFindedNpc = std::find_if(vecNpcList->begin(), vecNpcList->end(),
                     [x](const TNpc& a) { return a.iProtoID == x; });
 
-                if (pFindedNpc != mapNpcList.end())
+                if (pFindedNpc != vecNpcList->end())
                     pNpcData.fDistance = m_pClient->GetDistance(pFindedNpc->fX, pFindedNpc->fY);
 
-                vecNpcList.push_back(pNpcData);
+                vecTargetList.push_back(pNpcData);
             }
 
-            for (const auto& x : mapNpcList)
+            for (const auto& x : *vecNpcList)
             {
-                const auto pFindedNpc = std::find_if(vecNpcList.begin(), vecNpcList.end(),
+                const auto pFindedNpc = std::find_if(vecTargetList.begin(), vecTargetList.end(),
                     [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
 
                 if ((x.iMonsterOrNpc == 1
@@ -1369,18 +1366,18 @@ void Drawing::DrawMonsterListTree()
                     || (x.iProtoID >= 19070 && x.iProtoID <= 19072))
                     && x.iProtoID != 9009
                     && m_pClient->GetDistance(x.fX, x.fY) <= MAX_VIEW_RANGE
-                    && pFindedNpc == vecNpcList.end())
+                    && pFindedNpc == vecTargetList.end())
                 {
                     SNpcData pNpcData;
 
                     pNpcData.iProtoID = x.iProtoID;
                     pNpcData.fDistance = m_pClient->GetDistance(x.fX, x.fY);
 
-                    vecNpcList.push_back(pNpcData);
+                    vecTargetList.push_back(pNpcData);
                 }
             }
 
-            for (const auto& x : vecNpcList)
+            for (const auto& x : vecTargetList)
             {
                 bool bIsAttackable = false;
 
@@ -1401,16 +1398,25 @@ void Drawing::DrawMonsterListTree()
 
                 bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
 
-                auto pNpcInfo = m_mapNpcTable.find(x.iProtoID);
-                auto pMobInfo = m_mapMobTable.find(x.iProtoID);
-
                 std::string szNpcName = skCryptDec("~Unknown~");
 
-                if (pNpcInfo != m_mapNpcTable.end())
-                    szNpcName = pNpcInfo->second.szText;
+                std::map<uint32_t, __TABLE_NPC>* pNpcTable;
+                if (Drawing::Bot->GetNpcTable(&pNpcTable))
+                {
+                    auto pNpcInfo = pNpcTable->find(x.iProtoID);
 
-                if (pMobInfo != m_mapMobTable.end())
-                    szNpcName = pMobInfo->second.szText;
+                    if (pNpcInfo != pNpcTable->end())
+                        szNpcName = pNpcInfo->second.szText;
+                }
+
+                std::map<uint32_t, __TABLE_MOB_USKO>* pMobTable;
+                if (Drawing::Bot->GetMobTable(&pMobTable))
+                {
+                    auto pMobInfo = pMobTable->find(x.iProtoID);
+
+                    if (pMobInfo != pMobTable->end())
+                        szNpcName = pMobInfo->second.szText;
+                }          
 
                 if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
                 {

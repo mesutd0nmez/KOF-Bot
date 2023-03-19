@@ -14,20 +14,13 @@ Bot::Bot()
 
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
-	m_pTbl_Skill_Extension1 = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
-	m_pTbl_Skill_Extension3 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
-	m_pTbl_Skill_Extension5 = nullptr;
-	m_pTbl_Skill_Extension6 = nullptr;
-	m_pTbl_Skill_Extension7 = nullptr;
-	m_pTbl_Skill_Extension8 = nullptr;
-	m_pTbl_Skill_Extension9 = nullptr;
 	m_pTbl_Item = nullptr;
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
 
-	msLastConfigurationSave = std::chrono::milliseconds(0);
+	m_msLastConfigurationSave = std::chrono::milliseconds(0);
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
@@ -52,20 +45,13 @@ Bot::~Bot()
 	m_bTableLoaded = false;
 
 	m_pTbl_Skill = nullptr;
-	m_pTbl_Skill_Extension1 = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
-	m_pTbl_Skill_Extension3 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
-	m_pTbl_Skill_Extension5 = nullptr;
-	m_pTbl_Skill_Extension6 = nullptr;
-	m_pTbl_Skill_Extension7 = nullptr;
-	m_pTbl_Skill_Extension8 = nullptr;
-	m_pTbl_Skill_Extension9 = nullptr;
 	m_pTbl_Item = nullptr;
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
 
-	msLastConfigurationSave = std::chrono::milliseconds(0);
+	m_msLastConfigurationSave = std::chrono::milliseconds(0);
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
@@ -181,32 +167,11 @@ void Bot::Release()
 	if (m_pTbl_Skill)
 		m_pTbl_Skill->Release();
 
-	if (m_pTbl_Skill_Extension1)
-		m_pTbl_Skill_Extension1->Release();
-
 	if (m_pTbl_Skill_Extension2)
 		m_pTbl_Skill_Extension2->Release();
 
-	if (m_pTbl_Skill_Extension3)
-		m_pTbl_Skill_Extension3->Release();
-
 	if (m_pTbl_Skill_Extension4)
 		m_pTbl_Skill_Extension4->Release();
-
-	if (m_pTbl_Skill_Extension5)
-		m_pTbl_Skill_Extension5->Release();
-
-	if (m_pTbl_Skill_Extension6)
-		m_pTbl_Skill_Extension6->Release();
-
-	if (m_pTbl_Skill_Extension7)
-		m_pTbl_Skill_Extension7->Release();
-
-	if (m_pTbl_Skill_Extension8)
-		m_pTbl_Skill_Extension8->Release();
-
-	if (m_pTbl_Skill_Extension9)
-		m_pTbl_Skill_Extension9->Release();
 
 	if (m_pTbl_Item)
 		m_pTbl_Item->Release();
@@ -232,35 +197,34 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Started\n");
 #endif
 
-	m_pTbl_Skill = new Table<__TABLE_UPC_SKILL>();
-	m_pTbl_Skill->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_main_us.tbl"));
+	std::string szPlatformPrefix = "us";
 
-	m_pTbl_Skill_Extension1 = new Table<__TABLE_UPC_SKILL_EXTENSION1>();
-	m_pTbl_Skill_Extension1->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_1.tbl"));
+	switch (m_ePlatformType)
+	{
+		case PlatformType::CNKO:
+		{
+			szPlatformPrefix = "nc";
+		}
+		break;
+
+		case PlatformType::JPKO:
+		{
+			szPlatformPrefix = "jp";
+		}
+		break;
+	}
+
+	char szPath[255];
+
+	m_pTbl_Skill = new Table<__TABLE_UPC_SKILL>();
+	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\skill_magic_main_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+	m_pTbl_Skill->Load(szPath);
 
 	m_pTbl_Skill_Extension2 = new Table<__TABLE_UPC_SKILL_EXTENSION2>();
 	m_pTbl_Skill_Extension2->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_2.tbl"));
 
-	m_pTbl_Skill_Extension3 = new Table<__TABLE_UPC_SKILL_EXTENSION3>();
-	m_pTbl_Skill_Extension3->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_3.tbl"));
-
 	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
 	m_pTbl_Skill_Extension4->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_4.tbl"));
-
-	m_pTbl_Skill_Extension5 = new Table<__TABLE_UPC_SKILL_EXTENSION5>();
-	m_pTbl_Skill_Extension5->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_5.tbl"));
-
-	m_pTbl_Skill_Extension6 = new Table<__TABLE_UPC_SKILL_EXTENSION6>();
-	m_pTbl_Skill_Extension6->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_6.tbl"));
-
-	m_pTbl_Skill_Extension7 = new Table<__TABLE_UPC_SKILL_EXTENSION7>();
-	m_pTbl_Skill_Extension7->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_7.tbl"));
-
-	m_pTbl_Skill_Extension8 = new Table<__TABLE_UPC_SKILL_EXTENSION8>();
-	m_pTbl_Skill_Extension8->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_8.tbl"));
-
-	m_pTbl_Skill_Extension9 = new Table<__TABLE_UPC_SKILL_EXTENSION9>();
-	m_pTbl_Skill_Extension9->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_9.tbl"));
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
@@ -298,21 +262,24 @@ void Bot::InitializeStaticData()
 #endif
 
 	m_pTbl_Item = new Table<__TABLE_ITEM>();
-	m_pTbl_Item->Load(m_szClientPath + skCryptDec("\\Data\\item_org_us.tbl"));
+	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\item_org_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+	m_pTbl_Item->Load(szPath);
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
 #endif
 
 	m_pTbl_Npc = new Table<__TABLE_NPC>();
-	m_pTbl_Npc->Load(m_szClientPath + skCryptDec("\\Data\\npc_us.tbl"));
+	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\npc_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+	m_pTbl_Npc->Load(szPath);
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
 	m_pTbl_Mob = new Table<__TABLE_MOB_USKO>();
-	m_pTbl_Mob->Load(m_szClientPath + skCryptDec("\\Data\\mob_us.tbl"));
+	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+	m_pTbl_Mob->Load(szPath);
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
@@ -496,17 +463,22 @@ void Bot::OnConfigurationLoaded()
 
 		std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
-		if ((msCurrentTime - msLastConfigurationSave) > std::chrono::milliseconds(1000))
+		if ((msCurrentTime - m_msLastConfigurationSave) > std::chrono::milliseconds(1000))
 		{
 			SendSaveUserConfiguration(1, GetClientHandler()->GetName());
-			msLastConfigurationSave = msCurrentTime;
+			m_msLastConfigurationSave = msCurrentTime;
 		}
 	};
 
-	m_ClientHandler->SetConfigurationLoaded(true);
-	m_ClientHandler->StartHandler();
+	new std::thread([this]() 
+	{ 
+		WaitCondition(IsTableLoaded() == false);
 
-	new std::thread([this]() { UI::Render(this); });
+		m_ClientHandler->SetConfigurationLoaded(true);
+		m_ClientHandler->StartHandler();
+
+		new std::thread([this]() { UI::Render(this); });
+	});
 }
 
 DWORD Bot::GetAddress(std::string szAddressName)
@@ -518,6 +490,62 @@ DWORD Bot::GetAddress(std::string szAddressName)
 Ini* Bot::GetConfiguration()
 {
 	return m_iniUserConfiguration;
+}
+
+bool Bot::GetSkillTable(std::map<uint32_t, __TABLE_UPC_SKILL>** mapDataOut)
+{
+	if (m_pTbl_Skill == nullptr)
+		return false;
+
+	return m_pTbl_Skill->GetData(mapDataOut);
+}
+
+bool Bot::GetSkillExtension2Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>** mapDataOut)
+{
+	if (m_pTbl_Skill_Extension2 == nullptr)
+		return false;
+
+	return m_pTbl_Skill_Extension2->GetData(mapDataOut);
+}
+
+bool Bot::GetSkillExtension4Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>** mapDataOut)
+{
+	if (m_pTbl_Skill_Extension4 == nullptr)
+		return false;
+
+	return m_pTbl_Skill_Extension4->GetData(mapDataOut);
+}
+
+bool Bot::GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut)
+{
+	if (m_pTbl_Item == nullptr)
+		return false;
+
+	return m_pTbl_Item->GetData(mapDataOut);
+}
+
+bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
+{
+	if (m_pTbl_Npc == nullptr)
+		return false;
+
+	return m_pTbl_Npc->GetData(mapDataOut);
+}
+
+bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_USKO>** mapDataOut)
+{
+	if (m_pTbl_Mob == nullptr)
+		return false;
+
+	return m_pTbl_Mob->GetData(mapDataOut);
+}
+
+bool Bot::GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut)
+{
+	if (m_pTbl_ItemSell == nullptr)
+		return false;
+
+	return m_pTbl_ItemSell->GetData(mapDataOut);
 }
 
 BYTE Bot::ReadByte(DWORD dwAddress)
@@ -604,48 +632,55 @@ bool Bot::IsInjectedProcessLost()
 	return false;
 }
 
-std::vector<SShopItem> Bot::GetShopItemTable(int32_t iSellingGroup)
+bool Bot::GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecShopWindow)
 {
-	auto pSellTable = GetItemSellTable()->GetData();
+	std::map<uint32_t, __TABLE_ITEM_SELL>* pSellTable;
+	if (!GetItemSellTable(&pSellTable))
+		return false;
 
-	std::vector<SShopItem> vecShopWindow;
+	if (pSellTable->size() == 0)
+		return false;
 
-	if (pSellTable.size() == 0)
-		return vecShopWindow;
+	std::vector<SShopItem> vecTmpShopWindow;
 
 	uint8_t iPage = 0;
-	for (auto& e : pSellTable)
+	for (auto& e : *pSellTable)
 	{
 		if (e.second.iSellingGroup == iSellingGroup)
 		{
-			vecShopWindow.push_back(SShopItem(iPage, 0, e.second.iItem0));
-			vecShopWindow.push_back(SShopItem(iPage, 1, e.second.iItem1));
-			vecShopWindow.push_back(SShopItem(iPage, 2, e.second.iItem2));
-			vecShopWindow.push_back(SShopItem(iPage, 3, e.second.iItem3));
-			vecShopWindow.push_back(SShopItem(iPage, 4, e.second.iItem4));
-			vecShopWindow.push_back(SShopItem(iPage, 5, e.second.iItem5));
-			vecShopWindow.push_back(SShopItem(iPage, 6, e.second.iItem6));
-			vecShopWindow.push_back(SShopItem(iPage, 7, e.second.iItem7));
-			vecShopWindow.push_back(SShopItem(iPage, 8, e.second.iItem8));
-			vecShopWindow.push_back(SShopItem(iPage, 9, e.second.iItem9));
-			vecShopWindow.push_back(SShopItem(iPage, 10, e.second.iItem10));
-			vecShopWindow.push_back(SShopItem(iPage, 11, e.second.iItem11));
-			vecShopWindow.push_back(SShopItem(iPage, 12, e.second.iItem12));
-			vecShopWindow.push_back(SShopItem(iPage, 13, e.second.iItem13));
-			vecShopWindow.push_back(SShopItem(iPage, 14, e.second.iItem14));
-			vecShopWindow.push_back(SShopItem(iPage, 15, e.second.iItem15));
-			vecShopWindow.push_back(SShopItem(iPage, 16, e.second.iItem16));
-			vecShopWindow.push_back(SShopItem(iPage, 17, e.second.iItem17));
-			vecShopWindow.push_back(SShopItem(iPage, 18, e.second.iItem18));
-			vecShopWindow.push_back(SShopItem(iPage, 19, e.second.iItem19));
-			vecShopWindow.push_back(SShopItem(iPage, 20, e.second.iItem20));
-			vecShopWindow.push_back(SShopItem(iPage, 21, e.second.iItem21));
-			vecShopWindow.push_back(SShopItem(iPage, 22, e.second.iItem22));
-			vecShopWindow.push_back(SShopItem(iPage, 23, e.second.iItem23));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 0, e.second.iItem0));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 1, e.second.iItem1));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 2, e.second.iItem2));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 3, e.second.iItem3));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 4, e.second.iItem4));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 5, e.second.iItem5));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 6, e.second.iItem6));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 7, e.second.iItem7));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 8, e.second.iItem8));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 9, e.second.iItem9));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 10, e.second.iItem10));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 11, e.second.iItem11));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 12, e.second.iItem12));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 13, e.second.iItem13));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 14, e.second.iItem14));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 15, e.second.iItem15));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 16, e.second.iItem16));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 17, e.second.iItem17));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 18, e.second.iItem18));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 19, e.second.iItem19));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 20, e.second.iItem20));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 21, e.second.iItem21));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 22, e.second.iItem22));
+			vecTmpShopWindow.push_back(SShopItem(iPage, 23, e.second.iItem23));
 
 			iPage += 1;
 		}
 	}
 
-	return vecShopWindow;
+	if (vecTmpShopWindow.size() == 0)
+		return false;
+
+	vecShopWindow = vecTmpShopWindow;
+
+	return true;
 }

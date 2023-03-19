@@ -45,6 +45,8 @@ void ClientHandler::Clear()
 	m_ClientHook = nullptr;
 
 	m_vecRoute.clear();
+
+	m_msLastSupplyTime = std::chrono::milliseconds(0);
 }
 
 void ClientHandler::Initialize()
@@ -73,6 +75,7 @@ void ClientHandler::StartHandler()
 	new std::thread([this]() { GodModeProcess(); });
 	new std::thread([this]() { MinorProcess(); });
 	new std::thread([this]() { RouteProcess(); });
+	new std::thread([this]() { SupplyProcess(); });
 }
 
 void ClientHandler::StopHandler()
@@ -2074,25 +2077,30 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					int32_t iSourceID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
 
-					auto pSkillTable = m_Bot->GetSkillTable()->GetData();
-					auto pSkillData = pSkillTable.find(iSkillID);
+					std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+					if (!m_Bot->GetSkillTable(&pSkillTable))
+						return;
 
-					if (pSkillData != pSkillTable.end())
+					auto pSkillData = pSkillTable->find(iSkillID);
+
+					if (pSkillData != pSkillTable->end())
 					{
 						if (pSkillData->second.dw1stTableType == 4)
 						{
 							if (iTargetID == GetID())
 							{
-								auto pSkillExtension4 = m_Bot->GetSkillExtension4Table()->GetData();
-								auto pSkillExtension4Data = pSkillExtension4.find(pSkillData->second.iID);
+								std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>* pSkillExtension4;
+								if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
+									return;
 
-								if (pSkillExtension4Data != pSkillExtension4.end())
+								auto pSkillExtension4Data = pSkillExtension4->find(pSkillData->second.iID);
+
+								if (pSkillExtension4Data != pSkillExtension4->end())
 								{
-									Guard lock(m_mapActiveBuffListLock);
-									auto it = m_mapActiveBuffList.find(pSkillExtension4Data->second.iBuffType);
+									//auto it = m_mapActiveBuffList.find(pSkillExtension4Data->second.iBuffType);
 
-									if (it != m_mapActiveBuffList.end())
-										m_mapActiveBuffList.erase(pSkillExtension4Data->second.iBuffType);
+									//if (it != m_mapActiveBuffList.end())
+									//	m_mapActiveBuffList.erase(pSkillExtension4Data->second.iBuffType);
 
 									m_mapActiveBuffList.insert(std::pair(pSkillExtension4Data->second.iBuffType, pSkillData->second.iID));
 
@@ -2176,27 +2184,30 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					uint8_t iBuffType = pkt.read<uint8_t>();
 
-					Guard lock(m_mapActiveBuffListLock);
 					auto it = m_mapActiveBuffList.find(iBuffType);
 
 					if (it != m_mapActiveBuffList.end())
 					{
-						auto pSkillTable = m_Bot->GetSkillTable()->GetData();
-						auto pSkillData = pSkillTable.find(it->second);
+						std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+						if (m_Bot->GetSkillTable(&pSkillTable))
+						{
+							auto pSkillData = pSkillTable->find(it->second);
 
 #ifdef DEBUG
-						if (pSkillData != pSkillTable.end())
-							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
-						else
-							printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %d buff removed\n", GetName().c_str(), it->second);
+							if (pSkillData != pSkillTable->end())
+								printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
+							else
+								printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %d buff removed\n", GetName().c_str(), it->second);
 #endif
+						}
+
 					}
 
 					switch (iBuffType)
 					{
-					case (byte)BuffType::BUFF_TYPE_SPEED:
-						m_PlayerMySelf.iMoveSpeed = 45;
-						break;
+						case (byte)BuffType::BUFF_TYPE_SPEED:
+							m_PlayerMySelf.iMoveSpeed = 45;
+							break;
 					}
 
 					m_mapActiveBuffList.erase(iBuffType);
@@ -2547,7 +2558,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			tLoot.iRequestedOpen = false;
 
-			Guard lock(m_vecLootListLock);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[tLoot](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
 
@@ -2571,7 +2581,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			uint32_t iBundleID = pkt.read<uint32_t>();
 			uint8_t iResult = pkt.read<uint8_t>();
 
-			Guard lock(m_vecLootListLock);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[iBundleID](const TLoot a) { return a.iBundleID == iBundleID; });
 
@@ -2630,7 +2639,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-					Guard lock(m_vecLootListLock);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -2662,7 +2670,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					m_PlayerMySelf.iGold = iGold;
 
-					Guard lock(m_vecLootListLock);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -2678,7 +2685,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-					Guard lock(m_vecLootListLock);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -2762,7 +2768,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			m_PlayerMySelf.fY = (pkt.read<uint16_t>() / 10.0f);
 			m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
 		}
-		break;
+		break;	
 	}
 }
 
@@ -3280,9 +3286,11 @@ void ClientHandler::LoadSkillData()
 
 	m_vecAvailableSkill.clear();
 
-	auto pSkillList = m_Bot->GetSkillTable()->GetData();
+	std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+	if (!m_Bot->GetSkillTable(&pSkillTable))
+		return;
 
-	for (const auto& [key, value] : pSkillList)
+	for (const auto& [key, value] : *pSkillTable)
 	{
 		if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(GetClass())))
 			continue;
@@ -3346,16 +3354,19 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 				}
 
 				SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
-				/*std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));*/
+				//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
 			}
-
-			auto pSkillExtension2 = m_Bot->GetSkillExtension2Table()->GetData();
-			auto pSkillExtension2Data = pSkillExtension2.find(pSkillData.iID);
 
 			uint32_t iArrowCount = 0;
 
-			if (pSkillExtension2Data != pSkillExtension2.end())
-				iArrowCount = pSkillExtension2Data->second.iArrowCount;
+			std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>* pSkillExtension2;
+			if (m_Bot->GetSkillExtension2Table(&pSkillExtension2))
+			{
+				auto pSkillExtension2Data = pSkillExtension2->find(pSkillData.iID);
+
+				if (pSkillExtension2Data != pSkillExtension2->end())
+					iArrowCount = pSkillExtension2Data->second.iArrowCount;
+			}
 
 			Vector3 v3TargetPosition = GetTargetPosition();
 
@@ -3370,31 +3381,31 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 
 				switch (iArrowCount)
 				{
-				case 3:
-				{
-					iArrowCount = 1;
+					case 3:
+					{
+						iArrowCount = 1;
 
-					if (fDistance <= 5.0f)
-						iArrowCount = 3;
-					else if (fDistance < 16.0f)
-						iArrowCount = 2;
-				};
-				break;
+						if (fDistance <= 5.0f)
+							iArrowCount = 3;
+						else if (fDistance < 16.0f)
+							iArrowCount = 2;
+					};
+					break;
 
-				case 5:
-				{
-					iArrowCount = 1;
+					case 5:
+					{
+						iArrowCount = 1;
 
-					if (fDistance <= 5.0f)
-						iArrowCount = 5;
-					else if (fDistance <= 6.0f)
-						iArrowCount = 4;
-					else if (fDistance <= 8.0f)
-						iArrowCount = 3;
-					else if (fDistance < 16.0f)
-						iArrowCount = 2;
-				}
-				break;
+						if (fDistance <= 5.0f)
+							iArrowCount = 5;
+						else if (fDistance <= 6.0f)
+							iArrowCount = 4;
+						else if (fDistance <= 8.0f)
+							iArrowCount = 3;
+						else if (fDistance < 16.0f)
+							iArrowCount = 2;
+					}
+					break;
 				}
 
 				for (uint32_t i = 0; i < iArrowCount; i++)
@@ -3420,7 +3431,7 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 				}
 
 				SendStartSkillCastingAtPosPacket(pSkillData, GetTargetPosition());
-				std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
+				//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
 			}
 
 			if (pSkillData.iFlyingFX != 0)
@@ -3749,16 +3760,21 @@ void ClientHandler::SetOreads(bool bValue)
 
 bool ClientHandler::UseItem(uint32_t iItemID)
 {
-	auto pItemTable = m_Bot->GetItemTable()->GetData();
-	auto pSkillTable = m_Bot->GetSkillTable()->GetData();
+	std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+	if (!m_Bot->GetItemTable(&pItemTable))
+		return false;
 
-	auto pItemData = pItemTable.find(iItemID);
+	std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+	if (!m_Bot->GetSkillTable(&pSkillTable))
+		return false;
 
-	if (pItemData != pItemTable.end())
+	auto pItemData = pItemTable->find(iItemID);
+
+	if (pItemData != pItemTable->end())
 	{
-		auto pSkillData = pSkillTable.find(pItemData->second.dwEffectID1);
+		auto pSkillData = pSkillTable->find(pItemData->second.dwEffectID1);
 
-		if (pSkillData != pSkillTable.end())
+		if (pSkillData != pSkillTable->end())
 		{
 			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
 				std::chrono::system_clock::now().time_since_epoch()
@@ -3789,8 +3805,6 @@ void ClientHandler::BasicAttackProcess()
 	printf("ClientHandler::BasicAttackProcess Started\n");
 #endif
 
-	auto pItemTable = m_Bot->GetItemTable()->GetData();
-
 	while (m_bWorking)
 	{
 		try
@@ -3804,6 +3818,13 @@ void ClientHandler::BasicAttackProcess()
 				continue;
 
 			if (IsBlinking())
+				continue;
+
+			if (IsRouting())
+				continue;
+
+			std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+			if (!m_Bot->GetItemTable(&pItemTable))
 				continue;
 
 			bool bAttackStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -3829,12 +3850,12 @@ void ClientHandler::BasicAttackProcess()
 
 			auto iLeftHandWeapon = GetInventoryItemSlot(6);
 
-			if (iLeftHandWeapon != nullptr)
+			if (iLeftHandWeapon.iItemID != 0)
 			{
-				uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon->iItemID / 1000 * 1000;
-				auto pLeftHandWeaponItemData = pItemTable.find(iLeftHandWeaponBaseID);
+				uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon.iItemID / 1000 * 1000;
+				auto pLeftHandWeaponItemData = pItemTable->find(iLeftHandWeaponBaseID);
 
-				if (pLeftHandWeaponItemData != pItemTable.end())
+				if (pLeftHandWeaponItemData != pItemTable->end())
 				{
 					if (pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
 						|| pLeftHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
@@ -3845,12 +3866,12 @@ void ClientHandler::BasicAttackProcess()
 
 			auto iRightHandWeapon = GetInventoryItemSlot(8);
 
-			if (iRightHandWeapon != nullptr)
+			if (iRightHandWeapon.iItemID != 0)
 			{
-				uint32_t iRightHandWeaponBaseID = iRightHandWeapon->iItemID / 1000 * 1000;
-				auto pRightHandWeaponItemData = pItemTable.find(iRightHandWeaponBaseID);
+				uint32_t iRightHandWeaponBaseID = iRightHandWeapon.iItemID / 1000 * 1000;
+				auto pRightHandWeaponItemData = pItemTable->find(iRightHandWeaponBaseID);
 
-				if (pRightHandWeaponItemData != pItemTable.end())
+				if (pRightHandWeaponItemData != pItemTable->end())
 				{
 					if (pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW
 						|| pRightHandWeaponItemData->second.byKind == ITEM_CLASS_BOW_LONG
@@ -3883,9 +3904,6 @@ void ClientHandler::AttackProcess()
 	printf("ClientHandler::AttackProcess Started\n");
 #endif
 
-	auto pSkillTable = m_Bot->GetSkillTable()->GetData();
-	auto pSkillExtension2 = m_Bot->GetSkillExtension2Table()->GetData();
-
 	while (m_bWorking)
 	{
 		try
@@ -3899,6 +3917,17 @@ void ClientHandler::AttackProcess()
 				continue;
 
 			if (IsBlinking())
+				continue;
+
+			if (IsRouting())
+				continue;
+
+			std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+			if (!m_Bot->GetSkillTable(&pSkillTable))
+				continue;
+
+			std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>* pSkillExtension2;
+			if (!m_Bot->GetSkillExtension2Table(&pSkillExtension2))
 				continue;
 
 			bool bAttackStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -3931,9 +3960,9 @@ void ClientHandler::AttackProcess()
 
 			for (const auto& x : vecAttackSkillList)
 			{
-				auto pSkillData = pSkillTable.find(x);
+				auto pSkillData = pSkillTable->find(x);
 
-				if (pSkillData != pSkillTable.end())
+				if (pSkillData != pSkillTable->end())
 				{
 					uint32_t iNeedItem = pSkillData->second.dwNeedItem;
 
@@ -3944,9 +3973,9 @@ void ClientHandler::AttackProcess()
 					{
 						iExistItemCount = GetInventoryItemCount(pSkillData->second.dwNeedItem);
 
-						auto pSkillExtension2Data = pSkillExtension2.find(pSkillData->second.iID);
+						auto pSkillExtension2Data = pSkillExtension2->find(pSkillData->second.iID);
 
-						if (pSkillExtension2Data != pSkillExtension2.end())
+						if (pSkillExtension2Data != pSkillExtension2->end())
 							iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 					}
 
@@ -3980,17 +4009,17 @@ void ClientHandler::AttackProcess()
 				}
 			}
 
-			//bool bAttackSpeed = GetConfiguration()->GetBool("Attack", "AttackSpeed", false);
+			bool bAttackSpeed = GetConfiguration()->GetBool("Attack", "AttackSpeed", false);
 
-			//if (bAttackSpeed)
-			//{
-			//	int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
+			if (bAttackSpeed)
+			{
+				int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
 
-			//	if (iAttackSpeedValue > 0)
-			//		std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
-			//}
-			//else
-			//	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+				if (iAttackSpeedValue > 0)
+					std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
+			}
+			else
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		}
 		catch (const std::exception& e)
 		{
@@ -4023,6 +4052,9 @@ void ClientHandler::SearchTargetProcess()
 				continue;
 
 			if (IsMovingToLoot())
+				continue;
+
+			if (IsRouting())
 				continue;
 
 			bool bAttackStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -4158,6 +4190,9 @@ void ClientHandler::AutoLootProcess()
 			if (m_vecLootList.size() == 0)
 				continue;
 
+			if (IsRouting())
+				continue;
+
 			bool bAutoLoot = GetConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
 
 			if (bAutoLoot)
@@ -4269,10 +4304,6 @@ void ClientHandler::CharacterProcess()
 	printf("ClientHandler::CharacterProcess Started\n");
 #endif
 
-	auto pSkillTable = m_Bot->GetSkillTable()->GetData();
-	auto pSkillExtension2 = m_Bot->GetSkillExtension2Table()->GetData();
-	auto pSkillExtension4 = m_Bot->GetSkillExtension4Table()->GetData();
-
 	while (m_bWorking)
 	{
 		try
@@ -4280,6 +4311,18 @@ void ClientHandler::CharacterProcess()
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			if (IsBlinking())
+				continue;
+
+			std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+			if (!m_Bot->GetSkillTable(&pSkillTable))
+				continue;
+
+			std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>* pSkillExtension2;
+			if (!m_Bot->GetSkillExtension2Table(&pSkillExtension2))
+				continue;
+
+			std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>* pSkillExtension4;
+			if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
 				continue;
 
 			bool bCharacterStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
@@ -4300,9 +4343,9 @@ void ClientHandler::CharacterProcess()
 
 				for (const auto& x : vecCharacterSkillList)
 				{
-					auto pSkillData = pSkillTable.find(x);
+					auto pSkillData = pSkillTable->find(x);
 
-					if (pSkillData != pSkillTable.end())
+					if (pSkillData != pSkillTable->end())
 					{
 						uint32_t iNeedItem = pSkillData->second.dwNeedItem;
 
@@ -4313,9 +4356,9 @@ void ClientHandler::CharacterProcess()
 						{
 							iExistItemCount = GetInventoryItemCount(pSkillData->second.dwNeedItem);
 
-							auto pSkillExtension2Data = pSkillExtension2.find(pSkillData->second.iID);
+							auto pSkillExtension2Data = pSkillExtension2->find(pSkillData->second.iID);
 
-							if (pSkillExtension2Data != pSkillExtension2.end())
+							if (pSkillExtension2Data != pSkillExtension2->end())
 								iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 						}
 
@@ -4339,9 +4382,9 @@ void ClientHandler::CharacterProcess()
 								continue;
 						}
 
-						auto pSkillExtension4Data = pSkillExtension4.find(pSkillData->second.iID);
+						auto pSkillExtension4Data = pSkillExtension4->find(pSkillData->second.iID);
 
-						if (pSkillExtension4Data != pSkillExtension4.end())
+						if (pSkillExtension4Data != pSkillExtension4->end())
 						{
 							if (IsBuffActive(pSkillExtension4Data->second.iBuffType))
 								continue;
@@ -4396,10 +4439,11 @@ void ClientHandler::ProtectionProcess()
 				int32_t iHpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
 
 				if (iHpProtectionPercent <= iHpProtectionValue)
+				{
 					HealthPotionProcess();
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				}	
 			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 			bool bMpProtectionEnable = GetConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
 
@@ -4414,7 +4458,10 @@ void ClientHandler::ProtectionProcess()
 				int32_t iMpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 50);
 
 				if (iMpProtectionPercent <= iMpProtectionValue)
+				{
 					ManaPotionProcess();
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				}
 			}
 		}
 		catch (const std::exception& e)
@@ -4457,18 +4504,19 @@ void ClientHandler::HealthPotionProcess()
 
 	std::sort(vecPotions.begin(), vecPotions.end(), pSort);
 
-	TInventory* tInventoryItem = NULL;
+	TInventory tInventoryItem;
 
 	for (const auto& x : vecPotions)
 	{
 		tInventoryItem = GetInventoryItem(x);
 
-		if (tInventoryItem != NULL)
+		if (tInventoryItem.iItemID != 0)
+		{
+			UseItem(tInventoryItem.iItemID);
 			break;
+		}
+			
 	}
-
-	if (tInventoryItem != NULL)
-		UseItem(tInventoryItem->iItemID);
 }
 
 void ClientHandler::ManaPotionProcess()
@@ -4493,18 +4541,18 @@ void ClientHandler::ManaPotionProcess()
 
 	std::sort(vecPotions.begin(), vecPotions.end(), pSort);
 
-	TInventory* tInventoryItem = NULL;
+	TInventory tInventoryItem;
 
 	for (const auto& x : vecPotions)
 	{
 		tInventoryItem = GetInventoryItem(x);
 
-		if (tInventoryItem != NULL)
+		if (tInventoryItem.iItemID != 0)
+		{
+			UseItem(tInventoryItem.iItemID);
 			break;
-	}
-
-	if (tInventoryItem != NULL)
-		UseItem(tInventoryItem->iItemID);
+		}
+	}	
 }
 
 void ClientHandler::GodModeProcess()
@@ -4513,24 +4561,26 @@ void ClientHandler::GodModeProcess()
 	printf("ClientHandler::GodModeProcess Started\n");
 #endif
 
-	auto pSkillTable = m_Bot->GetSkillTable()->GetData();
-
 	while (m_bWorking)
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 			if (IsBlinking())
+				continue;
+
+			std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+			if (!m_Bot->GetSkillTable(&pSkillTable))
 				continue;
 
 			bool bGodMode = GetConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("GodMode"), false);
 
 			if (bGodMode)
 			{
-				auto pSkillData = pSkillTable.find(500344);
+				auto pSkillData = pSkillTable->find(500344);
 
-				if (pSkillData != pSkillTable.end())
+				if (pSkillData != pSkillTable->end())
 				{
 					int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
 					int16_t iMp = GetMp(); int16_t iMaxMp = GetMaxMp();
@@ -4560,7 +4610,7 @@ void ClientHandler::GodModeProcess()
 
 					if (iHpGodModePercent <= iHpProtectionValue
 						|| iMpGodModePercent <= iMpProtectionValue
-						|| !IsBuffActive(1))
+						|| !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
 					{
 						SendCancelSkillPacket(pSkillData->second);
 						UseSkill(pSkillData->second, GetID());
@@ -4612,14 +4662,16 @@ void ClientHandler::MinorProcess()
 
 				if (iHpProtectionPercent <= iHpProtectionValue)
 				{
-					auto vecAvailableSkill = GetAvailableSkill();
-
-					auto it = std::find_if(vecAvailableSkill.begin(), vecAvailableSkill.end(),
-						[](const TABLE_UPC_SKILL& a) { return a.szEngName == skCryptDec("minor healing"); });
-
-					if (it != vecAvailableSkill.end())
+					std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+					if (GetAvailableSkill(&vecAvailableSkills))
 					{
-						UseSkill(*it, GetID());
+						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+							[](const TABLE_UPC_SKILL& a) { return a.szEngName == skCryptDec("minor healing"); });
+
+						if (it != vecAvailableSkills->end())
+						{
+							UseSkill(*it, GetID());
+						}
 					}
 				}
 			}
@@ -4638,8 +4690,6 @@ void ClientHandler::MinorProcess()
 	printf("ClientHandler::MinorProcess Stopped\n");
 #endif
 }
-
-#define GET_VARIABLE_NAME(Variable1,Variable2) (#Variable1#Variable2)
 
 void ClientHandler::RouteProcess()
 {
@@ -4687,74 +4737,59 @@ void ClientHandler::RouteProcess()
 					{
 						auto jSupplyList = m_Bot->GetSupplyList();
 
-						if (jSupplyList.size() > 0)
+						std::map<int32_t, SSupplyBuyList> mapSupplyBuyList;
+
+						bool bAutoSupply = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+						bool bAutoRepair = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+
+						if (bAutoSupply && jSupplyList.size() > 0)
 						{
-							std::vector<int> vecSupplyList = GetConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
-
-							std::string szItemIdAttribute = skCryptDec("itemid");
-							std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
-							std::string szCountAttribute = skCryptDec("count");
-
-							auto pSort = [szSellingGroupAttribute](JSON& a, JSON& b)
-							{
-								return a[szSellingGroupAttribute.c_str()] > b[szSellingGroupAttribute.c_str()];
-							};
-
-							std::sort(jSupplyList.begin(), jSupplyList.end(), pSort);
-
-							int32_t iLastNpcEventId = 0;
+							std::vector<int32_t> vecExceptedSlotPos;
 
 							for (size_t i = 0; i < jSupplyList.size(); i++)
 							{
-								int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int>();
+								std::vector<int> vecSupplyList = GetConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+
+								std::string szItemIdAttribute = skCryptDec("itemid");
+								std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+								std::string szCountAttribute = skCryptDec("count");
+
+								int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
+								int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
 
 								bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iItemId) != vecSupplyList.end();
 
 								if (!bSelected)
 									continue;
 
-								int iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int>();
-
 								auto findedNpc = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 									[iSellingGroup](const TNpc& a) { return a.iSellingGroup == iSellingGroup; });
 
 								if (findedNpc != m_vecNpc.end())
 								{
-									while (GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(findedNpc->fX, 0.0f, findedNpc->fY)) > 3.0f)
-									{
-										std::this_thread::sleep_for(std::chrono::milliseconds(100));
-										SetMovePosition(Vector3(findedNpc->fX, 0.0f, findedNpc->fY));
-									}
+									int32_t iFindedNpcId = findedNpc->iID;
+									Vector3 vec3FindedNpcPosition = Vector3(findedNpc->fX, 0.0f, findedNpc->fY);
 
-									if (iLastNpcEventId != findedNpc->iID)
-									{
-										SendNpcEvent(findedNpc->iID);
-										iLastNpcEventId = findedNpc->iID;
-
-										std::this_thread::sleep_for(std::chrono::milliseconds(500));
-									}
-
-									std::vector<SShopItem> vecShopItemTable = m_Bot->GetShopItemTable(iSellingGroup);
-
-									if (vecShopItemTable.size() == 0)
+									std::vector<SShopItem> vecShopItemTable;
+									if (!m_Bot->GetShopItemTable(iSellingGroup, vecShopItemTable))
 										continue;
 
 									uint8_t iInventoryPosition = -1;
-									int16_t iItemCount = GetConfiguration()->GetInt(
+									int16_t iItemCount = (int16_t)GetConfiguration()->GetInt(
 										skCryptDec("Supply"),
 										std::to_string(iItemId).c_str(),
 										jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
 
-									TInventory* pInventoryItem = GetInventoryItem(iItemId);
+									TInventory pInventoryItem = GetInventoryItem(iItemId);
 
-									if (pInventoryItem)
+									if (pInventoryItem.iItemID != 0)
 									{
-										iInventoryPosition = pInventoryItem->iPos;
-										iItemCount = std::abs(pInventoryItem->iCount - iItemCount);
+										iInventoryPosition = (uint8_t)pInventoryItem.iPos;
+										iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
 									}
 									else
 									{
-										iInventoryPosition = GetInventoryEmptySlot();
+										iInventoryPosition = (uint8_t)GetInventoryEmptySlot(vecExceptedSlotPos);
 									}
 
 									if (iInventoryPosition == -1 || iItemCount == 0)
@@ -4765,14 +4800,127 @@ void ClientHandler::RouteProcess()
 
 									if (findedShopItem != vecShopItemTable.end())
 									{
-										SendItemTradeBuy(iSellingGroup, findedNpc->iID, findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos);
-										std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+										auto pSupplyBuyList = mapSupplyBuyList.find(iSellingGroup);
+
+										if (pSupplyBuyList == mapSupplyBuyList.end())
+										{
+											std::vector<SSItemBuy> m_vecItemBuy;
+											m_vecItemBuy.push_back(SSItemBuy(findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos));
+											mapSupplyBuyList.insert(std::make_pair(iSellingGroup, SSupplyBuyList(iFindedNpcId, vec3FindedNpcPosition, m_vecItemBuy)));
+										}
+										else
+										{
+											pSupplyBuyList->second.m_vecItemBuy.push_back(
+												SSItemBuy(findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos));
+										}
+
+										vecExceptedSlotPos.push_back(iInventoryPosition);
+									}
+								}
+							}
+
+							for (auto& e : mapSupplyBuyList)
+							{
+								while (GetDistance(Vector3(GetX(), 0.0f, GetY()), e.second.m_vec3NpcPosition) > 3.0f)
+								{
+									std::this_thread::sleep_for(std::chrono::milliseconds(100));
+									SetMovePosition(e.second.m_vec3NpcPosition);
+								}
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+								SendNpcEvent(e.second.m_iNpcId);
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+								SendItemTradeBuy(e.first, e.second.m_iNpcId, e.second.m_vecItemBuy);
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+								SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+
+								if (bAutoRepair && e.first == 255000)
+								{
+									std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+									for (uint8_t i = 0; i < SLOT_MAX; i++)
+									{
+										switch (i)
+										{
+											case 1:
+											case 4:
+											case 6:
+											case 8:
+											case 10:
+											case 12:
+											case 13:
+											{
+												TInventory pInventory = GetInventoryItemSlot(i);
+
+												if (pInventory.iItemID == 0)
+													continue;
+
+												if (pInventory.iDurability > 1000)
+													continue;
+
+												SendItemRepair(1, (uint8_t)pInventory.iPos, e.second.m_iNpcId, pInventory.iItemID);
+												std::this_thread::sleep_for(std::chrono::milliseconds(500));
+											}
+											break;
+										}
 									}
 								}
 							}
 						}
 
-						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+						if (bAutoRepair && (jSupplyList.size() == 0 || mapSupplyBuyList.size() == 0))
+						{
+							auto findedNpc = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+								[](const TNpc& a) { return a.iSellingGroup == 255000; });
+
+							if (findedNpc != m_vecNpc.end())
+							{
+								int32_t iFindedNpcId = findedNpc->iID;
+								Vector3 vec3FindedNpcPosition = Vector3(findedNpc->fX, 0.0f, findedNpc->fY);
+
+								while (GetDistance(Vector3(GetX(), 0.0f, GetY()), vec3FindedNpcPosition) > 3.0f)
+								{
+									std::this_thread::sleep_for(std::chrono::milliseconds(100));
+									SetMovePosition(vec3FindedNpcPosition);
+								}
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+								SendNpcEvent(iFindedNpcId);
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+								for (uint8_t i = 0; i < SLOT_MAX; i++)
+								{
+									switch (i)
+									{
+										case 1:
+										case 4:
+										case 6:
+										case 8:
+										case 10:
+										case 12:
+										case 13:
+										{
+											TInventory pInventory = GetInventoryItemSlot(i);
+
+											if (pInventory.iItemID == 0)
+												continue;
+
+											if (pInventory.iDurability > 1000)
+												continue;
+
+											SendItemRepair(1, (uint8_t)pInventory.iPos, iFindedNpcId, pInventory.iItemID);
+											std::this_thread::sleep_for(std::chrono::milliseconds(500));
+										}
+										break;
+									}
+								}
+							}
+						}
+
+						m_msLastSupplyTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
 						m_vecRoute.erase(m_vecRoute.begin());
 					}
@@ -4798,6 +4946,65 @@ void ClientHandler::RouteProcess()
 
 #ifdef DEBUG
 	printf("ClientHandler::RouteProcess Stopped\n");
+#endif
+}
+
+void ClientHandler::SupplyProcess()
+{
+#ifdef DEBUG
+	printf("ClientHandler::SupplyProcess Started\n");
+#endif
+
+	while (m_bWorking)
+	{
+		try
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+			if (IsBlinking())
+				continue;
+
+			if (IsRouting())
+				continue;
+
+			std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+
+			if (m_msLastSupplyTime > std::chrono::milliseconds(0) && (msCurrentTime - m_msLastSupplyTime) < std::chrono::milliseconds((60 * 5) * 1000))
+				continue;
+
+			bool bAutoRepair = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+			bool bAutoSupply = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+
+			if (bAutoSupply && IsNeedSupply() || bAutoRepair && IsNeedRepair())
+			{
+				std::string szSelectedRoute = GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+
+				RouteManager* pRouteManager = m_Bot->GetRouteManager();
+				RouteManager::RouteList pRouteList;
+
+				if (pRouteManager && pRouteManager->GetRouteList(GetZone(), pRouteList))
+				{
+					auto pRoute = pRouteList.find(szSelectedRoute);
+
+					if (pRoute != pRouteList.end())
+					{
+						SetRoute(pRoute->second);
+					}
+				}
+			}
+		}
+		catch (const std::exception& e)
+		{
+#ifdef DEBUG
+			printf("SupplyProcess:Exception: %s\n", e.what());
+#else
+			UNREFERENCED_PARAMETER(e);
+#endif
+		}
+	}
+
+#ifdef DEBUG
+	printf("ClientHandler::SupplyProcess Stopped\n");
 #endif
 }
 
@@ -4847,14 +5054,35 @@ void ClientHandler::SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int
 		<< uint8_t(1)
 		<< uint32_t(iSellingGroup)
 		<< uint32_t(iNpcId)
-
-		<< uint8_t(1) //TODO: Multiple Item Count
-
+		<< uint8_t(1)
 		<< int32_t(iItemId)
 		<< uint8_t(iInventoryPosition)
 		<< int16_t(iCount)
 		<< uint8_t(iShopPage)
 		<< uint8_t(iShopPosition);
+
+	SendPacket(pkt);
+}
+
+void ClientHandler::SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemBuy> vecItemList)
+{
+	Packet pkt = Packet(WIZ_ITEM_TRADE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint32_t(iSellingGroup)
+		<< uint32_t(iNpcId)
+		<< uint8_t(vecItemList.size());
+
+	for (auto &e : vecItemList)
+	{
+		pkt  
+			<< int32_t(e.m_iItemId)
+			<< uint8_t(e.m_iInventoryPosition)
+			<< int16_t(e.m_iCount)
+			<< uint8_t(e.m_iShopPage)
+			<< uint8_t(e.m_iShopPosition);
+	}
 
 	SendPacket(pkt);
 }
@@ -4867,12 +5095,31 @@ void ClientHandler::SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, in
 		<< uint8_t(2)
 		<< uint32_t(iSellingGroup)
 		<< uint32_t(iNpcId)
-
-		<< uint8_t(1) //TODO: Multiple Item Count
-
+		<< uint8_t(1)
 		<< int32_t(iItemId)
 		<< uint8_t(iInventoryPosition)
 		<< int16_t(iCount);
+
+	SendPacket(pkt);
+}
+
+void ClientHandler::SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemSell> vecItemList)
+{
+	Packet pkt = Packet(WIZ_ITEM_TRADE);
+
+	pkt
+		<< uint8_t(2)
+		<< uint32_t(iSellingGroup)
+		<< uint32_t(iNpcId)
+		<< uint8_t(vecItemList.size());
+
+	for (auto& e : vecItemList)
+	{
+		pkt
+			<< int32_t(e.m_iItemId)
+			<< uint8_t(e.m_iInventoryPosition)
+			<< int16_t(e.m_iCount);
+	}
 
 	SendPacket(pkt);
 }
@@ -4888,4 +5135,75 @@ void ClientHandler::SendItemRepair(uint8_t iDirection, uint8_t iInventoryPositio
 		<< int32_t(iItemId);
 
 	SendPacket(pkt);
+}
+
+bool ClientHandler::IsNeedRepair()
+{
+	for (uint8_t i = 0; i < SLOT_MAX; i++)
+	{
+		switch (i)
+		{
+			case 1:
+			case 4:
+			case 6:
+			case 8:
+			case 10:
+			case 12:
+			case 13:
+			{
+				TInventory pInventory = GetInventoryItemSlot(i);
+
+				if (pInventory.iItemID == 0)
+					continue;
+
+				if (pInventory.iDurability != 0)
+					continue;
+
+				return true;
+			}
+			break;
+		}
+	}
+
+	return false;
+}
+
+bool ClientHandler::IsNeedSupply()
+{
+	auto jSupplyList = m_Bot->GetSupplyList();
+
+	if (jSupplyList.size() > 0)
+	{
+		for (size_t i = 0; i < jSupplyList.size(); i++)
+		{
+			std::string szItemIdAttribute = skCryptDec("itemid");
+			std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+			std::string szCountAttribute = skCryptDec("count");
+
+			int32_t iSupplyItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
+			int32_t iSupplyItemCount = jSupplyList[i][szCountAttribute.c_str()].get<int32_t>();
+
+			std::vector<int> vecSupplyList = GetConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+
+			bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iSupplyItemId) != vecSupplyList.end();
+
+			if (!bSelected)
+				continue;
+
+			TInventory pInventoryItem = GetInventoryItem(iSupplyItemId);
+
+			if (pInventoryItem.iItemID == 0)
+				return true;
+
+			if (pInventoryItem.iItemID != 0)
+			{
+				//uint16_t iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iSupplyItemCount);
+
+				if (pInventoryItem.iCount <= 3 && pInventoryItem.iCount < iSupplyItemCount)
+					return true;
+			}
+		}
+	}
+
+	return false;
 }

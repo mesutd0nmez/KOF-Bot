@@ -178,6 +178,8 @@ private:
 
 	void RouteProcess();
 
+	void SupplyProcess();
+
 private:
 	bool m_bWorking;
 
@@ -208,8 +210,17 @@ private:
 private:
 	void SendNpcEvent(int32_t iTargetID);
 	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition);
+	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemBuy> vecItemList);
 	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount);
+	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemSell> vecItemList);
 	void SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId);
+
+private:
+	bool IsNeedRepair();
+	bool IsNeedSupply();
+
+private:
+	std::chrono::milliseconds m_msLastSupplyTime;
 };
 
 

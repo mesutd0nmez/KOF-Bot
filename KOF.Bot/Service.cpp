@@ -29,30 +29,17 @@ void Service::Clear()
 
 void Service::Initialize()
 {
-    PWSTR szAppDataPath = NULL;
-    HRESULT hRes = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, NULL, &szAppDataPath);
-
-    if (!SUCCEEDED(hRes))
-    {
-#ifdef DEBUG
-        printf("Cannot opened app data directory\n");
-#endif
-        return;
-    }
-
-    std::string szIniPath = to_string(szAppDataPath) + skCryptDec("\\KOF.ini");
+    std::string szIniPath = skCryptDec(".\\data\\KOF.ini");
     m_iniConfiguration = new Ini();
     m_iniConfiguration->Load(szIniPath.c_str());
 
     m_szToken = m_iniConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
-    Connect(skCryptDec("127.0.0.1"), 8888);
-
-/*#ifdef DEBUG
+#ifdef DEBUG
     Connect(skCryptDec("127.0.0.1"), 8888);
 #else
-    Connect(skCryptDec("162.19.137.94"), 8888);
-#endif*/ 
+    Connect(skCryptDec("watchdog.kofbot.com"), 8888);
+#endif 
 }
 
 void Service::OnConnect()
