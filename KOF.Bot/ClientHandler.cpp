@@ -4009,19 +4009,17 @@ void ClientHandler::AttackProcess()
 				}
 			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			bool bAttackSpeed = GetConfiguration()->GetBool("Attack", "AttackSpeed", false);
 
-			//bool bAttackSpeed = GetConfiguration()->GetBool("Attack", "AttackSpeed", false);
+			if (bAttackSpeed)
+			{
+				int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
 
-			//if (bAttackSpeed)
-			//{
-			//	int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
-
-			//	if (iAttackSpeedValue > 0)
-			//		std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
-			//}
-			//else
-			//	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+				if (iAttackSpeedValue > 0)
+					std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
+			}
+			else
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		}
 		catch (const std::exception& e)
 		{

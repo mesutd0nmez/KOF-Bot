@@ -34,6 +34,7 @@
     <ClInclude Include="Json.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Remap.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="RouteManager.h" />
     <ClInclude Include="Service.h" />
     <ClInclude Include="Ini.h" />
@@ -44,6 +45,7 @@
     <ClInclude Include="Socket.h" />
     <ClInclude Include="Struct.h" />
     <ClInclude Include="Table.h" />
+    <ClInclude Include="targetver.h" />
     <ClInclude Include="TcpSocket.h" />
     <ClInclude Include="Trim.h" />
     <ClInclude Include="UI.h" />
@@ -64,12 +66,19 @@
     <ClCompile Include="UI.cpp" />
     <ClCompile Include="World.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="KOF.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="KOF.rc" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{d4f62534-8a9a-4965-a0d2-0ec63529307a}</ProjectGuid>
     <RootNamespace>KOFDLL</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>KOF.Bot</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

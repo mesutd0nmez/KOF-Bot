@@ -25,7 +25,6 @@ char m_szRouteName[255] = "";
 std::string m_szSelectedRoute = "";
 std::vector<Route> m_vecRoute;
 
-std::string m_lpWindowName = "";
 float m_fScreenWidth = 0.0f;
 float m_fScreenHeight = 0.0f;
 
@@ -41,7 +40,6 @@ bool Drawing::isActive()
 
 void Drawing::Initialize()
 {
-    m_lpWindowName = skCryptEnc("KOF.Bot");
     m_fScreenWidth = (GetSystemMetrics(SM_CXSCREEN)) / 2.0f;
     m_fScreenHeight = (GetSystemMetrics(SM_CYSCREEN)) / 2.0f;
 }
@@ -76,6 +74,8 @@ void Drawing::Draw()
 	if (isActive())
 	{
         InitializeSceneData();
+
+        std::string lpWindowName = skCryptEnc("KOF.Bot");
        
         ImVec2 vWindowSize = { 658, 700 };
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
@@ -88,7 +88,7 @@ void Drawing::Draw()
 		ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
 		ImGui::SetNextWindowSize(vWindowSize);
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::Begin(m_lpWindowName.c_str(), &bDraw, WindowFlags);
+		ImGui::Begin(lpWindowName.c_str(), &bDraw, WindowFlags);
 		{
             DrawGameController();
 		}
@@ -111,6 +111,8 @@ void Drawing::DrawRoutePlanner()
         if (!Drawing::bDrawRoutePlanner)
             return;
 
+        std::string lpWindowName = skCryptEnc("KOF.RoutePlanner");
+
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 
         ImVec2 vec2InitialPos = { m_fScreenWidth, m_fScreenHeight };
@@ -123,7 +125,7 @@ void Drawing::DrawRoutePlanner()
         ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
         ImGui::SetNextWindowSize(vWindowSize);
         ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin(m_lpWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
+        ImGui::Begin(lpWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
         {
             DrawRoutePlannerArea();
         }
@@ -182,7 +184,11 @@ void Drawing::DrawRoutePlannerArea()
                     pOffsetPosition.x + std::ceil(m_vecRoute[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
                     pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
-                ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                if (m_vecRoute[i - 1].eStepType != RouteStepType::STEP_TOWN)
+                {
+                    ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 2.0f);
+                }
+                
             }
 
             switch (m_vecRoute[i].eStepType)
@@ -555,7 +561,7 @@ void Drawing::DrawGameController()
                             pOffsetPosition.x + std::ceil(fGoX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
                             pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (fGoY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                        ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                        ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 2.0f);
                     }
 
                     std::string szSelectedRouteConfiguration = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
@@ -583,7 +589,10 @@ void Drawing::DrawGameController()
                                         pOffsetPosition.x + std::ceil(pPlan->second[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
                                         pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlan->second[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                                    ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 3.0f);
+                                    if (pPlan->second[i - 1].eStepType != RouteStepType::STEP_TOWN)
+                                    {
+                                        ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 2.0f);
+                                    }        
                                 }
                             }
                         }
