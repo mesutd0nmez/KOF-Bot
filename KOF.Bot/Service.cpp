@@ -35,11 +35,11 @@ void Service::Initialize()
 
     m_szToken = m_iniConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
-#ifdef DEBUG
-    Connect(skCryptDec("127.0.0.1"), 8888);
-#else
+//#ifdef DEBUG
+//    Connect(skCryptDec("127.0.0.1"), 8888);
+//#else
     Connect(skCryptDec("watchdog.kofbot.com"), 8888);
-#endif 
+//#endif 
 }
 
 void Service::OnConnect()
@@ -207,7 +207,7 @@ void Service::SendLogin(std::string szToken)
     {
         HardwareId::DiskObject& Disk{ HWID.Disk.at(i) };
 
-        if (HWID.Disk.at(i).MediaType == 3 || HWID.Disk.at(i).MediaType == 4)
+        if (Disk.IsBootDrive && (HWID.Disk.at(i).MediaType == 3 || HWID.Disk.at(i).MediaType == 4))
         {
             if (i == 0)
                 szHddSerial += to_string(Disk.SerialNumber);

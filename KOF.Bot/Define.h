@@ -1,6 +1,6 @@
 #pragma once
 
-//#define DEBUG
+#define DEBUG
 //#define PRINT_RECV_PACKET
 //#define PRINT_SEND_PACKET
 
