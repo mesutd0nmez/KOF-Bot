@@ -22,6 +22,7 @@ public:
 	void InitializeStaticData();
 	void InitializeRouteData();
 	void InitializeSupplyData();
+	void InitializePriestData();
 
 	void Process();
 	void LoadAccountList();
@@ -114,6 +115,18 @@ public:
 
 protected:
 	JSON m_jSupplyList;
+
+public:
+	JSON GetHealthBuffList() { return m_jHealthBuffList; };
+	JSON GetDefenceBuffList() { return m_jDefenceBuffList; };
+	JSON GetMindBuffList() { return m_jMindBuffList; };
+	JSON GetHealList() { return m_jHealList; };
+
+protected:
+	JSON m_jHealthBuffList;
+	JSON m_jDefenceBuffList;
+	JSON m_jMindBuffList;
+	JSON m_jHealList;
 
 };
 

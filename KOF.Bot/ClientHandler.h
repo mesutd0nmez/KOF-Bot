@@ -119,8 +119,10 @@ private:
 private:
 	void SendPacket(Packet byBuffer);
 
-private:
+public:
 	void LoadSkillData();
+
+private:
 	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
@@ -180,6 +182,9 @@ private:
 
 	void SupplyProcess();
 
+	void PriestBuffProcess();
+	void PriestHealProcess();
+
 private:
 	bool m_bWorking;
 
@@ -218,6 +223,9 @@ private:
 private:
 	bool IsNeedRepair();
 	bool IsNeedSupply();
+
+private:
+	std::recursive_mutex m_UseSkillLock;
 
 private:
 	std::chrono::milliseconds m_msLastSupplyTime;

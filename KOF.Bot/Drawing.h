@@ -33,6 +33,7 @@ public:
 	static void DrawMainAutoLootArea();
 	static void DrawMainSupplyArea();
 	static void DrawMainSettingsArea();
+	static void DrawMainPriestArea();
 
 	static void DrawRoutePlannerArea();
 

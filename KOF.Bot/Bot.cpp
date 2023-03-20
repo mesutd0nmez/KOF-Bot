@@ -32,6 +32,11 @@ Bot::Bot()
 	m_World = new World();
 
 	m_jSupplyList.clear();
+
+	m_jHealthBuffList.clear();
+	m_jDefenceBuffList.clear();
+	m_jMindBuffList.clear();
+	m_jHealList.clear();
 }
 
 Bot::~Bot()
@@ -63,6 +68,10 @@ Bot::~Bot()
 	m_World = nullptr;
 
 	m_jSupplyList.clear();
+	m_jHealthBuffList.clear();
+	m_jDefenceBuffList.clear();
+	m_jMindBuffList.clear();
+	m_jHealList.clear();
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -342,6 +351,56 @@ void Bot::InitializeSupplyData()
 #endif
 }
 
+void Bot::InitializePriestData()
+{
+#ifdef DEBUG
+	printf("InitializePriestData: Started\n");
+#endif
+
+	try
+	{
+		std::ifstream iHealthBuffList(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("health.json"));
+
+		m_jHealthBuffList = JSON::parse(iHealthBuffList);
+
+		std::ifstream iDefenceBuffList(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("defence.json"));
+
+		m_jDefenceBuffList = JSON::parse(iDefenceBuffList);
+
+		std::ifstream iMindBuffList(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("mind.json"));
+
+		m_jMindBuffList = JSON::parse(iMindBuffList);
+
+		std::ifstream iHealList(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("heal.json"));
+
+		m_jHealList = JSON::parse(iHealList);
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
+
+#ifdef DEBUG
+	printf("InitializePriestData: Finished\n");
+#endif
+}
+
 void Bot::OnReady()
 {
 #ifdef DEBUG
@@ -478,6 +537,8 @@ void Bot::OnConfigurationLoaded()
 		m_ClientHandler->StartHandler();
 
 		new std::thread([this]() { UI::Render(this); });
+
+		
 	});
 }
 

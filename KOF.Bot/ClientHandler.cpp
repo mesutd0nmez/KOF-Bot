@@ -72,10 +72,21 @@ void ClientHandler::StartHandler()
 	new std::thread([this]() { AutoLootProcess(); });
 	new std::thread([this]() { CharacterProcess(); });
 	new std::thread([this]() { ProtectionProcess(); });
-	new std::thread([this]() { GodModeProcess(); });
+
+	if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+	{
+		new std::thread([this]() { GodModeProcess(); });
+	}
+
 	new std::thread([this]() { MinorProcess(); });
 	new std::thread([this]() { RouteProcess(); });
 	new std::thread([this]() { SupplyProcess(); });
+
+	if (IsPriest())
+	{
+		new std::thread([this]() { PriestBuffProcess(); });
+		new std::thread([this]() { PriestHealProcess(); });
+	}
 }
 
 void ClientHandler::StopHandler()
@@ -125,6 +136,7 @@ void ClientHandler::OnReady()
 	new std::thread([this]() { m_Bot->InitializeStaticData(); });
 	new std::thread([this]() { m_Bot->InitializeRouteData(); });
 	new std::thread([this]() { m_Bot->InitializeSupplyData(); });
+	new std::thread([this]() { m_Bot->InitializePriestData(); });
 
 	if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 	{
@@ -3295,8 +3307,13 @@ void ClientHandler::LoadSkillData()
 		if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(GetClass())))
 			continue;
 
-		if (value.iTarget != SkillTargetType::TARGET_SELF && value.iTarget != SkillTargetType::TARGET_PARTY_ALL && value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME &&
-			value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+		if (value.iTarget != SkillTargetType::TARGET_SELF 
+			&& value.iTarget != SkillTargetType::TARGET_PARTY 
+			&& value.iTarget != SkillTargetType::TARGET_PARTY_ALL 
+			&& value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME 
+			&& value.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
+			&& value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY 
+			&& value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
 			continue;
 
 		if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
@@ -3332,6 +3349,9 @@ void ClientHandler::LoadSkillData()
 
 void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 {
+	Vector3 v3MyPosition = GetPosition();
+	Vector3 v3TargetPosition = GetTargetPosition();
+
 	switch (pSkillData.iTarget)
 	{
 		case SkillTargetType::TARGET_SELF:
@@ -3350,11 +3370,11 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			{
 				if (m_PlayerMySelf.iMoveType != 0)
 				{
-					SendMovePacket(GetPosition(), GetPosition(), 0, 0);
+					SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
 				}
 
 				SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
-				//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
+				std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
 			}
 
 			uint32_t iArrowCount = 0;
@@ -3368,8 +3388,6 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 					iArrowCount = pSkillExtension2Data->second.iArrowCount;
 			}
 
-			Vector3 v3TargetPosition = GetTargetPosition();
-
 			if ((iArrowCount == 0 && pSkillData.iFlyingFX != 0) || iArrowCount == 1)
 				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
 
@@ -3377,7 +3395,7 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			{
 				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), 1);
 
-				float fDistance = GetDistance(GetTargetPosition());
+				float fDistance = GetDistance(v3TargetPosition);
 
 				switch (iArrowCount)
 				{
@@ -3427,17 +3445,17 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			{
 				if (m_PlayerMySelf.iMoveType != 0)
 				{
-					SendMovePacket(GetPosition(), GetPosition(), 0, 0);
+					SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
 				}
 
-				SendStartSkillCastingAtPosPacket(pSkillData, GetTargetPosition());
-				//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iCastTime * 100));
+				SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
+				std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
 			}
 
 			if (pSkillData.iFlyingFX != 0)
-				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, GetTargetPosition());
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
 
-			SendStartSkillMagicAtPosPacket(pSkillData, GetTargetPosition());
+			SendStartSkillMagicAtPosPacket(pSkillData, v3TargetPosition);
 		}
 		break;
 	}
@@ -3458,6 +3476,11 @@ void ClientHandler::SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillDa
 		<< iTargetID
 		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
 		<< int16_t(pSkillData.iReCastTime);
+
+	if (pSkillData.iTarget == SkillTargetType::TARGET_PARTY)
+	{
+		pkt << uint32_t(0);
+	}
 
 	SendPacket(pkt);
 }
@@ -3518,8 +3541,16 @@ void ClientHandler::SendStartSkillMagicAtTargetPacket(TABLE_UPC_SKILL pSkillData
 			<< uint32_t(v3TargetPosition.m_fY * 10.0f);
 	}
 
-	pkt << arrowIndex
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0);
+	if (pSkillData.iTarget == SkillTargetType::TARGET_PARTY)
+	{
+		pkt << arrowIndex
+			<< uint32_t(0) << uint32_t(0) << int16_t(0);
+	}
+	else
+	{
+		pkt << arrowIndex
+			<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
+	}
 
 	SendPacket(pkt);
 }
@@ -3555,7 +3586,7 @@ void ClientHandler::SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t i
 		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
 		<< int32_t(-101)
 		<< arrowIndex
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
+		<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
 
 	SendPacket(pkt);
 }
@@ -3790,6 +3821,7 @@ bool ClientHandler::UseItem(uint32_t iItemID)
 					return false;
 			}
 
+			Guard lock(m_UseSkillLock);
 			UseSkill(pSkillData->second, GetID());
 
 			return true;
@@ -3839,13 +3871,21 @@ void ClientHandler::BasicAttackProcess()
 
 			bool bMoveToTarget = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
-			if (bMoveToTarget && GetDistance(GetTargetPosition()) > 1.0f)
-				SetMovePosition(GetTargetPosition());
+			Vector3 v3TargetPosition = GetTargetPosition();
+
+			if (bMoveToTarget && GetDistance(v3TargetPosition) > 1.0f)
+				SetMovePosition(v3TargetPosition);
 
 			bool bRangeLimit = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
 			int iRangeLimitValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_ATTACK_RANGE);
 
-			if (bRangeLimit && GetDistance(GetTargetPosition()) > (float)iRangeLimitValue)
+			if (bRangeLimit && GetDistance(v3TargetPosition) > (float)iRangeLimitValue)
+				continue;
+
+			bool bAttackRangeLimit = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
+			int iAttackRangeLimitValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
+
+			if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
 				continue;
 
 			auto iLeftHandWeapon = GetInventoryItemSlot(6);
@@ -3908,7 +3948,7 @@ void ClientHandler::AttackProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (GetTarget() == -1)
 				continue;
@@ -3937,13 +3977,21 @@ void ClientHandler::AttackProcess()
 
 			bool bMoveToTarget = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
-			if (bMoveToTarget && GetDistance(GetTargetPosition()) > 1.0f)
-				SetMovePosition(GetTargetPosition());
+			Vector3 v3TargetPosition = GetTargetPosition();
+
+			if (bMoveToTarget && GetDistance(v3TargetPosition) > 1.0f)
+				SetMovePosition(v3TargetPosition);
 
 			bool bRangeLimit = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
 			int iRangeLimitValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_ATTACK_RANGE);
 
-			if (bRangeLimit && GetDistance(GetTargetPosition()) > (float)iRangeLimitValue)
+			if (bRangeLimit && GetDistance(v3TargetPosition) > (float)iRangeLimitValue)
+				continue;
+
+			bool bAttackRangeLimit = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
+			int iAttackRangeLimitValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
+
+			if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
 				continue;
 
 			std::vector<int> vecAttackSkillList = GetConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
@@ -4001,11 +4049,8 @@ void ClientHandler::AttackProcess()
 					if (iNeedItem != 0 && iExistItemCount < iNeedItemCount)
 						continue;
 
+					Guard lock(m_UseSkillLock);
 					UseSkill(pSkillData->second, GetTarget());
-
-					int iAttackSpeedValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 1000);
-
-					std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
 				}
 			}
 
@@ -4019,7 +4064,7 @@ void ClientHandler::AttackProcess()
 					std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
 			}
 			else
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		}
 		catch (const std::exception& e)
 		{
@@ -4046,7 +4091,7 @@ void ClientHandler::SearchTargetProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -4071,6 +4116,7 @@ void ClientHandler::SearchTargetProcess()
 
 			if (GetTarget() == -1)
 			{
+				Guard lock(m_vecNpcLock);
 				std::vector<TNpc> vecFilteredNpc;
 
 				if (bAutoTarget)
@@ -4124,6 +4170,7 @@ void ClientHandler::SearchTargetProcess()
 			}
 			else
 			{
+				Guard lock(m_vecNpcLock);
 				auto pTarget = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 					[this](const TNpc& a)
 					{
@@ -4182,7 +4229,7 @@ void ClientHandler::AutoLootProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -4207,7 +4254,7 @@ void ClientHandler::AutoLootProcess()
 					std::back_inserter(vecFilteredLoot),
 					[msNow](const TLoot& c)
 					{
-						return (c.msDropTime.count() + 1000) < msNow.count() && c.iRequestedOpen == false;
+						return (c.msDropTime.count() + 1500) < msNow.count() && c.iRequestedOpen == false;
 					});
 
 				if (vecFilteredLoot.size() > 0)
@@ -4308,7 +4355,7 @@ void ClientHandler::CharacterProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -4390,8 +4437,8 @@ void ClientHandler::CharacterProcess()
 								continue;
 						}
 
+						Guard lock(m_UseSkillLock);
 						UseSkill(pSkillData->second, GetID());
-						std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 					}
 				}
 			}
@@ -4421,7 +4468,7 @@ void ClientHandler::ProtectionProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -4565,7 +4612,7 @@ void ClientHandler::GodModeProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 			if (IsBlinking())
 				continue;
@@ -4612,6 +4659,7 @@ void ClientHandler::GodModeProcess()
 						|| iMpGodModePercent <= iMpProtectionValue
 						|| !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
 					{
+						Guard lock(m_UseSkillLock);
 						SendCancelSkillPacket(pSkillData->second);
 						UseSkill(pSkillData->second, GetID());
 					}
@@ -4643,7 +4691,7 @@ void ClientHandler::MinorProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -4670,6 +4718,7 @@ void ClientHandler::MinorProcess()
 
 						if (it != vecAvailableSkills->end())
 						{
+							Guard lock(m_UseSkillLock);
 							UseSkill(*it, GetID());
 						}
 					}
@@ -4701,7 +4750,7 @@ void ClientHandler::RouteProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -4959,7 +5008,7 @@ void ClientHandler::SupplyProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (IsBlinking())
 				continue;
@@ -5005,6 +5054,241 @@ void ClientHandler::SupplyProcess()
 
 #ifdef DEBUG
 	printf("ClientHandler::SupplyProcess Stopped\n");
+#endif
+}
+
+void ClientHandler::PriestBuffProcess()
+{
+#ifdef DEBUG
+	printf("ClientHandler::PriestBuffProcess Started\n");
+#endif
+
+	while (m_bWorking)
+	{
+		try
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+			if (IsBlinking())
+				continue;
+
+			std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+			if (!GetAvailableSkill(&vecAvailableSkills))
+				continue;
+
+			bool bAutoHealthBuff = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
+
+			int iSelectedHealthBuff = Drawing::Bot->GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
+
+			if (iSelectedHealthBuff == -1)
+			{
+				iSelectedHealthBuff = GetProperHealthBuff(GetMaxHp());
+			}
+
+			if (bAutoHealthBuff && iSelectedHealthBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
+			{
+				auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+					[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
+
+				if (it != vecAvailableSkills->end())
+				{
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+					bool bUse = true;
+
+					if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+					{
+						int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							bUse = false;
+					}
+
+					if (bUse)
+					{
+						Guard lock(m_UseSkillLock);
+						UseSkill(*it, GetID());
+					}
+				}
+			}
+
+			bool bAutoDefenceBuff = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
+
+			int iSelectedDefenceBuff = Drawing::Bot->GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
+
+			if (iSelectedDefenceBuff == -1)
+			{
+				iSelectedDefenceBuff = GetProperDefenceBuff();
+			}
+
+			if (bAutoDefenceBuff && iSelectedDefenceBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_AC))
+			{
+				auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+					[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
+
+				if (it != vecAvailableSkills->end())
+				{
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+					bool bUse = true;
+
+					if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+					{
+						int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							bUse = false;
+					}
+
+					if (bUse)
+					{
+						Guard lock(m_UseSkillLock);
+						UseSkill(*it, GetID());
+					}
+				}
+			}
+
+			bool bAutoMindBuff = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+
+			int iSelectedMindBuff = Drawing::Bot->GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
+
+			if (iSelectedMindBuff == -1)
+			{
+				iSelectedMindBuff = GetProperMindBuff();
+			}
+
+			if (bAutoMindBuff && iSelectedMindBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))
+			{
+				auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+					[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
+
+				if (it != vecAvailableSkills->end())
+				{
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+					bool bUse = true;
+
+					if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+					{
+						int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							bUse = false;
+					}
+
+					if (bUse)
+					{
+						Guard lock(m_UseSkillLock);
+						UseSkill(*it, GetID());
+					}
+				}
+			}
+		}
+		catch (const std::exception& e)
+		{
+#ifdef DEBUG
+			printf("PriestBuffProcess:Exception: %s\n", e.what());
+#else
+			UNREFERENCED_PARAMETER(e);
+#endif
+		}
+	}
+
+#ifdef DEBUG
+	printf("ClientHandler::PriestBuffProcess Stopped\n");
+#endif
+}
+
+void ClientHandler::PriestHealProcess()
+{
+#ifdef DEBUG
+	printf("ClientHandler::PriestHealProcess Started\n");
+#endif
+
+	while (m_bWorking)
+	{
+		try
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+			if (IsBlinking())
+				continue;
+
+			int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
+
+			if (iHp == 0 || iMaxHp == 0)
+				continue;
+
+			std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+			if (!GetAvailableSkill(&vecAvailableSkills))
+				continue;
+
+			bool bAutoHeal = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
+			int iSelectedHeal = GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
+
+			if (iSelectedHeal == -1)
+			{
+				iSelectedHeal = GetProperHeal();
+			}
+
+			int iAutoHealValue = GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
+			int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
+
+			if (bAutoHeal && iSelectedHeal != -1 && iHpProtectionPercent <= iAutoHealValue)
+			{
+				auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+					[iSelectedHeal](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHeal; });
+
+				if (it != vecAvailableSkills->end())
+				{
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+					bool bUse = true;
+
+					if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+					{
+						int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							bUse = false;
+					}
+
+					if (bUse)
+					{
+						Guard lock(m_UseSkillLock);
+						UseSkill(*it, GetID());
+					}
+				}
+			}
+		}
+		catch (const std::exception& e)
+		{
+#ifdef DEBUG
+			printf("PriestHealProcess:Exception: %s\n", e.what());
+#else
+			UNREFERENCED_PARAMETER(e);
+#endif
+		}
+	}
+
+#ifdef DEBUG
+	printf("ClientHandler::PriestHealProcess Stopped\n");
 #endif
 }
 

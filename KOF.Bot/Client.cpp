@@ -50,114 +50,73 @@ Ini* Client::GetConfiguration()
 	return m_Bot->GetConfiguration();
 }
 
-int32_t Client::GetID(bool bFromServer)
+int32_t Client::GetID()
 {
-	if(bFromServer)
-		return m_PlayerMySelf.iID;
-
 	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ID")));
 }
 
-std::string Client::GetName(bool bFromServer)
+std::string Client::GetName()
 {
-	if(bFromServer)
-		return m_PlayerMySelf.szName;
-	else
-	{
-		int iNameLen = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME_LEN")));
+	int iNameLen = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME_LEN")));
 
-		if (iNameLen > 15)
-			return ReadString(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME"))), iNameLen);
+	if (iNameLen > 15)
+		return ReadString(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME"))), iNameLen);
 
-		return ReadString(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME")), iNameLen);
-	}
+	return ReadString(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME")), iNameLen);
 }
 
-int16_t Client::GetHp(bool bFromServer)
+int16_t Client::GetHp()
 {
-	if (bFromServer)
-		return (int16_t)m_PlayerMySelf.iHP;
-
 	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_HP")));
 }
 
-int16_t Client::GetMaxHp(bool bFromServer)
+int16_t Client::GetMaxHp()
 {
-	if (bFromServer)
-		return (int16_t)m_PlayerMySelf.iHPMax;
-
 	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXHP")));
 }
 
-int16_t Client::GetMp(bool bFromServer)
+int16_t Client::GetMp()
 {
-	if (bFromServer)
-		return (int16_t)m_PlayerMySelf.iMSP;
-
 	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MP")));
 }
 
-int16_t Client::GetMaxMp(bool bFromServer)
+int16_t Client::GetMaxMp()
 {
-	if (bFromServer)
-		return (int16_t)m_PlayerMySelf.iMSPMax;
-
 	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXMP")));
 }
 
-uint8_t Client::GetZone(bool bFromServer)
+uint8_t Client::GetZone()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.iCity;
-
 	return (uint8_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ZONE")));
 }
 
-uint32_t Client::GetGold(bool bFromServer)
+uint32_t Client::GetGold()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.iGold;
-
 	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOLD")));
 }
 
-uint8_t Client::GetLevel(bool bFromServer)
+uint8_t Client::GetLevel()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.iLevel;
-
 	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_LEVEL")));
 }
 
-Nation Client::GetNation(bool bFromServer)
+Nation Client::GetNation()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.eNation;
-
 	return (Nation)ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NATION")));
 }
 
-Class Client::GetClass(bool bFromServer)
+Class Client::GetClass()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.eClass;
-
 	return (Class)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_CLASS")));
 }
 
-uint64_t Client::GetExp(bool bFromServer)
+uint64_t Client::GetExp()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.iExp;
-
 	return (uint64_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_EXP")));
 }
 
-uint64_t Client::GetMaxExp(bool bFromServer)
+uint64_t Client::GetMaxExp()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.iExpNext;
-
 	return (uint64_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXEXP")));
 }
 
@@ -181,36 +140,208 @@ float Client::GetGoZ()
 	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")));
 }
 
-float Client::GetX(bool bFromServer)
+float Client::GetX()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.fX;
-
 	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")));
 }
 
-float Client::GetZ(bool bFromServer)
+float Client::GetZ()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.fZ;
-
 	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")));
 }
 
-float Client::GetY(bool bFromServer)
+float Client::GetY()
 {
-	if (bFromServer)
-		return m_PlayerMySelf.fY;
-
 	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")));
 }
 
-uint8_t Client::GetAuthority(bool bFromServer)
+uint8_t Client::GetAuthority()
 {
-	if (bFromServer)
-		return (uint8_t)m_PlayerMySelf.iAuthority;
-
 	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_AUTHORITY")));
+}
+
+bool Client::IsRogue(Class eClass)
+{
+	if (eClass == CLASS_UNKNOWN)
+	{
+		eClass = GetClass();
+	}
+
+	switch (eClass)
+	{
+		case CLASS_KA_ROGUE:
+		case CLASS_KA_HUNTER:
+		case CLASS_KA_PENETRATOR:
+		case CLASS_EL_ROGUE:
+		case CLASS_EL_RANGER:
+		case CLASS_EL_ASSASIN:
+			return true;
+	}
+
+	return false;
+}
+
+bool Client::IsMage(Class eClass)
+{
+	if (eClass == CLASS_UNKNOWN)
+	{
+		eClass = GetClass();
+	}
+
+	switch (eClass)
+	{
+		case CLASS_KA_WIZARD:
+		case CLASS_KA_SORCERER:
+		case CLASS_KA_NECROMANCER:
+		case CLASS_EL_WIZARD:
+		case CLASS_EL_MAGE:
+		case CLASS_EL_ENCHANTER:
+			return true;
+	}
+
+	return false;
+}
+
+bool Client::IsWarrior(Class eClass)
+{
+	if (eClass == CLASS_UNKNOWN)
+	{
+		eClass = GetClass();
+	}
+
+	switch (eClass)
+	{
+		case CLASS_KA_WARRIOR:
+		case CLASS_KA_BERSERKER:
+		case CLASS_KA_GUARDIAN:
+		case CLASS_EL_WARRIOR:
+		case CLASS_EL_BLADE:
+		case CLASS_EL_PROTECTOR:
+			return true;
+	}
+
+	return false;
+}
+
+bool Client::IsPriest(Class eClass)
+{
+	if (eClass == CLASS_UNKNOWN)
+	{
+		eClass = GetClass();
+	}
+
+	switch (eClass)
+	{
+		case CLASS_KA_PRIEST:
+		case CLASS_KA_SHAMAN:
+		case CLASS_KA_DARKPRIEST:
+		case CLASS_EL_PRIEST:
+		case CLASS_EL_CLERIC:
+		case CLASS_EL_DRUID:
+			return true;
+	}
+
+	return false;
+}
+
+uint32_t Client::GetProperHealthBuff(int MaxHp)
+{
+	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp * 100) / 100.0f);
+
+	if (GetSkillPoint(6) >= 78)
+	{
+		if (iUndyHpPercent >= 2500)
+			return 111654;
+		else
+			return 112675;
+	}
+	else if (GetSkillPoint(6) >= 70)
+	{
+		if (iUndyHpPercent >= 2000)
+			return 111654;
+		else
+			return 112670;
+	}
+	else if (GetSkillPoint(6) >= 57)
+	{
+		if (iUndyHpPercent >= 1500)
+			return 111654;
+		else
+			return 111657;
+	}
+	else if (GetSkillPoint(6) >= 54)
+	{
+		if (iUndyHpPercent >= 1200)
+			return 111654;
+		else
+			return 111655;
+	}
+	else if (GetSkillPoint(6) >= 42)
+		return 111642;
+	else if (GetSkillPoint(6) >= 33)
+		return 111633;
+	else if (GetSkillPoint(6) >= 24)
+		return 111624;
+	else if (GetSkillPoint(6) >= 15)
+		return 111615;
+	else if (GetSkillPoint(6) >= 6)
+		return 111606;
+
+	return -1;
+}
+
+uint32_t Client::GetProperDefenceBuff()
+{
+	if (GetSkillPoint(6) >= 76)
+		return 112674;
+	else if (GetSkillPoint(6) >= 60)
+		return 111660;
+	else if (GetSkillPoint(6) >= 51)
+		return 111651;
+	else if (GetSkillPoint(6) >= 39)
+		return 111639;
+	else if (GetSkillPoint(6) >= 30)
+		return 111630;
+	else if (GetSkillPoint(6) >= 21)
+		return 111621;
+	else if (GetSkillPoint(6) >= 12)
+		return 111612;
+	else if (GetSkillPoint(6) >= 3)
+		return 111603;
+
+	return -1;
+}
+
+uint32_t Client::GetProperMindBuff()
+{
+	if (GetSkillPoint(6) >= 45 && GetSkillPoint(6) <= 80)
+		return 111645;
+	else if (GetSkillPoint(6) >= 36 && GetSkillPoint(6) <= 44)
+		return 111636;
+	else if (GetSkillPoint(6) >= 27 && GetSkillPoint(6) <= 35)
+		return 111627;
+	else if (GetSkillPoint(6) >= 9 && GetSkillPoint(6) <= 26)
+		return 111609;
+
+	return -1;
+}
+
+uint32_t Client::GetProperHeal()
+{
+	if (GetSkillPoint(5) >= 45)
+		return 111545;
+	else if (GetSkillPoint(5) >= 36)
+		return 111536;
+	else if (GetSkillPoint(5) >= 27)
+		return 111527;
+	else if (GetSkillPoint(5) >= 18)
+		return 111518;
+	else if (GetSkillPoint(5) >= 9)
+		return 111509;
+	else if (GetSkillPoint(5) >= 0)
+		return 107705;
+
+	return -1;
 }
 
 std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
@@ -238,23 +369,66 @@ Vector3 Client::GetPosition()
 	return Vector3(GetX(), GetZ(), GetY());
 }
 
+DWORD Client::GetMobBase(int32_t iTargetId)
+{
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+
+	if (hProcess == nullptr)
+		return 0;
+
+	LPVOID pAddress = VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (pAddress == 0)
+	{
+		CloseHandle(hProcess);
+		return 0;
+	}
+
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0x6A, 0x01,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD7,
+		0xA3, 0x00, 0x00, 0x00, 0x00,
+		0x61,
+		0xC3,
+	};
+
+	DWORD iFldb = GetAddress(skCryptDec("KO_PTR_FLDB"));
+
+	CopyBytes(byCode + 3, iFldb);
+	CopyBytes(byCode + 10, iTargetId);
+
+	DWORD iFmbs = GetAddress(skCryptDec("KO_PTR_FMBS"));
+	CopyBytes(byCode + 15, iFmbs);
+	CopyBytes(byCode + 22, pAddress);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+
+	DWORD iBase = Read4Byte((DWORD)pAddress);
+
+	VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+	CloseHandle(hProcess);
+
+	return iBase;
+}
+
 Vector3 Client::GetTargetPosition()
 {
 	if (m_iTargetID >= 5000)
 	{
-		auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-			[this](const TNpc& a) { return a.iID == m_iTargetID; });
+		DWORD iBase = GetMobBase(m_iTargetID);
 
-		if (it != m_vecNpc.end())
-			return Vector3(it->fX, it->fZ, it->fY);
-	}
-	else
-	{
-		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-			[this](const TPlayer& a) { return a.iID == m_iTargetID; });
-
-		if (it != m_vecPlayer.end())
-			return Vector3(it->fX, it->fZ, it->fY);
+		if (iBase > 0)
+		{
+			return Vector3(
+				ReadFloat(iBase + GetAddress("KO_OFF_X")), 
+				ReadFloat(iBase + GetAddress("KO_OFF_Z")), 
+				ReadFloat(iBase + GetAddress("KO_OFF_Y")));
+		}
 	}
 
 	return Vector3(0.0f, 0.0f, 0.0f);
@@ -348,9 +522,17 @@ int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 	{
 		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
 
-		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == iItemID)
-			iItemCount += Read4Byte(iItemBase + 0x70);
-}
+		if (m_Bot->GetPlatformType() == PlatformType::USKO)
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) == iItemID)
+				iItemCount += Read4Byte(iItemBase + 0x68);
+		}
+		else
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == iItemID)
+				iItemCount += Read4Byte(iItemBase + 0x70);
+		}
+	}
 
 	return iItemCount;
 }
@@ -366,14 +548,29 @@ TInventory Client::GetInventoryItem(uint32_t iItemID)
 	{
 		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
 
-		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == iItemID)
+		if (m_Bot->GetPlatformType() == PlatformType::USKO)
 		{
-			pInventory.iPos = i;
-			pInventory.iItemID = iItemID;
-			pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
-			pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+			if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) == iItemID)
+			{
+				pInventory.iPos = i;
+				pInventory.iItemID = iItemID;
+				pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x68);
+				pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x6C);
 
-			return pInventory;
+				return pInventory;
+			}
+		}
+		else
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == iItemID)
+			{
+				pInventory.iPos = i;
+				pInventory.iItemID = iItemID;
+				pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
+				pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+
+				return pInventory;
+			}
 		}
 	}
 
@@ -388,11 +585,21 @@ int32_t Client::GetInventoryEmptySlot()
 	{
 		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
 
-		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == 0)
+		if (m_Bot->GetPlatformType() == PlatformType::USKO)
 		{
-			return i;
+			if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) == 0)
+			{
+				return i;
+			}
 		}
-}
+		else
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == 0)
+			{
+				return i;
+			}
+		}
+	}
 
 	return -1;
 }
@@ -409,9 +616,17 @@ int32_t Client::GetInventoryEmptySlot(std::vector<int32_t> vecExcept)
 
 		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
 
-		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == 0)
-			return i;
-}
+		if (m_Bot->GetPlatformType() == PlatformType::USKO)
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) == 0)
+				return i;
+		}
+		else
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) == 0)
+				return i;
+		}
+	}
 
 	return -1;
 }
@@ -424,17 +639,64 @@ TInventory Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
 	DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * iSlotPosition)));
 
-	if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) != 0)
+	if (m_Bot->GetPlatformType() == PlatformType::USKO)
 	{
-		pInventory.iPos = iSlotPosition;
-		pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C));
-		pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
-		pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+		if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) != 0)
+		{
+			pInventory.iPos = iSlotPosition;
+			pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64));
+			pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x68);
+			pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x6C);
 
-		return pInventory;
+			return pInventory;
+		}
+	}
+	else
+	{
+		if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) != 0)
+		{
+			pInventory.iPos = iSlotPosition;
+			pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C));
+			pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
+			pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+
+			return pInventory;
+		}
 	}
 
 	return pInventory;
+}
+
+void Client::ReadInventory()
+{
+	const int SLOT_MAX = 14; // 14 equipped item slots
+	const int HAVE_MAX = 28; // 28 inventory slots
+
+	for (int i = 0; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		DWORD KO_PTR_DLG = 0x1086148; // CGameProcMain
+		DWORD KO_OFF_INVENTORY_BASE = 0x1B0; //CUIInventory
+		DWORD KO_OFF_INVENTORY_START = 0x230;
+
+		int InventoryBase = Read4Byte(Read4Byte(KO_PTR_DLG) + KO_OFF_INVENTORY_BASE);
+		int Length = Read4Byte(InventoryBase + (KO_OFF_INVENTORY_START + (4 * i)));
+
+		int NameBase = Read4Byte(Length + 0x60);
+		int NameLengthBase = Read4Byte(NameBase + 0x1C);
+
+		std::string ItemName;
+
+		if (NameLengthBase > 15)
+			ItemName = ReadString(Read4Byte(NameBase + 0xC), NameLengthBase);
+		else
+			ItemName = ReadString(NameBase + 0xC, NameLengthBase);
+
+		int ItemId = Read4Byte(Read4Byte(Length + 0x60)) + Read4Byte(Read4Byte(Length + 0x64));
+		int ItemCount = Read4Byte(Length + 0x68);
+		int ItemDurability = Read4Byte(Length + 0x6C);
+
+		printf("Name: %s -  ID: %d - Count: %d - Durability: %d\n", ItemName.c_str(), ItemId, ItemCount, ItemDurability);
+	}
 }
 
 BYTE Client::ReadByte(DWORD dwAddress)

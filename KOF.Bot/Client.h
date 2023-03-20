@@ -12,31 +12,40 @@ public:
 	void Clear();
 
 public:
-	int32_t GetID(bool bFromServer = true);
-	std::string GetName(bool bFromServer = true);
-	int16_t GetHp(bool bFromServer = true);
-	int16_t GetMaxHp(bool bFromServer = true);
-	int16_t GetMp(bool bFromServer = true);
-	int16_t GetMaxMp(bool bFromServer = true);
-	uint8_t GetZone(bool bFromServer = true);
-	uint32_t GetGold(bool bFromServer = true);
-	uint8_t GetLevel(bool bFromServer = true);
-	Nation GetNation(bool bFromServer = true);
-	Class GetClass(bool bFromServer = true);
-	uint64_t GetExp(bool bFromServer = true);
-	uint64_t GetMaxExp(bool bFromServer = true);
+	int32_t GetID();
+	std::string GetName();
+	int16_t GetHp();
+	int16_t GetMaxHp();
+	int16_t GetMp();
+	int16_t GetMaxMp();
+	uint8_t GetZone();
+	uint32_t GetGold();
+	uint8_t GetLevel();
+	Nation GetNation();
+	Class GetClass();
+	uint64_t GetExp();
+	uint64_t GetMaxExp();
+
+	bool IsRogue(Class eClass = CLASS_UNKNOWN);
+	bool IsMage(Class eClass = CLASS_UNKNOWN);
+	bool IsWarrior(Class eClass = CLASS_UNKNOWN);
+	bool IsPriest(Class eClass = CLASS_UNKNOWN);
+	uint32_t GetProperHealthBuff(int MaxHp);
+	uint32_t GetProperDefenceBuff();
+	uint32_t GetProperMindBuff();
+	uint32_t GetProperHeal();
 
 	bool IsDisconnect();
 
-	float GetX(bool bFromServer = true);
-	float GetZ(bool bFromServer = true);
-	float GetY(bool bFromServer = true);
+	float GetX();
+	float GetZ();
+	float GetY();
 
 	float GetGoX();
 	float GetGoY();
 	float GetGoZ();
 
-	uint8_t GetAuthority(bool bFromServer = false);
+	uint8_t GetAuthority();
 	void SetAuthority(uint8_t iAuthority);
 
 	std::chrono::milliseconds GetSkillUseTime(int32_t iSkillID);
@@ -45,6 +54,8 @@ public:
 	Vector3 GetPosition();
 	Vector3 GetTargetPosition();
 	int32_t GetTarget();
+
+	DWORD GetMobBase(int32_t iTargetId);
 
 	bool IsBuffActive(int32_t iBuffType);
 
@@ -66,6 +77,8 @@ public:
 	TInventory GetInventoryItemSlot(uint8_t iSlotPosition);
 	int32_t GetInventoryEmptySlot();
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
+
+	void ReadInventory();
 
 protected:
 	DWORD GetAddress(std::string szAddressName);
