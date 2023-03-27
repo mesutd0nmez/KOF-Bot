@@ -9,12 +9,16 @@ class Drawing
 public:
 	static Bot* Bot;
 	static bool Done;
+	static bool bDraw;
 
 private:
-	static bool bDraw;
 	static bool bDrawRoutePlanner;
 
 	static void InitializeSceneData();
+
+public:
+	static std::string m_szMainWindowName;
+	static std::string m_szRoutePlannerWindowName;
 
 public:
 	static void Initialize();

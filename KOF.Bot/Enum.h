@@ -1,5 +1,16 @@
 #pragma once
 
+enum AccountTypeFlag
+{
+	ACCOUNT_TYPE_FLAG_FREE = (1 << 0),
+	ACCOUNT_TYPE_FLAG_BOT = (1 << 1),
+	ACCOUNT_TYPE_FLAG_CLIENTLESS = (1 << 2),
+	ACCOUNT_TYPE_FLAG_QUEST = (1 << 3),
+	ACCOUNT_TYPE_FLAG_DRAKI = (1 << 4),
+	ACCOUNT_TYPE_FLAG_UPGRADE = (1 << 5),
+	ACCOUNT_TYPE_FLAG_PACKET_LOGGER = (1 << 6),
+};
+
 enum PacketHeader
 {
 	READY,
@@ -34,6 +45,15 @@ enum AppType
 	LOADER,
 	BOT,
 	CLIENTLESS,
+};
+
+enum StateMove
+{
+	PSM_STOP = 0,
+	PSM_WALK,
+	PSM_RUN,
+	PSM_WALK_BACKWARD,
+	PSM_COUNT
 };
 
 enum StateAction

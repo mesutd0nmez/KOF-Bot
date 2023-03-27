@@ -21,15 +21,20 @@ public:
 	uint8_t GetZone();
 	uint32_t GetGold();
 	uint8_t GetLevel();
-	Nation GetNation();
-	Class GetClass();
+	uint8_t GetNation();
+	int32_t GetClass();
 	uint64_t GetExp();
 	uint64_t GetMaxExp();
 
-	bool IsRogue(Class eClass = CLASS_UNKNOWN);
-	bool IsMage(Class eClass = CLASS_UNKNOWN);
-	bool IsWarrior(Class eClass = CLASS_UNKNOWN);
-	bool IsPriest(Class eClass = CLASS_UNKNOWN);
+	uint8_t GetMoveState();
+	uint8_t GetActionState();
+
+	int32_t GetClientSelectedTarget();
+
+	bool IsRogue(int32_t eClass = CLASS_UNKNOWN);
+	bool IsMage(int32_t eClass = CLASS_UNKNOWN);
+	bool IsWarrior(int32_t eClass = CLASS_UNKNOWN);
+	bool IsPriest(int32_t eClass = CLASS_UNKNOWN);
 	uint32_t GetProperHealthBuff(int MaxHp);
 	uint32_t GetProperDefenceBuff();
 	uint32_t GetProperMindBuff();
@@ -61,16 +66,15 @@ public:
 
 	bool IsBlinking();
 
-	float GetDistance(Vector3 v3Position);
-	float GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition);
-	float GetDistance(float fX, float fY);
-	float GetDistance(float fX1, float fY1, float fX2, float fY2);
+	double GetDistance(Vector3 v3Position);
+	double GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition);
+	double GetDistance(float fX, float fY);
+	double GetDistance(float fX1, float fY1, float fX2, float fY2);
 
 	uint8_t GetSkillPoint(int32_t Slot);
 
 	bool GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills);
 	bool GetNpcList(std::vector<TNpc>** vecNpcList);
-	bool GetPlayerList(std::vector<TPlayer>** vecPlayerList);
 
 	int32_t GetInventoryItemCount(uint32_t iItemID);
 	TInventory GetInventoryItem(uint32_t iItemID);
@@ -78,7 +82,8 @@ public:
 	int32_t GetInventoryEmptySlot();
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
 
-	void ReadInventory();
+	int SearchMob(std::vector<EntityInfo>& vecOutMobList);
+	int SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList);
 
 protected:
 	DWORD GetAddress(std::string szAddressName);
@@ -89,19 +94,15 @@ protected:
 	TPlayer m_PlayerMySelf;
 	
 	std::vector<TNpc> m_vecNpc;
-	std::vector<TPlayer> m_vecPlayer;
 
 public:
 	std::recursive_mutex m_vecNpcLock;
-	std::recursive_mutex m_vecPlayerLock;
 
 protected:
-
+	std::recursive_mutex m_mutexActiveBuffList;
 	std::map<int32_t, uint32_t> m_mapActiveBuffList;
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
-
-	int32_t m_iTargetID;
 
 	bool m_bLunarWarDressUp;
 
@@ -112,11 +113,15 @@ public:
 	std::string ReadString(DWORD dwAddress, size_t nSize);
 	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
 	void WriteByte(DWORD dwAddress, BYTE byValue);
-	void Write4Byte(DWORD dwAddress, DWORD dwValue);
+	void Write4Byte(DWORD dwAddress, int iValue);
 	void WriteFloat(DWORD dwAddress, float fValue);
 	void WriteString(DWORD dwAddress, std::string strValue);
 	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
+	void ExecuteRemoteCode(LPVOID pAddress);
+
+public:
+	std::recursive_mutex m_vecLootListLock;
 
 protected:
 	std::vector<TLoot> m_vecLootList;
@@ -126,6 +131,9 @@ protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
 
-
+public:
+	std::recursive_mutex m_vecSkillLock;
+	std::recursive_mutex m_vecPacketLock;
+	std::recursive_mutex m_vecBasicAttackLock;
 };
 

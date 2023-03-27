@@ -24,6 +24,8 @@ void Service::Clear()
     m_ePlatformType = PlatformType::USKO;
     m_iSelectedAccount = 0;
 
+    m_iAccountTypeFlag = AccountTypeFlag::ACCOUNT_TYPE_FLAG_FREE;
+
     m_isServiceClosed = false;
 }
 
@@ -55,6 +57,8 @@ void Service::OnError(int32_t iErrorCode)
 #ifdef DEBUG
     printf("Connection error: %d\n", iErrorCode);
 #endif
+
+    m_isServiceClosed = true;
 }
 
 void Service::OnClose(int32_t iErrorCode)
@@ -97,6 +101,11 @@ void Service::HandlePacket(Packet& pkt)
 
             pkt.DByte();
             pkt >> iType >> iStatus;
+
+            if (iStatus == 1)
+            {
+                pkt >> m_iAccountTypeFlag;
+            }
 
             if (iStatus == 1)
             {

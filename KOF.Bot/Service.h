@@ -58,5 +58,8 @@ private:
 public:
 	bool IsServiceClosed() { return m_isServiceClosed; };
 
+protected:
+	uint32_t m_iAccountTypeFlag;
+
 };
 

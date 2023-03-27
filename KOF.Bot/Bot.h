@@ -68,6 +68,7 @@ private:
 	std::string m_szAppDataFolder;
 
 public:
+	HANDLE GetInjectedProcessHandle() { return m_hInjectedProcessHandle; };
 	DWORD GetInjectedProcessId() { return m_dwInjectedProcessId; };
 
 	BYTE ReadByte(DWORD dwAddress);
@@ -76,12 +77,13 @@ public:
 	std::string ReadString(DWORD dwAddress, size_t nSize);
 	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
 	void WriteByte(DWORD dwAddress, BYTE byValue);
-	void Write4Byte(DWORD dwAddress, DWORD dwValue);
+	void Write4Byte(DWORD dwAddress, int iValue);
 	void WriteFloat(DWORD dwAddress, float fValue);
 	void WriteString(DWORD dwAddress, std::string strValue);
 	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
 
 	void ExecuteRemoteCode(BYTE* codes, size_t psize);
+	void ExecuteRemoteCode(LPVOID pAddress);
 
 public:
 	bool IsClosed() { return m_bClosed; }
@@ -90,11 +92,14 @@ public:
 
 	PlatformType GetPlatformType() { return m_ePlatformType; }
 
+public:
+	HANDLE m_hInjectedProcessHandle;
 private:
 	bool m_bClosed;
 	std::string m_szClientPath;
 	std::string m_szClientExe;
 	DWORD m_dwInjectedProcessId;
+
 	bool m_bTableLoaded;
 	std::chrono::milliseconds m_msLastConfigurationSave;
 
@@ -128,5 +133,13 @@ protected:
 	JSON m_jMindBuffList;
 	JSON m_jHealList;
 
+public:
+	void BuildAdress();
+
+private:
+	std::map<std::string, DWORD> m_mapAddress;
+
+private:
+	std::chrono::milliseconds m_msLastInitializeHandle;
 };
 

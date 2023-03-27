@@ -26,7 +26,6 @@ public:
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
-	TPlayer InitializePlayer(Packet& pkt);
 
 private:
 	virtual void OnReady();
@@ -123,7 +122,7 @@ public:
 	void LoadSkillData();
 
 private:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
+	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking = false);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -140,7 +139,7 @@ public:
 	void SendShoppingMall(ShoppingMallType eType);
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
-	void SetTarget(int32_t iTargetID);
+	void SetTarget(int32_t iTargetID, bool bSelectFromClient = true);
 
 	void EquipOreads(int32_t iItemID);
 	void SetOreads(bool bValue);
@@ -164,26 +163,24 @@ private:
 	bool m_bConfigurationLoaded;
 
 private:
-	void BasicAttackProcess();
 	void AttackProcess();
 	void SearchTargetProcess();
+	void InitializeTarget();
 
 	void AutoLootProcess();
+
+	void MinorProcess();
+	void PotionProcess();
 	void CharacterProcess();
 
-	void ProtectionProcess();
 	void GodModeProcess();
-	void MinorProcess();
 
-	void HealthPotionProcess();
-	void ManaPotionProcess();
+	bool HealthPotionProcess();
+	bool ManaPotionProcess();
 
 	void RouteProcess();
 
 	void SupplyProcess();
-
-	void PriestBuffProcess();
-	void PriestHealProcess();
 
 private:
 	bool m_bWorking;
@@ -210,7 +207,6 @@ public:
 
 private:
 	std::vector<Route> m_vecRoute;
-	std::recursive_mutex m_vecRouteLock;
 
 private:
 	void SendNpcEvent(int32_t iTargetID);
@@ -225,10 +221,25 @@ private:
 	bool IsNeedSupply();
 
 private:
-	std::recursive_mutex m_UseSkillLock;
+	std::chrono::milliseconds m_msLastSupplyTime;
+	std::chrono::milliseconds m_msLastPotionUseTime;
+
+public:
+	void StepCharacterForward(bool bStart);
+	void BasicAttack();
+
+	DWORD GetSkillBase(uint32_t iSkillID);
 
 private:
-	std::chrono::milliseconds m_msLastSupplyTime;
+	std::map<uint32_t, DWORD> m_mapSkillBase;
+
+private:
+	LPVOID m_pClientBasicAttackAddress;
+	LPVOID m_pClientSkillAddress;
+	LPVOID m_pClientSkillFunctionAddress;
+
+public:
+	void StopMove();
 };
 
 

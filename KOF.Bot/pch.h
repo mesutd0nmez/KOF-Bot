@@ -40,4 +40,5 @@ extern std::string to_string(std::wstring const& wstr);
 
 extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
 
+
 #endif //PCH_H

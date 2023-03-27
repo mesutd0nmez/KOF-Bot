@@ -11,6 +11,7 @@ Bot::Bot()
 	m_ClientHandler = nullptr;
 
 	m_dwInjectedProcessId = 0;
+	m_hInjectedProcessHandle = nullptr;
 
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
@@ -19,6 +20,7 @@ Bot::Bot()
 	m_pTbl_Item = nullptr;
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
+	m_pTbl_ItemSell = nullptr;
 
 	m_msLastConfigurationSave = std::chrono::milliseconds(0);
 
@@ -37,6 +39,8 @@ Bot::Bot()
 	m_jDefenceBuffList.clear();
 	m_jMindBuffList.clear();
 	m_jHealList.clear();
+
+	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 }
 
 Bot::~Bot()
@@ -46,6 +50,7 @@ Bot::~Bot()
 	m_ClientHandler = nullptr;
 
 	m_dwInjectedProcessId = 0;
+	m_hInjectedProcessHandle = nullptr;
 
 	m_bTableLoaded = false;
 
@@ -55,8 +60,7 @@ Bot::~Bot()
 	m_pTbl_Item = nullptr;
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
-
-	m_msLastConfigurationSave = std::chrono::milliseconds(0);
+	m_pTbl_ItemSell = nullptr;
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
@@ -72,6 +76,8 @@ Bot::~Bot()
 	m_jDefenceBuffList.clear();
 	m_jMindBuffList.clear();
 	m_jHealList.clear();
+
+	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -212,7 +218,7 @@ void Bot::InitializeStaticData()
 	{
 		case PlatformType::CNKO:
 		{
-			szPlatformPrefix = "nc";
+			szPlatformPrefix = "us";
 		}
 		break;
 
@@ -439,6 +445,8 @@ void Bot::OnLoaded()
 	printf("Bot: OnLoaded\n");
 #endif
 
+	BuildAdress();
+
 #if !defined(_WINDLL)
 	PROCESS_INFORMATION injectedProcessInfo;
 	std::ostringstream strCommandLine;
@@ -486,10 +494,10 @@ void Bot::OnLoaded()
 #endif
 	}
 
+	m_hInjectedProcessHandle = injectedProcessInfo.hProcess;
 	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
 	ResumeProcess(injectedProcessInfo.hProcess);
-	CloseHandle(injectedProcessInfo.hProcess);
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
@@ -537,15 +545,7 @@ void Bot::OnConfigurationLoaded()
 		m_ClientHandler->StartHandler();
 
 		new std::thread([this]() { UI::Render(this); });
-
-		
 	});
-}
-
-DWORD Bot::GetAddress(std::string szAddressName)
-{
-	std::string szAddress = m_iniPointer->GetString(skCryptDec("Address"), szAddressName.c_str(), skCryptDec("0x000000"));
-	return std::strtoul(szAddress.c_str(), NULL, 16);
 }
 
 Ini* Bot::GetConfiguration()
@@ -611,57 +611,110 @@ bool Bot::GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut)
 
 BYTE Bot::ReadByte(DWORD dwAddress)
 {
-	return Memory::ReadByte(m_dwInjectedProcessId, dwAddress);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	return Memory::ReadByte(m_hInjectedProcessHandle, dwAddress);
 }
 
 DWORD Bot::Read4Byte(DWORD dwAddress)
 {
-	return Memory::Read4Byte(m_dwInjectedProcessId, dwAddress);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	return Memory::Read4Byte(m_hInjectedProcessHandle, dwAddress);
 }
 
 float Bot::ReadFloat(DWORD dwAddress)
 {
-	return Memory::ReadFloat(m_dwInjectedProcessId, dwAddress);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	return Memory::ReadFloat(m_hInjectedProcessHandle, dwAddress);
 }
 
 std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
 {
-	return Memory::ReadString(m_dwInjectedProcessId, dwAddress, nSize);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	return Memory::ReadString(m_hInjectedProcessHandle, dwAddress, nSize);
 }
 
 std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 {
-	return Memory::ReadBytes(m_dwInjectedProcessId, dwAddress, nSize);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	return Memory::ReadBytes(m_hInjectedProcessHandle, dwAddress, nSize);
 }
 
 void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	Memory::WriteByte(m_dwInjectedProcessId, dwAddress, byValue);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::WriteByte(m_hInjectedProcessHandle, dwAddress, byValue);
 }
 
-void Bot::Write4Byte(DWORD dwAddress, DWORD dwValue)
+void Bot::Write4Byte(DWORD dwAddress, int iValue)
 {
-	Memory::Write4Byte(m_dwInjectedProcessId, dwAddress, dwValue);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::Write4Byte(m_hInjectedProcessHandle, dwAddress, iValue);
 }
 
 void Bot::WriteFloat(DWORD dwAddress, float fValue)
 {
-	Memory::WriteFloat(m_dwInjectedProcessId, dwAddress, fValue);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::WriteFloat(m_hInjectedProcessHandle, dwAddress, fValue);
 }
 
 void Bot::WriteString(DWORD dwAddress, std::string strValue)
 {
-	Memory::WriteString(m_dwInjectedProcessId, dwAddress, strValue);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::WriteString(m_hInjectedProcessHandle, dwAddress, strValue);
 }
 
 void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 {
-	Memory::WriteBytes(m_dwInjectedProcessId, dwAddress, byValue);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::WriteBytes(m_hInjectedProcessHandle, dwAddress, byValue);
 }
 
 void Bot::ExecuteRemoteCode(BYTE* codes, size_t psize)
 {
-	Memory::ExecuteRemoteCode(m_dwInjectedProcessId, codes, psize);
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::ExecuteRemoteCode(m_hInjectedProcessHandle, codes, psize);
+}
+
+void Bot::ExecuteRemoteCode(LPVOID pAddress)
+{
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	Memory::ExecuteRemoteCode(m_hInjectedProcessHandle, pAddress);
 }
 
 bool Bot::IsInjectedProcessLost()
@@ -669,26 +722,16 @@ bool Bot::IsInjectedProcessLost()
 	if (GetInjectedProcessId() == 0)
 		return true;
 
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	DWORD iFlags;
+	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
+		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
+	DWORD iExitCode = 0;
+	if (GetExitCodeProcess(m_hInjectedProcessHandle, &iExitCode) == FALSE)
 		return true;
 
-	DWORD dwExitCode = 0;
-
-	if (GetExitCodeProcess(hProcess, &dwExitCode) == FALSE)
-	{
-		CloseHandle(hProcess);
+	if (iExitCode != STILL_ACTIVE)
 		return true;
-	}
-
-	if (dwExitCode != STILL_ACTIVE)
-	{
-		CloseHandle(hProcess);
-		return true;
-	}
-
-	CloseHandle(hProcess);
 
 	return false;
 }
@@ -744,4 +787,33 @@ bool Bot::GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecSho
 	vecShopWindow = vecTmpShopWindow;
 
 	return true;
+}
+
+DWORD Bot::GetAddress(std::string szAddressName)
+{
+	auto it = m_mapAddress.find(szAddressName);
+
+	if (it != m_mapAddress.end())
+		return it->second;
+
+	return 0;
+}
+
+void Bot::BuildAdress()
+{
+	auto pAddressMap = m_iniPointer->GetConfigMap();
+
+	if (pAddressMap == nullptr)
+		return;
+
+	auto it = pAddressMap->find(skCryptDec("Address"));
+
+	if (it != pAddressMap->end())
+	{
+		for (auto e : it->second)
+			m_mapAddress.insert(std::make_pair(e.first, std::strtoul(e.second.c_str(), NULL, 16)));
+	}
+
+	delete m_iniPointer;
+	m_iniPointer = nullptr;
 }

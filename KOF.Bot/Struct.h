@@ -67,7 +67,22 @@ struct SSupplyBuyList
 struct SNpcData
 {
 	uint32_t iProtoID;
-	float fDistance;
+};
+
+struct EntityInfo
+{
+	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, double dDistance) :
+		m_iBase(iBase), m_iId(iId), m_iProtoId(iProtoId), m_iMaxHP(iMaxHP), m_iHP(iHP), m_iState(iState), m_iNation(iNation), m_v3Position(v3Position), m_dDistance(dDistance) {};
+
+	int32_t m_iBase;
+	int32_t m_iId;
+	int32_t m_iProtoId;
+	int32_t m_iMaxHP;
+	int32_t m_iHP;
+	int32_t m_iState;
+	int32_t m_iNation;
+	Vector3 m_v3Position;
+	double m_dDistance;
 };
 
 typedef struct SInventory
