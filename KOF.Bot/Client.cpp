@@ -23,11 +23,7 @@ void Client::Clear()
 	memset(&m_PlayerMySelf, 0, sizeof(m_PlayerMySelf));
 
 	m_vecNpc.clear();
-
-	m_mapActiveBuffList.clear();
 	m_mapSkillUseTime.clear();
-
-	m_bLunarWarDressUp = false;
 
 	m_vecAvailableSkill.clear();
 
@@ -47,84 +43,137 @@ Ini* Client::GetConfiguration()
 	return m_Bot->GetConfiguration();
 }
 
-int32_t Client::GetID()
+int32_t Client::GetID(DWORD iBase)
 {
-	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ID")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_ID")));
 }
 
-std::string Client::GetName()
+int32_t Client::GetProtoID(DWORD iBase)
 {
-	int iNameLen = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME_LEN")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_PROTO_ID")));
+}
+
+std::string Client::GetName(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	int iNameLen = Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_NAME_LEN")));
 
 	if (iNameLen > 15)
-		return ReadString(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME"))), iNameLen);
+		return ReadString(Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_NAME"))), iNameLen);
 
-	return ReadString(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NAME")), iNameLen);
+	return ReadString(iBase + GetAddress(skCryptDec("KO_OFF_NAME")), iNameLen);
 }
 
-int16_t Client::GetHp()
+int16_t Client::GetHp(DWORD iBase)
 {
-	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_HP")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (int16_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_HP")));
 }
 
-int16_t Client::GetMaxHp()
+int16_t Client::GetMaxHp(DWORD iBase)
 {
-	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXHP")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (int16_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_MAXHP")));
 }
 
-int16_t Client::GetMp()
+int16_t Client::GetMp(DWORD iBase)
 {
-	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MP")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (int16_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_MP")));
 }
 
-int16_t Client::GetMaxMp()
+int16_t Client::GetMaxMp(DWORD iBase)
 {
-	return (int16_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXMP")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (int16_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_MAXMP")));
 }
 
-uint8_t Client::GetZone()
+uint8_t Client::GetZone(DWORD iBase)
 {
-	return (uint8_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ZONE")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (uint8_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_ZONE")));
 }
 
-uint32_t Client::GetGold()
+uint32_t Client::GetGold(DWORD iBase)
 {
-	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOLD")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_GOLD")));
 }
 
-uint8_t Client::GetLevel()
+uint8_t Client::GetLevel(DWORD iBase)
 {
-	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_LEVEL")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadByte(iBase + GetAddress(skCryptDec("KO_OFF_LEVEL")));
 }
 
-uint8_t Client::GetNation()
+uint8_t Client::GetNation(DWORD iBase)
 {
-	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_NATION")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadByte(iBase + GetAddress(skCryptDec("KO_OFF_NATION")));
 }
 
-int32_t Client::GetClass()
+int32_t Client::GetClass(DWORD iBase)
 {
-	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_CLASS")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_CLASS")));
 }
 
-uint64_t Client::GetExp()
+uint64_t Client::GetExp(DWORD iBase)
 {
-	return (uint64_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_EXP")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (uint64_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_EXP")));
 }
 
-uint64_t Client::GetMaxExp()
+uint64_t Client::GetMaxExp(DWORD iBase)
 {
-	return (uint64_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MAXEXP")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return (uint64_t)Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_MAXEXP")));
 }
 
-uint8_t Client::GetMoveState()
+uint8_t Client::GetMoveState(DWORD iBase)
 {
-	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadByte(iBase + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")));
 }
 
-uint8_t Client::GetActionState()
+uint8_t Client::GetActionState(DWORD iBase)
 {
-	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_ACTION_STATE")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadByte(iBase + GetAddress(skCryptDec("KO_OFF_ACTION_STATE")));
 }
 
 bool Client::IsDisconnect()
@@ -147,24 +196,36 @@ float Client::GetGoZ()
 	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")));
 }
 
-float Client::GetX()
+float Client::GetX(DWORD iBase)
 {
-	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_X")));
 }
 
-float Client::GetZ()
+float Client::GetZ(DWORD iBase)
 {
-	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_Z")));
 }
 
-float Client::GetY()
+float Client::GetY(DWORD iBase)
 {
-	return ReadFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_Y")));
 }
 
-uint8_t Client::GetAuthority()
+uint8_t Client::GetAuthority(DWORD iBase)
 {
-	return ReadByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_AUTHORITY")));
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadByte(iBase + GetAddress(skCryptDec("KO_OFF_AUTHORITY")));
 }
 
 int32_t Client::GetClientSelectedTarget()
@@ -456,8 +517,41 @@ void Client::SetAuthority(uint8_t iAuthority)
 
 bool Client::IsBuffActive(int32_t iBuffType)
 { 
-	Guard guard(m_mutexActiveBuffList);
-	return m_mapActiveBuffList.find(iBuffType) != m_mapActiveBuffList.end(); 
+	int32_t iSkillBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_SKILL_BASE"));
+
+	int32_t iSkillContainer1 = Read4Byte(iSkillBase + 0x4);
+	int32_t iSkillContainer1Slot = Read4Byte(iSkillContainer1 + GetAddress("KO_OFF_SKILL_SLOT"));
+
+	for (int32_t i = 0; i < 20; i++)
+	{
+		iSkillContainer1Slot = Read4Byte(iSkillContainer1Slot + 0x0);
+
+		int32_t iAffectedSkill = Read4Byte(iSkillContainer1Slot + 0x8);
+
+		if (iAffectedSkill == 0)
+			continue;
+
+		if (Read4Byte(iAffectedSkill + 0x4) == iBuffType)
+			return true;
+	}
+
+	int32_t iSkillContainer2 = Read4Byte(iSkillBase + 0x8);
+	int32_t iSkillContainer2Slot = Read4Byte(iSkillContainer2 + GetAddress("KO_OFF_SKILL_SLOT"));
+
+	for (int32_t i = 0; i < 20; i++)
+	{
+		iSkillContainer1Slot = Read4Byte(iSkillContainer1Slot + 0x0);
+
+		int32_t iAffectedSkill = Read4Byte(iSkillContainer1Slot + 0x8);
+
+		if (iAffectedSkill == 0)
+			continue;
+
+		if (Read4Byte(iAffectedSkill + 0x4) == iBuffType)
+			return true;
+	}
+		
+	return false; 
 };
 
 bool Client::IsBlinking()
@@ -465,31 +559,27 @@ bool Client::IsBlinking()
 	return m_PlayerMySelf.bBlinking;
 };
 
-double Client::GetDistance(Vector3 v3Position)
+float Client::GetDistance(Vector3 v3Position)
 {
 	Vector3 v3MyPosition = GetPosition();
 	return GetDistance(v3MyPosition.m_fX, v3MyPosition.m_fY, v3Position.m_fX, v3Position.m_fY);
 }
 
-double Client::GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition)
+float Client::GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition)
 {
 	return GetDistance(v3SourcePosition.m_fX, v3SourcePosition.m_fY, v3TargetPosition.m_fX, v3TargetPosition.m_fY);
 }
 
-double Client::GetDistance(float fX, float fY)
+float Client::GetDistance(float fX, float fY)
 {
 	Vector3 v3MyPosition = GetPosition();
 	return GetDistance(v3MyPosition.m_fX, v3MyPosition.m_fY, fX, fY);
 }
 
-double Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
+float Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
 {
-	struct Point { double x; double y; };
-
-	Point a{ fX1, fY1 };
-	Point b{ fX2, fY2 };
-
-	return std::hypot(a.x - b.x, a.y - b.y);
+	return std::sqrtf((fX1 - fX2) * (fX1 - fX2) +
+		(fY1 - fY2) * (fY1 - fY2));
 }
 
 uint8_t Client::GetSkillPoint(int32_t Slot)
@@ -505,16 +595,6 @@ bool Client::GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkil
 	*vecAvailableSkills = &m_vecAvailableSkill;
 
 	return true;
-}
-
-bool Client::GetNpcList(std::vector<TNpc>** vecNpcList)
-{ 
-	if (m_vecNpc.size() == 0)
-		return false;
-
-	*vecNpcList = &m_vecNpc;
-
-	return true; 
 }
 
 int32_t Client::GetInventoryItemCount(uint32_t iItemID)
@@ -682,23 +762,21 @@ int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
 
 	auto AddEntityInfo = [&](DWORD Base)
 	{
-		DWORD id = Read4Byte(Base + GetAddress("KO_OFF_ID"));
-		DWORD proto_id = Read4Byte(Base + GetAddress("KO_OFF_PROTO_ID"));
-		DWORD max_hp = Read4Byte(Base + GetAddress("KO_OFF_MAXHP"));
-		DWORD hp = Read4Byte(Base + GetAddress("KO_OFF_HP"));
-		DWORD state = Read4Byte(Base + GetAddress("KO_OFF_ACTION_STATE"));
-		DWORD nation = Read4Byte(Base + GetAddress("KO_OFF_NATION"));
-		Vector3 pos = Vector3(
-			ReadFloat(Base + GetAddress("KO_OFF_X")),
-			ReadFloat(Base + GetAddress("KO_OFF_Z")),
-			ReadFloat(Base + GetAddress("KO_OFF_Y"))
-		);
-		double distance = GetDistance(pos);
+		DWORD id = GetID(Base);
+		DWORD proto_id = GetProtoID(Base);
+		DWORD max_hp = GetMaxHp(Base);
+		DWORD hp = GetHp(Base);
+		DWORD state = GetActionState(Base);
+		DWORD nation = GetNation(Base);
+		Vector3 pos = Vector3(GetX(Base), GetZ(Base), GetY(Base));
+		float distance = GetDistance(pos);
+		bool enemy = IsEnemy(Base);
 
-		vecOutMobList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance));
+		vecOutMobList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy));
 	};
 
-	while (Esi != Ebp && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
+	while (Esi != Ebp 
+		&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
 	{
 		if (vecOutMobList.size() == iMobSize)
 			break;
@@ -718,7 +796,8 @@ int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
 
 		if (Eax != Fend)
 		{
-			while (Read4Byte(Eax) != Fend && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
+			while (Read4Byte(Eax) != Fend 
+				&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
 			{
 				Eax = Read4Byte(Eax);
 			}
@@ -729,7 +808,8 @@ int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
 		{
 			DWORD Ebx = Read4Byte(Esi + 0x4);
 
-			while (Esi == Read4Byte(Ebx + 0x8) && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
+			while (Esi == Read4Byte(Ebx + 0x8) 
+				&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
 			{
 				Esi = Ebx;
 				Ebx = Read4Byte(Ebx + 0x4);
@@ -746,31 +826,32 @@ int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
 int Client::SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList)
 {
 	int Ebp = Read4Byte(Read4Byte(GetAddress("KO_PTR_FLDB")) + 0x30);
+	int iPlayerSize = Read4Byte(Read4Byte(GetAddress("KO_PTR_FLDB")) + 0x34);
 	int Fend = Read4Byte(Read4Byte(Ebp + 0x4) + 0x4);
 	int Esi = Read4Byte(Ebp);
 	auto Tick = std::chrono::steady_clock::now();
 
 	auto AddEntityInfo = [&](DWORD Base)
 	{
-		DWORD id = Read4Byte(Base + GetAddress("KO_OFF_ID"));
-		DWORD proto_id = Read4Byte(Base + GetAddress("KO_OFF_PROTO_ID"));
-		DWORD max_hp = Read4Byte(Base + GetAddress("KO_OFF_MAXHP"));
-		DWORD hp = Read4Byte(Base + GetAddress("KO_OFF_HP"));
-		DWORD state = Read4Byte(Base + GetAddress("KO_OFF_ACTION_STATE"));
-		DWORD nation = Read4Byte(Base + GetAddress("KO_OFF_NATION"));
-		Vector3 pos = Vector3(
-			ReadFloat(Base + GetAddress("KO_OFF_X")),
-			ReadFloat(Base + GetAddress("KO_OFF_Z")),
-			ReadFloat(Base + GetAddress("KO_OFF_Y"))
-		);
-		double distance = GetDistance(pos);
+		DWORD id = GetID(Base);
+		DWORD proto_id = GetProtoID(Base);
+		DWORD max_hp = GetMaxHp(Base);
+		DWORD hp = GetHp(Base);
+		DWORD state = GetActionState(Base);
+		DWORD nation = GetNation(Base);
+		Vector3 pos = Vector3(GetX(Base), GetZ(Base), GetY(Base));
+		float distance = GetDistance(pos);
+		bool enemy = IsEnemy(Base);
 
-		vecOutPlayerList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance));
+		vecOutPlayerList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy));
 	};
 
-	while (Esi != Ebp
+	while (Esi != Ebp 
 		&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
 	{
+		if (vecOutPlayerList.size() == iPlayerSize)
+			break;
+
 		DWORD base = Read4Byte(Esi + 0x14);
 
 		if (base == 0) break;
@@ -811,6 +892,50 @@ int Client::SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList)
 	}
 
 	return static_cast<int>(vecOutPlayerList.size());
+}
+
+bool Client::IsEnemy(DWORD iBase)
+{
+	DWORD iFlags;
+	if (!GetHandleInformation(m_Bot->m_hInjectedProcessHandle, &iFlags))
+		m_Bot->m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+
+	LPVOID pBaseAddress = VirtualAllocEx(m_Bot->m_hInjectedProcessHandle, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (pBaseAddress == nullptr)
+		return 0;
+
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD7,
+		0xA3, 0x00, 0x00, 0x00, 0x00,
+		0x61,
+		0xC3,
+	};
+
+	DWORD iChr = GetAddress(skCryptDec("KO_PTR_CHR"));
+
+	CopyBytes(byCode + 3, iChr);
+	CopyBytes(byCode + 8, iBase);
+
+	DWORD iIsEnemy = GetAddress(skCryptDec("KO_PTR_ENEMY"));
+	CopyBytes(byCode + 13, iIsEnemy);
+	CopyBytes(byCode + 20, pBaseAddress);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+
+	DWORD iEnemyBase = Read4Byte((DWORD)pBaseAddress);
+
+	VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pBaseAddress, 0, MEM_RELEASE);
+
+	if (iEnemyBase > 0)
+		return true;
+
+	return false;
 }
 
 BYTE Client::ReadByte(DWORD dwAddress)

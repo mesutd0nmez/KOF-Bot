@@ -1629,7 +1629,8 @@ void Drawing::DrawMonsterListTree()
                 if (((bRangeLimit 
                     && m_pClient->GetDistance(x.m_v3Position) <= (float)iRangeLimitValue) 
                     || !bRangeLimit) 
-                    && x.m_iProtoId != 9009 && pFindedNpc == vecTargetList.end())
+                    && x.m_bEnemy == true
+                    && pFindedNpc == vecTargetList.end())
                 {
                     SNpcData pNpcData;
 

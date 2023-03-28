@@ -71,8 +71,10 @@ struct SNpcData
 
 struct EntityInfo
 {
-	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, double dDistance) :
-		m_iBase(iBase), m_iId(iId), m_iProtoId(iProtoId), m_iMaxHP(iMaxHP), m_iHP(iHP), m_iState(iState), m_iNation(iNation), m_v3Position(v3Position), m_dDistance(dDistance) {};
+	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, float fDistance, bool bEnemy) :
+		m_iBase(iBase), m_iId(iId), m_iProtoId(iProtoId), m_iMaxHP(iMaxHP), 
+		m_iHP(iHP), m_iState(iState), m_iNation(iNation), m_v3Position(v3Position), 
+		m_fDistance(fDistance), m_bEnemy(bEnemy) {};
 
 	int32_t m_iBase;
 	int32_t m_iId;
@@ -82,7 +84,8 @@ struct EntityInfo
 	int32_t m_iState;
 	int32_t m_iNation;
 	Vector3 m_v3Position;
-	double m_dDistance;
+	float m_fDistance;
+	bool m_bEnemy;
 };
 
 typedef struct SInventory

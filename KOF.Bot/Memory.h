@@ -8,6 +8,9 @@
 
 class Memory
 {
+protected:
+    inline static std::recursive_mutex m_mutexExecutionCode;
+
 public:
     inline static BYTE ReadByte(HANDLE hProcess, DWORD dwAddress)
     {
@@ -90,17 +93,12 @@ public:
         LPVOID pAddress = VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
         if (pAddress == nullptr)
-        {
             return;
-        }
+
+        m_mutexExecutionCode.lock();
 
         WriteProcessMemory(hProcess, pAddress, byCode, bySize, NULL);
-        ExecuteRemoteCode(hProcess, pAddress);
-        VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
-    }
 
-    inline static void ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
-    {
         HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
 
         if (hThread != nullptr)
@@ -108,6 +106,25 @@ public:
             WaitForSingleObject(hThread, INFINITE);
             CloseHandle(hThread);
         }
+
+        VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+
+        m_mutexExecutionCode.unlock();
+    }
+
+    inline static void ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
+    {
+        m_mutexExecutionCode.lock();
+
+        HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
+
+        if (hThread != nullptr)
+        {
+            WaitForSingleObject(hThread, INFINITE);
+            CloseHandle(hThread);
+        }
+
+        m_mutexExecutionCode.unlock();
     }
 };
 

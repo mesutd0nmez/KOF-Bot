@@ -1009,244 +1009,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
-		case WIZ_HP_CHANGE:
-		{
-			m_PlayerMySelf.iHPMax = pkt.read<int16_t>();
-			m_PlayerMySelf.iHP = pkt.read<int16_t>();
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_HP_CHANGE: %d / %d\n", m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
-#endif
-		}
-		break;
-
-		case WIZ_MSP_CHANGE:
-		{
-			m_PlayerMySelf.iMSPMax = pkt.read<int16_t>();
-			m_PlayerMySelf.iMSP = pkt.read<int16_t>();
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_MSP_CHANGE: %d / %d\n", m_PlayerMySelf.iMSP, m_PlayerMySelf.iMSPMax);
-#endif
-		}
-		break;
-
-		case WIZ_EXP_CHANGE:
-		{
-			uint8_t iUnknown1 = pkt.read<uint8_t>();
-			m_PlayerMySelf.iExp = pkt.read<uint64_t>();
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_EXP_CHANGE: %llu\n", m_PlayerMySelf.iExp);
-#endif
-		}
-		break;
-
-		case WIZ_LEVEL_CHANGE:
-		{
-			int32_t iID = pkt.read<int32_t>();
-			uint8_t iLevel = pkt.read<uint8_t>();
-
-			if (m_PlayerMySelf.iID == iID)
-			{
-				m_PlayerMySelf.iLevel = iLevel;
-				m_PlayerMySelf.iBonusPointRemain = pkt.read<uint16_t>();
-				m_PlayerMySelf.iSkillInfo[0] = pkt.read<uint8_t>();
-				m_PlayerMySelf.iExpNext = pkt.read<int64_t>();
-				m_PlayerMySelf.iExp = pkt.read<int64_t>();
-				m_PlayerMySelf.iHPMax = pkt.read<int16_t>();
-				m_PlayerMySelf.iHP = pkt.read<int16_t>();
-				m_PlayerMySelf.iMSPMax = pkt.read<int16_t>();
-				m_PlayerMySelf.iMSP = pkt.read<int16_t>();
-				m_PlayerMySelf.iWeightMax = pkt.read<uint32_t>();
-				m_PlayerMySelf.iWeight = pkt.read<uint32_t>();
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", m_PlayerMySelf.szName.c_str(), iLevel);
-#endif
-			}
-			else
-			{
-			}
-		}
-		break;
-
-		case WIZ_POINT_CHANGE:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-			int16_t iVal = pkt.read<int16_t>();
-
-			m_PlayerMySelf.iHPMax = pkt.read<int16_t>();
-			m_PlayerMySelf.iMSPMax = pkt.read<int16_t>();
-			m_PlayerMySelf.iAttack = pkt.read<int16_t>();
-			m_PlayerMySelf.iWeightMax = pkt.read<uint32_t>();
-
-			switch (iType)
-			{
-				case 0x01:
-				{
-					m_PlayerMySelf.iStrength = (uint8_t)iVal;
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_POINT_CHANGE: STR %d\n", iVal);
-#endif
-				}
-				break;
-
-				case 0x02:
-				{
-					m_PlayerMySelf.iStamina = (uint8_t)iVal;
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_POINT_CHANGE: HP %d\n", iVal);
-#endif
-				}
-				break;
-
-				case 0x03:
-				{
-					m_PlayerMySelf.iDexterity = (uint8_t)iVal;
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_POINT_CHANGE: DEX %d\n", iVal);
-#endif
-				}
-				break;
-
-				case 0x04:
-				{
-					m_PlayerMySelf.iIntelligence = (uint8_t)iVal;
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_POINT_CHANGE: INT %d\n", iVal);
-#endif
-				}
-				break;
-
-				case 0x05:
-				{
-					m_PlayerMySelf.iMagicAttak = (uint8_t)iVal;
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_POINT_CHANGE: MP %d\n", iVal);
-#endif
-				}
-				break;
-			}
-
-			if (iType >= 1 && iType <= 5)
-			{
-				m_PlayerMySelf.iBonusPointRemain--;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: POINT %d\n", m_PlayerMySelf.iBonusPointRemain);
-#endif
-			}
-		}
-		break;
-
-		case WIZ_WEIGHT_CHANGE:
-		{
-			m_PlayerMySelf.iWeight = pkt.read<uint32_t>();
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_WEIGHT_CHANGE: %d\n", m_PlayerMySelf.iWeight);
-#endif
-		}
-		break;
-
-		case WIZ_DURATION:
-		{
-			uint8_t iPos = pkt.read<uint8_t>();
-			uint16_t iDurability = pkt.read<uint16_t>();
-
-			m_PlayerMySelf.tInventory[iPos].iDurability = iDurability;
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_DURATION: %d,%d\n", iPos, iDurability);
-#endif
-		}
-		break;
-
-		case WIZ_ITEM_REMOVE:
-		{
-			uint8_t	iResult = pkt.read<uint8_t>();
-
-			switch (iResult)
-			{
-				case 0x00:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_REMOVE: 0\n");
-#endif
-				}
-				break;
-
-				case 0x01:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_REMOVE: 1\n");
-#endif
-				}
-				break;
-
-				default:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_REMOVE: %d Result Not Implemented\n", iResult);
-#endif
-				}
-				break;
-			}
-		}
-		break;
-
-		case WIZ_ITEM_COUNT_CHANGE:
-		{
-			int16_t iTotalCount = pkt.read<int16_t>();
-
-			for (int i = 0; i < iTotalCount; i++)
-			{
-				uint8_t iDistrict = pkt.read<uint8_t>();
-				uint8_t iIndex = pkt.read<uint8_t>();
-				uint32_t iID = pkt.read<uint32_t>();
-				uint32_t iCount = pkt.read<uint32_t>();
-				uint8_t iNewItem = pkt.read<uint8_t>();
-				uint16_t iDurability = pkt.read<uint16_t>();
-
-				uint32_t iSerial = pkt.read<uint32_t>();
-				uint32_t iExpirationTime = pkt.read<uint32_t>();
-
-				m_PlayerMySelf.tInventory[14 + iIndex].iItemID = iID;
-				m_PlayerMySelf.tInventory[14 + iIndex].iCount = (uint16_t)iCount;
-				m_PlayerMySelf.tInventory[14 + iIndex].iDurability = iDurability;
-				m_PlayerMySelf.tInventory[14 + iIndex].iSerial = iSerial;
-				m_PlayerMySelf.tInventory[14 + iIndex].iExpirationTime = iExpirationTime;
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_COUNT_CHANGE: %d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-					iDistrict,
-					iIndex,
-					iID,
-					iCount,
-					iNewItem,
-					iNewItem,
-					iDurability,
-					iSerial,
-					iExpirationTime);
-#endif
-
-			}
-		}
-		break;
-
-		case WIZ_SKILLPT_CHANGE:
-		{
-			int iType = pkt.read<uint8_t>();
-			int iValue = pkt.read<uint8_t>();
-
-			m_PlayerMySelf.iSkillInfo[iType] = (uint8_t)iValue;
-			m_PlayerMySelf.iSkillInfo[0]++;
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_SKILLPT_CHANGE: %d,%d,%d\n", iType, iValue, m_PlayerMySelf.iSkillInfo[0]);
-#endif
-		}
-		break;
-
 		case WIZ_CLASS_CHANGE:
 		{
 			uint8_t	iType = pkt.read<uint8_t>();
@@ -1316,42 +1078,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 						case 0x01:
 						{
-							m_PlayerMySelf.iStrength = (uint8_t)pkt.read<int16_t>();
-							m_PlayerMySelf.iStamina = (uint8_t)pkt.read<int16_t>();
-							m_PlayerMySelf.iDexterity = (uint8_t)pkt.read<int16_t>();
-							m_PlayerMySelf.iIntelligence = (uint8_t)pkt.read<int16_t>();
-							m_PlayerMySelf.iMagicAttak = (uint8_t)pkt.read<int16_t>();
-
-							m_PlayerMySelf.iHPMax = pkt.read<int16_t>();
-							m_PlayerMySelf.iMSPMax = pkt.read<int16_t>();
-							m_PlayerMySelf.iAttack = pkt.read<int16_t>();
-							m_PlayerMySelf.iWeightMax = pkt.read<uint32_t>();
-
-							m_PlayerMySelf.iBonusPointRemain = pkt.read<int16_t>();
-
-							m_PlayerMySelf.iGold = iGold;
-
 							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
 							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 
 							LoadSkillData();
-
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CLASS_CHANGE: Stat point reset\n");
-							printf("RecvProcess::WIZ_CLASS_CHANGE: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-								m_PlayerMySelf.iStrength,
-								m_PlayerMySelf.iStamina,
-								m_PlayerMySelf.iDexterity,
-								m_PlayerMySelf.iIntelligence,
-								m_PlayerMySelf.iMagicAttak,
-								m_PlayerMySelf.iHPMax,
-								m_PlayerMySelf.iMSPMax,
-								m_PlayerMySelf.iAttack,
-								m_PlayerMySelf.iWeightMax,
-								m_PlayerMySelf.iBonusPointRemain,
-								m_PlayerMySelf.iGold);
-
-#endif
 						}
 						break;
 
@@ -1377,19 +1107,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 						case 0x01:
 						{
-							m_PlayerMySelf.iSkillInfo[0] = pkt.read<uint8_t>();
-
-							for (int i = 1; i < 9; i++)
-								m_PlayerMySelf.iSkillInfo[i] = 0;
-
 							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
 							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 
 							LoadSkillData();
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CLASS_CHANGE: Skill point reset, new points: %d\n",
-								m_PlayerMySelf.iSkillInfo[0]);
-#endif
 						}
 						break;
 
@@ -1414,128 +1135,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					uint16_t iClass = pkt.read<uint16_t>();
 					uint32_t iID = pkt.read<uint32_t>();
-
-					if (m_PlayerMySelf.iID == iID)
-					{
-						m_PlayerMySelf.eClass = (Class)iClass;
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_CLASS_CHANGE: %s class changed to %d\n",
-							m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.eClass);
-#endif
-					}
-					else
-					{
-					}
 				}
 				break;
-			}
-		}
-		break;
-
-		case WIZ_GOLD_CHANGE:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-			uint32_t iGoldOffset = pkt.read<uint32_t>();
-			uint32_t iGold = pkt.read<uint32_t>();
-
-			m_PlayerMySelf.iGold = iGold;
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_GOLD_CHANGE: %d,%d,%d\n", iType, iGoldOffset, iGold);
-#endif
-		}
-		break;
-
-		case WIZ_ITEM_MOVE:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-
-			if (iType != 0)
-			{
-				uint8_t iSubType = pkt.read<uint8_t>();
-
-				if (iSubType != 0)
-				{
-					m_PlayerMySelf.iAttack = pkt.read<int16_t>();
-					m_PlayerMySelf.iGuard = pkt.read<int16_t>();
-					m_PlayerMySelf.iWeightMax = pkt.read<uint32_t>();
-
-					uint16_t iUnknown1 = pkt.read<uint16_t>();
-
-					m_PlayerMySelf.iHPMax = pkt.read<int16_t>();
-					m_PlayerMySelf.iMSPMax = pkt.read<int16_t>();
-
-					m_PlayerMySelf.iStrength_Delta = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iStamina_Delta = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iDexterity_Delta = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iIntelligence_Delta = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iMagicAttak_Delta = (uint8_t)pkt.read<uint16_t>();
-
-					m_PlayerMySelf.iRegistFire = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iRegistCold = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iRegistLight = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iRegistMagic = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iRegistCurse = (uint8_t)pkt.read<uint16_t>();
-					m_PlayerMySelf.iRegistPoison = (uint8_t)pkt.read<uint16_t>();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_MOVE: %d,%d,%d,Unknown1(%d),%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-						m_PlayerMySelf.iAttack,
-						m_PlayerMySelf.iGuard,
-						m_PlayerMySelf.iWeightMax,
-						iUnknown1,
-						m_PlayerMySelf.iHPMax,
-						m_PlayerMySelf.iMSPMax,
-						m_PlayerMySelf.iStrength_Delta,
-						m_PlayerMySelf.iStamina_Delta,
-						m_PlayerMySelf.iDexterity_Delta,
-						m_PlayerMySelf.iIntelligence_Delta,
-						m_PlayerMySelf.iMagicAttak_Delta,
-						m_PlayerMySelf.iRegistFire,
-						m_PlayerMySelf.iRegistCold,
-						m_PlayerMySelf.iRegistLight,
-						m_PlayerMySelf.iRegistMagic,
-						m_PlayerMySelf.iRegistCurse,
-						m_PlayerMySelf.iRegistPoison);
-#endif
-				}
-				else
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_MOVE: %d SubType Not Implemented\n", iSubType);
-#endif
-				}
-			}
-			else
-			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_MOVE: %d Type Not Implemented\n", iType);
-#endif
-			}
-		}
-		break;
-
-		case WIZ_LOYALTY_CHANGE:
-		{
-			uint8_t bType = pkt.read<uint8_t>();
-
-			if (bType == 1)
-			{
-				uint32_t iLoyalty = pkt.read<uint32_t>();
-				uint32_t iLoyaltyMonthly = pkt.read<uint32_t>();
-				uint32_t iUnknown1 = pkt.read<uint32_t>();
-				uint32_t iClanLoyaltyAmount = pkt.read<uint32_t>();
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_LOYALTY_CHANGE: %d,%d,%d,Unknown1(%d),%d\n",
-					bType, iLoyalty, iLoyaltyMonthly, iUnknown1, iClanLoyaltyAmount);
-#endif
-			}
-			else
-			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_LOYALTY_CHANGE: %d Type Not Implemented\n", bType);
-#endif
 			}
 		}
 		break;
@@ -1553,14 +1154,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 				if (bWallHack)
 					SetAuthority(0);
-
-				bool bOreads = GetConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("Oreads"), false);
-
-				if (bOreads)
-				{
-					EquipOreads(700039000);
-					SetOreads(bOreads);
-				}
 
 				bool bDeathEffect = GetConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
 
@@ -1596,16 +1189,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 #ifdef DEBUG
 			printf("RecvProcess::WIZ_REQ_NPCIN: Size %d\n", iNpcCount);
-#endif
-		}
-		break;
-
-		case WIZ_REQ_USERIN:
-		{
-			int16_t iUserCount = pkt.read<int16_t>();
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_REQ_USERIN: Size %d\n", iUserCount);
 #endif
 		}
 		break;
@@ -1655,42 +1238,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
-		case WIZ_USER_INOUT:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-			uint8_t iUnknown0 = pkt.read<uint8_t>();
-
-			switch (iType)
-			{
-				case InOut::INOUT_IN:
-				case InOut::INOUT_RESPAWN:
-				case InOut::INOUT_WARP:
-				{
-				}
-				break;
-
-				case InOut::INOUT_OUT:
-				{
-					int32_t iPlayerID = pkt.read<int32_t>();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_USER_INOUT: %d,%d\n", iType, iPlayerID);
-#endif
-				}
-				break;
-
-				default:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_USER_INOUT: %d not implemented\n", iType);
-#endif
-				}
-
-				break;
-			}
-		}
-		break;
-
 		case WIZ_NPC_REGION:
 		{
 			int16_t iNpcCount = pkt.read<int16_t>();
@@ -1731,158 +1278,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		case WIZ_DEAD:
 		{
 			int32_t iID = pkt.read<int32_t>();
-
-			if (m_PlayerMySelf.iID == iID)
-			{
-				m_PlayerMySelf.eState = PSA_DEATH;
-
-				Guard guard(m_mutexActiveBuffList);
-				std::erase_if(m_mapActiveBuffList, [](const auto& item) 
-				{
-					auto const& [key, value] = item;
-					return value < 500000;
-				});
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
-#endif
-			}
-			else
-			{
-				if (iID >= 5000)
-				{
-					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-						[iID](const TNpc& a) { return a.iID == iID; });
-
-					if (it != m_vecNpc.end())
-					{
-						it->eState = PSA_DEATH;
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_DEAD: %d Npc Dead\n", iID);
-#endif
-					}
-				}
-				else
-				{				
-				}
-			}
-		}
-		break;
-
-		case WIZ_ATTACK:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-			uint8_t iResult = pkt.read<uint8_t>();
-
-			switch (iResult)
-			{
-				case ATTACK_FAIL:
-				{
-					int32_t iAttackID = pkt.read<int32_t>();
-					int32_t iTargetID = pkt.read<int32_t>();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ATTACK: %d,%d FAIL\n", iAttackID, iTargetID);
-#endif
-				}
-				break;
-
-				case ATTACK_SUCCESS:
-				{
-					int32_t iAttackID = pkt.read<int32_t>();
-					int32_t iTargetID = pkt.read<int32_t>();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ATTACK: %d,%d SUCCESS\n", iAttackID, iTargetID);
-#endif
-				}
-				break;
-
-				case ATTACK_TARGET_DEAD:
-				case ATTACK_TARGET_DEAD_OK:
-				{
-					int32_t iAttackID = pkt.read<int32_t>();
-					int32_t iTargetID = pkt.read<int32_t>();
-
-					if (iTargetID >= 5000)
-					{
-						auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-							[iTargetID](const TNpc& a) { return a.iID == iTargetID; });
-
-						if (it != m_vecNpc.end())
-						{
-							it->eState = PSA_DEATH;
-
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Npc Dead\n", iTargetID);
-#endif
-						}
-					}
-					else
-					{
-					}
-				}
-				break;
-
-				default:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ATTACK: %d not implemented\n", iResult);
-#endif
-				}
-				break;
-
-			}
-		}
-		break;
-
-		case WIZ_TARGET_HP:
-		{
-			int32_t iID = pkt.read<int32_t>();
-			uint8_t iUpdateImmediately = pkt.read<uint8_t>();
-
-			int32_t iTargetHPMax = pkt.read<int32_t>();
-			int32_t iTargetHPCur = pkt.read<int32_t>();
-
-			int16_t iTargetHPChange = pkt.read<int16_t>();
-
-			if (m_PlayerMySelf.iID == iID)
-			{
-				m_PlayerMySelf.iHPMax = iTargetHPMax;
-				m_PlayerMySelf.iHP = iTargetHPCur;
-
-				if (m_PlayerMySelf.iHPMax > 0 && m_PlayerMySelf.iHP <= 0)
-					m_PlayerMySelf.eState = PSA_DEATH;
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n",
-					m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
-#endif
-			}
-			else
-			{
-				if (iID >= 5000)
-				{
-					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-						[iID](const TNpc& a) { return a.iID == iID; });
-
-					if (it != m_vecNpc.end())
-					{
-						it->iHPMax = iTargetHPMax;
-						it->iHP = iTargetHPCur;
-
-						if (it->iHPMax > 0 && it->iHP <= 0)
-							it->eState = PSA_DEATH;
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->iHP, it->iHPMax);
-#endif
-					}
-				}
-				else
-				{		
-				}
-			}
 		}
 		break;
 
@@ -1896,19 +1291,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			int16_t iSpeed = pkt.read<int16_t>();
 			uint8_t iMoveType = pkt.read<uint8_t>();
-
-			if (m_PlayerMySelf.iID == iID)
-			{
-				m_PlayerMySelf.fX = fX;
-				m_PlayerMySelf.fY = fY;
-				m_PlayerMySelf.fZ = fZ;
-
-				m_PlayerMySelf.iMoveSpeed = iSpeed;
-				m_PlayerMySelf.iMoveType = iMoveType;
-			}
-			else
-			{
-			}
 		}
 		break;
 
@@ -1924,22 +1306,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			uint16_t iSpeed = pkt.read<uint16_t>();
 
-			auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-				[iID](const TNpc& a) { return a.iID == iID; });
-
-			if (it != m_vecNpc.end())
-			{
-				it->fX = fX;
-				it->fY = fY;
-				it->fZ = fZ;
-
-				it->iMoveSpeed = iSpeed;
-				it->iMoveType = iMoveType;
-			}
-#ifdef DEBUG
-			else
-				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_vecNpc list, is ghost npc\n", iID);
-#endif
 		}
 		break;
 
@@ -1954,17 +1320,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					uint32_t iSkillID = pkt.read<uint32_t>();
 					int32_t iSourceID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
-
-					std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
-					if (!m_Bot->GetSkillTable(&pSkillTable))
-						return;
-
-					auto pSkillData = pSkillTable->find(iSkillID);
-
-					if (pSkillData != pSkillTable->end())
-					{
-
-					}
 				}
 				break;
 
@@ -1973,58 +1328,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 					uint32_t iSkillID = pkt.read<uint32_t>();
 					int32_t iSourceID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
-
-					std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
-					if (!m_Bot->GetSkillTable(&pSkillTable))
-						return;
-
-					auto pSkillData = pSkillTable->find(iSkillID);
-
-					if (pSkillData != pSkillTable->end())
-					{
-						if (pSkillData->second.dw1stTableType == 4)
-						{
-							if (iTargetID == GetID())
-							{
-								std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>* pSkillExtension4;
-								if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
-									return;
-
-								auto pSkillExtension4Data = pSkillExtension4->find(pSkillData->second.iID);
-
-								if (pSkillExtension4Data != pSkillExtension4->end())
-								{
-									Guard guard(m_mutexActiveBuffList);
-									m_mapActiveBuffList.insert(std::pair(pSkillExtension4Data->second.iBuffType, pSkillData->second.iID));
-
-									switch (pSkillData->second.iBaseId)
-									{
-										case 101001:
-										case 107010:
-											m_PlayerMySelf.iMoveSpeed = 67;
-											break;
-
-										case 107725:
-											m_PlayerMySelf.iMoveSpeed = 90;
-											break;
-									}
-
-#ifdef DEBUG
-									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
-#endif
-								}
-#ifdef DEBUG
-								else
-								{
-									printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s Buff added but extension not		exist\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
-								}
-#endif
-							}
-							else
-							{
-							}
-						}
-					}
 				}
 				break;
 
@@ -2052,37 +1355,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				case SkillMagicType::SKILL_MAGIC_TYPE_BUFF:
 				{
 					uint8_t iBuffType = pkt.read<uint8_t>();
-
-					Guard guard(m_mutexActiveBuffList);
-					auto it = m_mapActiveBuffList.find(iBuffType);
-
-					if (it != m_mapActiveBuffList.end())
-					{
-						std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
-						if (m_Bot->GetSkillTable(&pSkillTable))
-						{
-							auto pSkillData = pSkillTable->find(it->second);
-
-#ifdef DEBUG
-							if (pSkillData != pSkillTable->end())
-								printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %s buff removed\n", GetName().c_str(), pSkillData->second.szEngName.c_str());
-							else
-								printf("RecvProcess::WIZ_MAGIC_PROCESS: %s %d buff removed\n", GetName().c_str(), it->second);
-#endif
-						}
-
-					}
-
-					switch (iBuffType)
-					{
-						case (byte)BuffType::BUFF_TYPE_SPEED:
-							m_PlayerMySelf.iMoveSpeed = 45;
-							break;
-					}
-
-					m_mapActiveBuffList.erase(iBuffType);
 				}
 				break;
+
 				default:
 				{
 #ifdef DEBUG
@@ -2160,103 +1435,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
-		case WIZ_SHOPPING_MALL:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-
-			switch (iType)
-			{
-				case ShoppingMallType::STORE_CLOSE:
-				{
-					for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
-					{
-						m_PlayerMySelf.tInventory[i].iPos = i;
-						m_PlayerMySelf.tInventory[i].iItemID = pkt.read<uint32_t>();
-						m_PlayerMySelf.tInventory[i].iDurability = pkt.read<uint16_t>();
-						m_PlayerMySelf.tInventory[i].iCount = pkt.read<uint16_t>();
-						m_PlayerMySelf.tInventory[i].iFlag = pkt.read<uint8_t>();
-						m_PlayerMySelf.tInventory[i].iRentalTime = pkt.read<int16_t>();
-						m_PlayerMySelf.tInventory[i].iSerial = pkt.read<uint32_t>();
-					}
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_SHOPPING_MALL: STORE_CLOSE\n");
-#endif
-				}
-				break;
-
-				default:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_SHOPPING_MALL: Type %d not implemented\n", iType);
-#endif
-				}
-				break;
-			}
-		}
-		break;
-
-		case WIZ_ITEM_TRADE:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-
-			switch (iType)
-			{
-				case 0:
-				{
-					uint8_t iErrorCode = pkt.read<uint8_t>();
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_TRADE: Error Code: %d\n", iErrorCode);
-#endif
-				}
-				break;
-
-				case 1:
-				{
-					uint32_t iGold = pkt.read<uint32_t>();
-					uint32_t iTransactionFee = pkt.read<uint32_t>();
-					uint8_t iSellingGroup = pkt.read<uint8_t>();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_TRADE: %d,%d,%d\n", iGold, iTransactionFee, iSellingGroup);
-#endif
-				}
-				break;
-
-				default:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_TRADE: Type %d not implemented\n", iType);
-#endif
-				}
-				break;
-			}
-		}
-		break;
-
-		case WIZ_MAP_EVENT:
-		{
-			uint8_t iType = pkt.read<uint8_t>();
-
-			switch (iType)
-			{
-				case 9:
-				{
-					m_bLunarWarDressUp = pkt.read<uint8_t>();
-				}
-				break;
-
-				default:
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_MAP_EVENT: Type %d not implemented\n", iType);
-#endif
-				}
-				break;
-			}
-		}
-		break;
-
 		case WIZ_EXCHANGE:
 		{
 			uint8_t iType = pkt.read<uint8_t>();
@@ -2269,28 +1447,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					if (iResult == 1)
 					{
-						m_PlayerMySelf.iGold = pkt.read<uint32_t>();
-
+						uint32_t iGold = pkt.read<uint32_t>();
 						int16_t iItemCount = pkt.read<int16_t>();
 
-						for (int32_t i = 0; i < iItemCount; i++)
-						{
-							uint8_t iItemPos = pkt.read<uint8_t>();
-
-							m_PlayerMySelf.tInventory[14 + iItemPos].iItemID = pkt.read<uint32_t>();
-							m_PlayerMySelf.tInventory[14 + iItemPos].iCount = pkt.read<int16_t>();
-							m_PlayerMySelf.tInventory[14 + iItemPos].iDurability = pkt.read<int16_t>();
-
 #ifdef DEBUG
-							printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Item - %d,%d,%d \n",
-								m_PlayerMySelf.tInventory[14 + iItemPos].iItemID,
-								m_PlayerMySelf.tInventory[14 + iItemPos].iCount,
-								m_PlayerMySelf.tInventory[14 + iItemPos].iDurability);
-#endif
-						}
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Success - %d,%d \n", m_PlayerMySelf.iGold, iItemCount);
+						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Success - %d,%d \n", iGold, iItemCount);
 #endif
 					}
 #ifdef DEBUG
@@ -2316,42 +1477,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 		}
 		break;
 
-		case WIZ_ROTATE:
-		{
-			int32_t iID = pkt.read<int32_t>();
-			float fRotation = pkt.read<int16_t>() / 100.0f;
-
-			if (m_PlayerMySelf.iID == iID)
-			{
-				m_PlayerMySelf.fRotation = fRotation;
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ROTATE: %s MySelf Rotate %f\n", m_PlayerMySelf.szName.c_str(), fRotation);
-#endif
-			}
-			else
-			{
-				if (iID >= 5000)
-				{
-					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-						[iID](const TNpc& a) { return a.iID == iID; });
-
-					if (it != m_vecNpc.end())
-					{
-						it->fRotation = fRotation;
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_ROTATE: %d Npc Rotate %f\n", iID, fRotation);
-#endif
-					}
-				}
-				else
-				{
-				}
-			}
-		}
-		break;
-
 		case WIZ_ITEM_DROP:
 		{
 			TLoot tLoot;
@@ -2365,7 +1490,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			tLoot.iRequestedOpen = false;
 
-			Guard lock(m_vecLootListLock);
+			Guard lock(m_mutexLootList);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[tLoot](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
 
@@ -2389,7 +1514,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			uint32_t iBundleID = pkt.read<uint32_t>();
 			uint8_t iResult = pkt.read<uint8_t>();
 
-			Guard lock(m_vecLootListLock);
+			Guard lock(m_mutexLootList);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[iBundleID](const TLoot a) { return a.iBundleID == iBundleID; });
 
@@ -2470,7 +1595,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-					Guard lock(m_vecLootListLock);
+					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -2502,7 +1627,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					m_PlayerMySelf.iGold = iGold;
 
-					Guard lock(m_vecLootListLock);
+					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -2518,7 +1643,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-					Guard lock(m_vecLootListLock);
+					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -2584,12 +1709,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 						m_msLastSupplyTime = std::chrono::milliseconds(0);
 						m_msLastPotionUseTime = std::chrono::milliseconds(0);
-
-						std::erase_if(m_mapActiveBuffList, [](const auto& item)
-						{
-							auto const& [key, value] = item;
-							return value < 500000;
-						});
 					}
 
 					m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
@@ -2620,12 +1739,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					m_msLastSupplyTime = std::chrono::milliseconds(0);
 					m_msLastPotionUseTime = std::chrono::milliseconds(0);
-
-					std::erase_if(m_mapActiveBuffList, [](const auto& item)
-					{
-						auto const& [key, value] = item;
-						return value < 500000;
-					});
 				}
 				break;
 			}
@@ -2764,11 +1877,19 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD dwLength)
 							if (IsRogue())
 							{
 								bool bArcherCombo = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), true);
+								DWORD iMobBase = GetMobBase(iTargetID);
 
-								if (bArcherCombo)
+								if (bArcherCombo && iMobBase != 0)
 								{
-									StepCharacterForward(true);
-									StepCharacterForward(false);
+									DWORD iHp = GetHp(iMobBase);
+									DWORD iMaxHp = GetMaxHp(iMobBase);
+									DWORD iState = GetActionState(iMobBase);
+
+									if (iState != PSA_DYING && iState != PSA_DEATH && iMaxHp != 0 && iHp != 0)
+									{
+										StepCharacterForward(true);
+										StepCharacterForward(false);
+									}
 								}
 							}	
 						}
@@ -2883,7 +2004,7 @@ void ClientHandler::ConnectLoginServer(bool bDisconnect)
 			0xFF,0xD7,
 			0x61,
 			0xC3,
-};
+		};
 
 		DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
 		CopyBytes(byCode + 3, dwPtrIntro);
@@ -2945,7 +2066,7 @@ void ClientHandler::ConnectGameServer(BYTE byServerId)
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-};
+	};
 
 	DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
 	CopyBytes(byCode + 3, dwPtrIntro);
@@ -2966,7 +2087,7 @@ void ClientHandler::SelectCharacterSkip()
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-};
+	};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -2987,7 +2108,7 @@ void ClientHandler::SelectCharacterLeft()
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-};
+	};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3008,7 +2129,7 @@ void ClientHandler::SelectCharacterRight()
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-};
+	};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3029,7 +2150,7 @@ void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
 		0xFF, 0xD7,
 		0x61,
 		0xC3,
-};
+	};
 
 	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
 	CopyBytes(byCode + 3, dwPtrCharacterSelect);
@@ -3042,43 +2163,39 @@ void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
 
 void ClientHandler::SendPacket(Packet vecBuffer)
 {
-	m_vecPacketLock.lock();
-
 	LPVOID pPacketAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-	if (pPacketAddress != nullptr)
+	if (pPacketAddress == nullptr)
+		return;
+
+	WriteProcessMemory(m_Bot->GetInjectedProcessHandle(), pPacketAddress, vecBuffer.contents(), vecBuffer.size(), 0);
+
+	BYTE byCode[] =
 	{
-		WriteProcessMemory(m_Bot->GetInjectedProcessHandle(), pPacketAddress, vecBuffer.contents(), vecBuffer.size(), 0);
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0x68, 0x0, 0x0, 0x0, 0x0,
+		0x68, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
 
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-			0x68, 0x0, 0x0, 0x0, 0x0,
-			0x68, 0x0, 0x0, 0x0, 0x0,
-			0xBF, 0x0, 0x0, 0x0, 0x0,
-			0xFF, 0xD7,
-			0x61,
-			0xC3,
-		};
+	DWORD dwPtrPkt = GetAddress(skCryptDec("KO_PTR_PKT"));
 
-		DWORD dwPtrPkt = GetAddress(skCryptDec("KO_PTR_PKT"));
+	CopyBytes(byCode + 3, dwPtrPkt);
 
-		CopyBytes(byCode + 3, dwPtrPkt);
+	size_t dwPacketSize = vecBuffer.size();
 
-		size_t dwPacketSize = vecBuffer.size();
+	CopyBytes(byCode + 8, dwPacketSize);
+	CopyBytes(byCode + 13, pPacketAddress);
 
-		CopyBytes(byCode + 8, dwPacketSize);
-		CopyBytes(byCode + 13, pPacketAddress);
+	DWORD dwPtrSndFnc = GetAddress(skCryptDec("KO_SND_FNC"));
+	CopyBytes(byCode + 18, dwPtrSndFnc);
 
-		DWORD dwPtrSndFnc = GetAddress(skCryptDec("KO_SND_FNC"));
-		CopyBytes(byCode + 18, dwPtrSndFnc);
-
-		ExecuteRemoteCode(byCode, sizeof(byCode));
-		VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pPacketAddress, 0, MEM_RELEASE);
-	}
-
-	m_vecPacketLock.unlock();
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+	VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pPacketAddress, 0, MEM_RELEASE);
 }
 
 void ClientHandler::LoadSkillData()
@@ -3145,15 +2262,21 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 	if (bLegalStatus)
 	{
 		//Fix for bug report -_-
-		BYTE byCodePatch[] =
+		BYTE byFix1Patch[] =
 		{
 			0xE9, 0xC5, 0x00, 0x00, 0x00,
 			0x90
 		};
 
-		WriteProcessMemory(m_Bot->m_hInjectedProcessHandle, (LPVOID)GetAddress(skCryptDec("KO_FIX1")), byCodePatch, sizeof(byCodePatch), NULL);
+		WriteProcessMemory(m_Bot->m_hInjectedProcessHandle, (LPVOID)GetAddress(skCryptDec("KO_FIX1")), byFix1Patch, sizeof(byFix1Patch), NULL);
 
-		m_vecSkillLock.lock();
+		if (pSkillData.iReCastTime != 0)
+		{
+			if (GetActionState() == PSA_SPELLMAGIC)
+				return;
+		}
+
+		m_mutexUseSkill.lock();
 
 		BYTE byCode[] =
 		{
@@ -3191,7 +2314,7 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 
 		ExecuteRemoteCode(byCode, sizeof(byCode));
 
-		m_vecSkillLock.unlock();
+		m_mutexUseSkill.unlock();
 
 		SetSkillUseTime(pSkillData.iID,
 			duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -3218,8 +2341,6 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 			{
 				if (pSkillData.iReCastTime != 0)
 				{
-					m_vecSkillLock.lock();
-
 					if (GetMoveState() != PSM_STOP)
 					{
 						SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
@@ -3247,7 +2368,7 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 				{
 					SendStartFlyingAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), 1);
 
-					double fDistance = GetDistance(v3TargetPosition);
+					float fDistance = GetDistance(v3TargetPosition);
 
 					switch (iArrowCount)
 					{
@@ -3287,10 +2408,6 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 				else
 					SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
 
-				if (pSkillData.iReCastTime != 0)
-				{
-					m_vecSkillLock.unlock();
-				}
 			}
 			break;
 
@@ -3300,8 +2417,6 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 			{
 				if (pSkillData.iReCastTime != 0)
 				{
-					m_vecSkillLock.lock();
-
 					if (GetMoveState() != PSM_STOP)
 					{
 						SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
@@ -3315,11 +2430,6 @@ void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool
 					SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
 
 				SendStartSkillMagicAtPosPacket(pSkillData, v3TargetPosition);
-
-				if (pSkillData.iReCastTime != 0)
-				{
-					m_vecSkillLock.unlock();
-				}
 			}
 			break;
 		}
@@ -3504,43 +2614,6 @@ void ClientHandler::SetPosition(Vector3 v3Position)
 
 void ClientHandler::SetMovePosition(Vector3 v3MovePosition)
 {
-	//new std::thread([this,v3MovePosition]()
-	//	{ 
-	//		WorldData* pWorldData = m_World->GetWorldData(GetZone());
-
-	//		if (pWorldData == nullptr)
-	//			return;
-
-	//		///TEST
-	//		int iStartX = (int)(GetX() / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
-	//		int iStartY = (int)(GetY() / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
-
-	//		int iEndX = (int)(v3MovePosition.m_fX / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
-	//		int iEndY = (int)(v3MovePosition.m_fY / ((int)pWorldData->fMapLength / pWorldData->iMapSize));
-
-	//		auto vecPath = pWorldData->AStar->findPath({ iStartX, iStartY }, { iEndX, iEndY });
-
-	//		for (auto& coordinate : vecPath)
-	//		{
-	//			int iNextX = (int)(coordinate.x * ((int)pWorldData->fMapLength / pWorldData->iMapSize));
-	//			int iNextY = (int)(coordinate.y * ((int)pWorldData->fMapLength / pWorldData->iMapSize));
-
-	//			WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 2);
-	//			WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), iNextX);
-	//			WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), iNextY);
-	//			WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 1);
-
-	//			Sleep(1000);
-
-	//			//std::cout
-	//			//	<< (int)(coordinate.x * ((int)pWorldData->fMapLength / pWorldData->iMapSize))
-	//			//	<< " "
-	//			//	<< (int)(coordinate.y * ((int)pWorldData->fMapLength / pWorldData->iMapSize))
-	//			//	<< "\n";
-	//		}
-	//	});
-
-
 	if (v3MovePosition.m_fX == 0.0f && v3MovePosition.m_fY == 0.0f && v3MovePosition.m_fZ == 0.0f)
 	{
 		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 0);
@@ -3662,19 +2735,6 @@ void ClientHandler::SetTarget(int32_t iTargetID, bool bSelectFromClient)
 	CopyBytes(byCode + 15, iSelectMob);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));
-
-#ifdef DEBUG
-	printf("SetTarget: %d\n", iTargetID);
-#endif
-}
-
-void ClientHandler::EquipOreads(int32_t iItemID)
-{
-}
-
-void ClientHandler::SetOreads(bool bValue)
-{
-	Write4Byte(Read4Byte(0xF7F35C) + GetAddress(skCryptDec("KO_OFF_LOOT")), bValue ? 1 : 0);
 }
 
 bool ClientHandler::UseItem(uint32_t iItemID)
@@ -3767,15 +2827,27 @@ void ClientHandler::AttackProcess()
 
 			DWORD iTargetBase = GetMobBase(GetClientSelectedTarget());
 
-			if (iTargetBase > 0)
+			if (iTargetBase == 0)
+				continue;
+			else
 			{
+				if (!IsEnemy(iTargetBase))
+					continue;
+
+				DWORD iHp = GetHp(iTargetBase);
+				DWORD iMaxHp = GetMaxHp(iTargetBase);
+				DWORD iState = GetActionState(iTargetBase);
+
+				if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
+					continue;
+
 				if (bBasicAttack)
 				{
 					DWORD iIsInBasicAttackProcess = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_BASIC_ATTACK_STATE")));
 
 					if (bMoveToTarget
 						&& iIsInBasicAttackProcess == 0
-						&& GetDistance(v3TargetPosition) >= 1.0f 
+						&& GetDistance(v3TargetPosition) >= 1.0f
 						&& GetActionState() != PSA_SPELLMAGIC)
 						BasicAttack();
 				}
@@ -3803,14 +2875,12 @@ void ClientHandler::AttackProcess()
 			{
 				Vector3 v3TargetPosition = GetTargetPosition();
 
-				if (GetDistance(v3TargetPosition) >= 3.0f)
+				if (GetDistance(v3TargetPosition) <= 3.0f)
 				{
-					continue;
-				}
-
-				if (bBasicAttack)
-				{
-					BasicAttack();
+					if (bBasicAttack)
+					{
+						BasicAttack();
+					}
 				}
 
 				if (bAttackSpeed)
@@ -3836,6 +2906,27 @@ void ClientHandler::AttackProcess()
 
 				for (const auto& x : vecAttackSkillList)
 				{
+					DWORD iTargetBase = GetMobBase(GetClientSelectedTarget());
+
+					if (iTargetBase == 0)
+						break;
+					else
+					{
+						DWORD iHp = GetHp(iTargetBase);
+						DWORD iMaxHp = GetMaxHp(iTargetBase);
+						DWORD iState = GetActionState(iTargetBase);
+
+						if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
+							break;
+
+						Vector3 v3TargetPosition = GetTargetPosition();
+						if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
+							break;
+
+						if (!IsEnemy(iTargetBase))
+							break;
+					}
+
 					auto pSkillData = pSkillTable->find(x);
 
 					if (pSkillData != pSkillTable->end())
@@ -3880,9 +2971,7 @@ void ClientHandler::AttackProcess()
 						UseSkill(pSkillData->second, GetTarget(), true);
 
 						if (bBasicAttack)
-						{
 							BasicAttack();
-						}
 
 						if (bAttackSpeed)
 						{
@@ -3974,7 +3063,8 @@ void ClientHandler::SearchTargetProcess()
 						std::back_inserter(vecFilteredTarget),
 						[&](const EntityInfo& c)
 						{
-							return c.m_iProtoId != 9009
+							return
+								c.m_bEnemy == true
 								&& c.m_iState != PSA_DYING
 								&& c.m_iState != PSA_DEATH
 								&& ((c.m_iMaxHP == 0) || (c.m_iMaxHP != 0 && c.m_iHP != 0))
@@ -3989,7 +3079,8 @@ void ClientHandler::SearchTargetProcess()
 						std::back_inserter(vecFilteredTarget),
 						[&](const EntityInfo& c)
 						{
-							return c.m_iProtoId != 9009
+							return 
+								c.m_bEnemy == true
 								&& c.m_iState != PSA_DYING
 								&& c.m_iState != PSA_DEATH
 								&& ((c.m_iMaxHP == 0) || (c.m_iMaxHP != 0 && c.m_iHP != 0))
@@ -4002,8 +3093,8 @@ void ClientHandler::SearchTargetProcess()
 				{
 					auto pSort = [&](EntityInfo const& a, EntityInfo const& b)
 					{
-						if (a.m_dDistance != b.m_dDistance)
-							return a.m_dDistance < b.m_dDistance;
+						if (a.m_fDistance != b.m_fDistance)
+							return a.m_fDistance < b.m_fDistance;
 
 						return false;
 					};
@@ -4069,7 +3160,7 @@ void ClientHandler::AutoLootProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			if (IsBlinking())
 				continue;
@@ -4090,7 +3181,7 @@ void ClientHandler::AutoLootProcess()
 					std::chrono::system_clock::now().time_since_epoch()
 				);
 
-				Guard lock(m_vecLootListLock);
+				Guard lock(m_mutexLootList);
 				std::copy_if(m_vecLootList.begin(), m_vecLootList.end(),
 					std::back_inserter(vecFilteredLoot),
 					[&](const TLoot& c)
@@ -4204,7 +3295,7 @@ void ClientHandler::MinorProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			if (IsBlinking())
 				continue;
@@ -4266,7 +3357,7 @@ void ClientHandler::PotionProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			if (IsBlinking())
 				continue;
@@ -4351,7 +3442,7 @@ void ClientHandler::CharacterProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			if (IsBlinking())
 				continue;
@@ -4699,7 +3790,7 @@ bool ClientHandler::ManaPotionProcess()
 		910006000, 389078000, 910007000, 900800000,
 		389079000, 910008000, 900810000, 389080000,
 		910009000, 900820000, 389081000, 910010000,
-		899997000, 399020000, 389082000
+		899997000, 399020000, 389082000, 931787000,
 	};
 
 	auto pSort = [](uint32_t const& a, uint32_t const& b)
@@ -4822,7 +3913,7 @@ void ClientHandler::RouteProcess()
 
 			Route pRoute = m_vecRoute.front();
 
-			double fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+			float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
 
 			if (fDistance > 3.0f)
 				SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
@@ -5347,113 +4438,37 @@ void ClientHandler::BasicAttack()
 	if (iMobBase == 0)
 		return;
 
-	m_vecBasicAttackLock.lock();
+	if (!IsEnemy(iMobBase))
+		return;
 
-	if (m_pClientBasicAttackAddress == nullptr)
+	DWORD iHp = GetHp(iMobBase);
+	DWORD iMaxHp = GetMaxHp(iMobBase);
+	DWORD iState = GetActionState(iMobBase);
+
+	if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
+		return;
+
+	BYTE byCode[] =
 	{
-		m_pClientBasicAttackAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0xB8, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD0,
+		0x61,
+		0xC3
+	};
 
-		if (m_pClientBasicAttackAddress != nullptr)
-		{
-			BYTE byCode[] =
-			{
-				0x60,
-				0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-				0xB8, 0x00, 0x00, 0x00, 0x00,
-				0xFF, 0xD0,
-				0x61,
-				0xC3
-			};
+	DWORD iDlg = GetAddress(skCryptDec("KO_PTR_DLG"));
+	CopyBytes(byCode + 3, iDlg);
 
-			DWORD iDlg = GetAddress(skCryptDec("KO_PTR_DLG"));
-			CopyBytes(byCode + 3, iDlg);
+	DWORD iLrca = GetAddress(skCryptDec("KO_LRCA"));
+	CopyBytes(byCode + 8, iLrca);
 
-			DWORD iLrca = GetAddress(skCryptDec("KO_LRCA"));
-			CopyBytes(byCode + 8, iLrca);
-
-			WriteProcessMemory(m_Bot->m_hInjectedProcessHandle, m_pClientBasicAttackAddress, byCode, sizeof(byCode), NULL);
-			ExecuteRemoteCode(m_pClientBasicAttackAddress);
-		}
-	}
-	else
-	{
-		ExecuteRemoteCode(m_pClientBasicAttackAddress);
-	}
-
-	m_vecBasicAttackLock.unlock();
+	ExecuteRemoteCode(byCode, sizeof(byCode));
 }
 
 DWORD ClientHandler::GetSkillBase(uint32_t iSkillID)
 {
-	auto pSkillBase = m_mapSkillBase.find(iSkillID);
-
-	if (pSkillBase != m_mapSkillBase.end())
-	{
-		return pSkillBase->second;
-	}
-	else
-	{
-		DWORD iFlags;
-		if (!GetHandleInformation(m_Bot->m_hInjectedProcessHandle, &iFlags))
-			m_Bot->m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-		LPVOID pBaseAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-		if (pBaseAddress == 0)
-		{
-			return 0;
-		}
-
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-			0x68, 0x00, 0x00, 0x00, 0x00,
-			0xBF, 0x00, 0x00, 0x00, 0x00,
-			0xFF, 0xD7,
-			0xA3, 0x00, 0x00, 0x00, 0x00,
-			0x61,
-			0xC3,
-		};
-
-		DWORD iSbec = GetAddress(skCryptDec("KO_SBEC"));
-
-		if (Read4Byte(iSbec) == 0)
-			return 0;
-
-		CopyBytes(byCode + 3, iSbec);
-		CopyBytes(byCode + 8, iSkillID);
-
-		DWORD iSbca = GetAddress(skCryptDec("KO_SBCA"));
-
-		if (Read4Byte(iSbca) == 0)
-			return 0;
-
-		CopyBytes(byCode + 13, iSbca);
-		CopyBytes(byCode + 20, pBaseAddress);
-
-		ExecuteRemoteCode(byCode, sizeof(byCode));
-
-		DWORD iSkillBase = Read4Byte((DWORD)pBaseAddress);
-
-		if (iSkillBase > 0)
-		{
-			m_mapSkillBase.insert(std::make_pair(iSkillID, iSkillBase));
-		}
-
-		VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pBaseAddress, 0, MEM_RELEASE);
-
-		return iSkillBase;
-	}
-}
-
-void ClientHandler::StopMove()
-{
-	if (GetMoveState() == PSM_STOP)
-	{
-		return;
-	}
-
 	DWORD iFlags;
 	if (!GetHandleInformation(m_Bot->m_hInjectedProcessHandle, &iFlags))
 		m_Bot->m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
@@ -5462,8 +4477,51 @@ void ClientHandler::StopMove()
 
 	if (pBaseAddress == 0)
 	{
-		return;
+		return 0;
 	}
+
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD7,
+		0xA3, 0x00, 0x00, 0x00, 0x00,
+		0x61,
+		0xC3,
+	};
+
+	DWORD iSbec = GetAddress(skCryptDec("KO_SBEC"));
+	CopyBytes(byCode + 3, iSbec);
+	CopyBytes(byCode + 8, iSkillID);
+
+	DWORD iSbca = GetAddress(skCryptDec("KO_SBCA"));
+	CopyBytes(byCode + 13, iSbca);
+	CopyBytes(byCode + 20, pBaseAddress);
+
+	ExecuteRemoteCode(byCode, sizeof(byCode));
+
+	DWORD iSkillBase = Read4Byte((DWORD)pBaseAddress);
+
+	VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pBaseAddress, 0, MEM_RELEASE);
+
+	return iSkillBase;
+}
+
+void ClientHandler::StopMove()
+{
+	if (GetMoveState() == PSM_STOP)
+		return;
+
+	DWORD iFlags;
+	if (!GetHandleInformation(m_Bot->m_hInjectedProcessHandle, &iFlags))
+		m_Bot->m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+
+	LPVOID pBaseAddress = VirtualAllocEx(m_Bot->m_hInjectedProcessHandle, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (pBaseAddress == nullptr)
+		return;
 
 	BYTE byCode[] =
 	{
@@ -5481,7 +4539,7 @@ void ClientHandler::StopMove()
 	DWORD iDLG = GetAddress(skCryptDec("KO_PTR_DLG"));
 	CopyBytes(byCode + 6, iDLG);
 
-	DWORD i06 = 0x7460C0;
+	DWORD i06 = GetAddress(skCryptDec("KO_PTR_06"));
 	CopyBytes(byCode + 13, i06);
 
 	ExecuteRemoteCode(byCode, sizeof(byCode));

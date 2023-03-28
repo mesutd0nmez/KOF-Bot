@@ -140,10 +140,6 @@ public:
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
 	void SetTarget(int32_t iTargetID, bool bSelectFromClient = true);
-
-	void EquipOreads(int32_t iItemID);
-	void SetOreads(bool bValue);
-
 	bool UseItem(uint32_t iItemID);
 
 private:
@@ -165,7 +161,6 @@ private:
 private:
 	void AttackProcess();
 	void SearchTargetProcess();
-	void InitializeTarget();
 
 	void AutoLootProcess();
 
@@ -240,6 +235,9 @@ private:
 
 public:
 	void StopMove();
+
+public:
+	std::recursive_mutex m_mutexUseSkill;
 };
 
 
