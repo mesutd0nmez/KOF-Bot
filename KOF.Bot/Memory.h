@@ -3,13 +3,14 @@
 #include <Windows.h>
 #include <string>
 #include <vector>
+#include <mutex>
 
 #define CopyBytes(Dest,Src) memcpy(Dest, (BYTE*)&Src, sizeof(Src))
 
 class Memory
 {
 protected:
-    inline static std::recursive_mutex m_mutexExecutionCode;
+    inline static std::mutex m_mutexExecutionCode;
 
 public:
     inline static BYTE ReadByte(HANDLE hProcess, DWORD dwAddress)
@@ -88,33 +89,44 @@ public:
         return (dwDestAddress - dwSrcAddress - 5);
     }
 
-    inline static void ExecuteRemoteCode(HANDLE hProcess, BYTE* byCode, size_t bySize)
+    inline static bool ExecuteRemoteCode(HANDLE hProcess, const BYTE* byCode, SIZE_T bySize)
     {
-        LPVOID pAddress = VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (!hProcess || !byCode || bySize == 0)
+            return false;
 
-        if (pAddress == nullptr)
-            return;
+        LPVOID pAddress = VirtualAllocEx(hProcess, nullptr, bySize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-        m_mutexExecutionCode.lock();
+        if (!pAddress)
+            return false;
 
-        WriteProcessMemory(hProcess, pAddress, byCode, bySize, NULL);
+        std::lock_guard<std::mutex> lock(m_mutexExecutionCode);
 
-        HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
+        SIZE_T bytesWritten = 0;
 
-        if (hThread != nullptr)
+        if (!WriteProcessMemory(hProcess, pAddress, byCode, bySize, &bytesWritten) || bytesWritten != bySize)
         {
-            WaitForSingleObject(hThread, INFINITE);
-            CloseHandle(hThread);
+            VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+            return false;
         }
 
+        HANDLE hThread = CreateRemoteThread(hProcess, nullptr, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(pAddress), nullptr, 0, nullptr);
+
+        if (!hThread)
+        {
+            VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+            return false;
+        }
+
+        WaitForSingleObject(hThread, INFINITE);
+        CloseHandle(hThread);
         VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
 
-        m_mutexExecutionCode.unlock();
+        return true;
     }
 
-    inline static void ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
+    inline static bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
     {
-        m_mutexExecutionCode.lock();
+        std::lock_guard<std::mutex> lock(m_mutexExecutionCode);
 
         HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
 
@@ -122,9 +134,10 @@ public:
         {
             WaitForSingleObject(hThread, INFINITE);
             CloseHandle(hThread);
+            return true;
         }
 
-        m_mutexExecutionCode.unlock();
+        return false;
     }
 };
 

@@ -1,7 +1,6 @@
 #ifndef DRAWING_H
 #define DRAWING_H
 
-#include <imgui.h>
 #include "Bot.h"
 
 class Drawing
@@ -36,6 +35,7 @@ public:
 	static void DrawMainFeaturesArea();
 	static void DrawMainAutoLootArea();
 	static void DrawMainSupplyArea();
+	static void DrawMainTransformationArea();
 	static void DrawMainSettingsArea();
 	static void DrawMainPriestArea();
 

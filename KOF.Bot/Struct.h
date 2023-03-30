@@ -505,7 +505,6 @@ typedef struct  __TABLE_MOB_CNKO
 	uint8_t				iUnknown2;
 } TABLE_MOBS_CNKO;
 
-
 typedef struct  __TABLE_ITEM_SELL
 {
 	uint32_t			iID;
@@ -535,3 +534,14 @@ typedef struct  __TABLE_ITEM_SELL
 	uint32_t			iItem22;
 	uint32_t			iItem23;
 } TABLE_ITEM_SELLS;
+
+typedef struct  __TABLE_DISGUISE_RING
+{
+	uint32_t			iID;
+	std::string			szName;
+	int32_t				iRequiredLevel;
+	uint32_t			iSkillID;
+	uint32_t			iItemID;
+	uint8_t				iType;
+	std::string			szDescription;
+} TABLE_DISGUISE_RING;

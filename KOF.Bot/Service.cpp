@@ -19,7 +19,7 @@ void Service::Clear()
 
     m_iniPointer = nullptr;
     m_iniUserConfiguration = nullptr;
-    m_iniConfiguration = nullptr;
+    m_iniAppConfiguration = nullptr;
 
     m_ePlatformType = PlatformType::USKO;
     m_iSelectedAccount = 0;
@@ -32,10 +32,10 @@ void Service::Clear()
 void Service::Initialize()
 {
     std::string szIniPath = skCryptDec(".\\data\\KOF.ini");
-    m_iniConfiguration = new Ini();
-    m_iniConfiguration->Load(szIniPath.c_str());
+    m_iniAppConfiguration = new Ini();
+    m_iniAppConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
+    m_szToken = m_iniAppConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
 //#ifdef DEBUG
 //    Connect(skCryptDec("127.0.0.1"), 8888);

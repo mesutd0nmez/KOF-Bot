@@ -1,6 +1,7 @@
 // pch.cpp: source file corresponding to the pre-compiled header
 
 #include "pch.h"
+#include <curl/curl.h>
 
 void SuspendProcess(HANDLE hProcess)
 {
@@ -121,4 +122,53 @@ BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
 	CloseHandle(hProcess);
 
 	return bStatus;
+}
+
+size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp)
+{
+	((std::string*)userp)->append((char*)contents, size * nmemb);
+	return size * nmemb;
+}
+
+std::string CurlPost(std::string szUrl, JSON jData)
+{
+	CURL* curl;
+	CURLcode res;
+	std::string szReadBuffer;
+
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+
+	curl = curl_easy_init();
+
+	if (curl)
+	{
+		std::string szJson = jData.dump();
+
+		curl_easy_setopt(curl, CURLOPT_URL, szUrl.c_str());
+		curl_easy_setopt(curl, CURLOPT_POST, 1L);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, szJson.c_str());
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &szReadBuffer);
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, FALSE);
+
+		struct curl_slist* headers = NULL;
+		headers = curl_slist_append(headers, "Content-Type: application/json");
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+		res = curl_easy_perform(curl);
+
+		if (res != CURLE_OK)
+		{
+			printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		}
+
+		curl_easy_cleanup(curl);
+		curl_slist_free_all(headers);
+	}
+
+	curl_global_cleanup();
+
+	return szReadBuffer;
 }

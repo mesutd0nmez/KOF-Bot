@@ -4,8 +4,6 @@
 //#define PRINT_RECV_PACKET
 //#define PRINT_SEND_PACKET
 
-#define USE_MAILSLOT
-
 //#define DISABLE_XIGNCODE
 
 #define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"

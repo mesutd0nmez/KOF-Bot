@@ -11,7 +11,6 @@ Bot::Bot()
 	m_ClientHandler = nullptr;
 
 	m_dwInjectedProcessId = 0;
-	m_hInjectedProcessHandle = nullptr;
 
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
@@ -21,6 +20,7 @@ Bot::Bot()
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
 	m_pTbl_ItemSell = nullptr;
+	m_pTbl_Disguise_Ring = nullptr;
 
 	m_msLastConfigurationSave = std::chrono::milliseconds(0);
 
@@ -50,7 +50,6 @@ Bot::~Bot()
 	m_ClientHandler = nullptr;
 
 	m_dwInjectedProcessId = 0;
-	m_hInjectedProcessHandle = nullptr;
 
 	m_bTableLoaded = false;
 
@@ -61,6 +60,7 @@ Bot::~Bot()
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
 	m_pTbl_ItemSell = nullptr;
+	m_pTbl_Disguise_Ring = nullptr;
 
 	m_szClientPath.clear();
 	m_szClientExe.clear();
@@ -199,6 +199,9 @@ void Bot::Release()
 
 	if (m_pTbl_ItemSell)
 		m_pTbl_ItemSell->Release();
+
+	if(m_pTbl_Disguise_Ring)
+		m_pTbl_Disguise_Ring->Release();
 }
 
 ClientHandler* Bot::GetClientHandler()
@@ -305,6 +308,14 @@ void Bot::InitializeStaticData()
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d selling item\n", m_pTbl_ItemSell->GetDataSize());
+#endif
+
+	m_pTbl_Disguise_Ring = new Table<__TABLE_DISGUISE_RING>();
+	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\disguisering_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+	m_pTbl_Disguise_Ring->Load(szPath);
+
+#ifdef DEBUG
+	printf("InitializeStaticData: Loaded %d disquise mob\n", m_pTbl_Disguise_Ring->GetDataSize());
 #endif
 
 #ifdef DEBUG
@@ -494,7 +505,6 @@ void Bot::OnLoaded()
 #endif
 	}
 
-	m_hInjectedProcessHandle = injectedProcessInfo.hProcess;
 	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
 	ResumeProcess(injectedProcessInfo.hProcess);
@@ -548,7 +558,12 @@ void Bot::OnConfigurationLoaded()
 	});
 }
 
-Ini* Bot::GetConfiguration()
+Ini* Bot::GetAppConfiguration()
+{
+	return m_iniAppConfiguration;
+}
+
+Ini* Bot::GetUserConfiguration()
 {
 	return m_iniUserConfiguration;
 }
@@ -609,112 +624,143 @@ bool Bot::GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut)
 	return m_pTbl_ItemSell->GetData(mapDataOut);
 }
 
+bool Bot::GetDisguiseRingTable(std::map<uint32_t, __TABLE_DISGUISE_RING>** mapDataOut)
+{
+	if (m_pTbl_Disguise_Ring == nullptr)
+		return false;
+
+	return m_pTbl_Disguise_Ring->GetData(mapDataOut);
+}
+
 BYTE Bot::ReadByte(DWORD dwAddress)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	return Memory::ReadByte(m_hInjectedProcessHandle, dwAddress);
+	if (hProcess == nullptr)
+		return 0;
+
+	BYTE nRet = Memory::ReadByte(hProcess, dwAddress);
+
+	CloseHandle(hProcess);
+	return nRet;
 }
 
 DWORD Bot::Read4Byte(DWORD dwAddress)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	return Memory::Read4Byte(m_hInjectedProcessHandle, dwAddress);
+	if (hProcess == nullptr)
+		return 0;
+
+	DWORD nRet = Memory::Read4Byte(hProcess, dwAddress);
+
+	CloseHandle(hProcess);
+	return nRet;
 }
 
 float Bot::ReadFloat(DWORD dwAddress)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	return Memory::ReadFloat(m_hInjectedProcessHandle, dwAddress);
+	if (hProcess == nullptr)
+		return 0.0f;
+
+	float nRet = Memory::ReadFloat(hProcess, dwAddress);
+
+	CloseHandle(hProcess);
+	return nRet;
 }
 
 std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	return Memory::ReadString(m_hInjectedProcessHandle, dwAddress, nSize);
+	if (hProcess == nullptr)
+		return "";
+
+	std::string nRet = Memory::ReadString(hProcess, dwAddress, nSize);
+
+	CloseHandle(hProcess);
+	return nRet;
 }
 
 std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	return Memory::ReadBytes(m_hInjectedProcessHandle, dwAddress, nSize);
+	std::vector<BYTE> nRet;
+	if (hProcess == nullptr)
+		return nRet;
+
+	nRet = Memory::ReadBytes(hProcess, dwAddress, nSize);
+
+	CloseHandle(hProcess);
+	return nRet;
 }
 
 void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	Memory::WriteByte(m_hInjectedProcessHandle, dwAddress, byValue);
+	if (hProcess == nullptr)
+		return;
+
+	Memory::WriteByte(hProcess, dwAddress, byValue);
+	CloseHandle(hProcess);
 }
 
 void Bot::Write4Byte(DWORD dwAddress, int iValue)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	Memory::Write4Byte(m_hInjectedProcessHandle, dwAddress, iValue);
+	if (hProcess == nullptr)
+		return;
+
+	Memory::Write4Byte(hProcess, dwAddress, iValue);
+	CloseHandle(hProcess);
 }
 
 void Bot::WriteFloat(DWORD dwAddress, float fValue)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	Memory::WriteFloat(m_hInjectedProcessHandle, dwAddress, fValue);
+	if (hProcess == nullptr)
+		return;
+
+	Memory::WriteFloat(hProcess, dwAddress, fValue);
+	CloseHandle(hProcess);
 }
 
 void Bot::WriteString(DWORD dwAddress, std::string strValue)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	Memory::WriteString(m_hInjectedProcessHandle, dwAddress, strValue);
+	if (hProcess == nullptr)
+		return;
+
+	Memory::WriteString(hProcess, dwAddress, strValue);
+	CloseHandle(hProcess);
 }
 
 void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	Memory::WriteBytes(m_hInjectedProcessHandle, dwAddress, byValue);
+	if (hProcess == nullptr)
+		return;
+
+	Memory::WriteBytes(hProcess, dwAddress, byValue);
+	CloseHandle(hProcess);
 }
 
-void Bot::ExecuteRemoteCode(BYTE* codes, size_t psize)
+bool Bot::ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	Memory::ExecuteRemoteCode(m_hInjectedProcessHandle, codes, psize);
+	return Memory::ExecuteRemoteCode(hProcess, codes, psize);
 }
 
-void Bot::ExecuteRemoteCode(LPVOID pAddress)
+bool Bot::ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
 {
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	Memory::ExecuteRemoteCode(m_hInjectedProcessHandle, pAddress);
+	return Memory::ExecuteRemoteCode(hProcess, pAddress);
 }
 
 bool Bot::IsInjectedProcessLost()
@@ -722,17 +768,25 @@ bool Bot::IsInjectedProcessLost()
 	if (GetInjectedProcessId() == 0)
 		return true;
 
-	DWORD iFlags;
-	if (!GetHandleInformation(m_hInjectedProcessHandle, &iFlags))
-		m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	if (hProcess == nullptr)
+		return true;
 
 	DWORD iExitCode = 0;
-	if (GetExitCodeProcess(m_hInjectedProcessHandle, &iExitCode) == FALSE)
+	if (GetExitCodeProcess(hProcess, &iExitCode) == FALSE)
+	{
+		CloseHandle(hProcess);
 		return true;
+	}
 
 	if (iExitCode != STILL_ACTIVE)
+	{
+		CloseHandle(hProcess);
 		return true;
+	}
 
+	CloseHandle(hProcess);
 	return false;
 }
 

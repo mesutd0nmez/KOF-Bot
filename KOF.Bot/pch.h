@@ -19,7 +19,6 @@ using JSON = nlohmann::json;
 
 #include <imgui.h>
 #include <d3d11.h>
-#include <stb_image.h>
 
 #define WaitCondition(condition) \
 	while(condition) \
@@ -39,6 +38,8 @@ extern std::string to_string(wchar_t const* wcstr);
 extern std::string to_string(std::wstring const& wstr);
 
 extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
+
+extern std::string CurlPost(std::string szUrl, JSON jData);
 
 
 #endif //PCH_H

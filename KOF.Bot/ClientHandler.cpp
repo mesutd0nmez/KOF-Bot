@@ -7,6 +7,10 @@
 #include "Service.h"
 #include "Guard.h"
 #include "Drawing.h"
+#include <stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
+#include <base64.h>
 
 ClientHandler::ClientHandler(Bot* pBot)
 {
@@ -28,19 +32,15 @@ void ClientHandler::Clear()
 
 	m_bConfigurationLoaded = false;
 
-#ifdef USE_MAILSLOT
 	m_bMailSlotWorking = false;
 	m_szMailSlotRecvName.clear();
 	m_szMailSlotSendName.clear();
 
 	m_RecvHookAddress = 0;
 	m_SendHookAddress = 0;
-#endif
 
 	m_szAccountId.clear();
 	m_szPassword.clear();
-
-	m_vecOrigDeathEffectFunction.clear();
 
 	m_ClientHook = nullptr;
 
@@ -48,13 +48,6 @@ void ClientHandler::Clear()
 
 	m_msLastSupplyTime = std::chrono::milliseconds(0);
 	m_msLastPotionUseTime = std::chrono::milliseconds(0);
-
-	m_mapSkillBase.clear();
-
-	m_pClientSkillAddress = nullptr;
-	m_pClientSkillFunctionAddress = nullptr;
-
-	m_pClientBasicAttackAddress = nullptr;
 }
 
 void ClientHandler::Initialize()
@@ -126,7 +119,7 @@ void ClientHandler::Process()
 
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-				ConnectLoginServer();
+				ConnectLoginServer(m_szAccountId, m_szPassword);
 			});
 		}
 	}
@@ -161,7 +154,7 @@ void ClientHandler::OnReady()
 					jSelectedAccount["accountId"].get<std::string>(),
 					jSelectedAccount["password"].get<std::string>());
 
-				ConnectLoginServer();
+				ConnectLoginServer(m_szAccountId, m_szPassword);
 			}
 		});
 	}
@@ -184,83 +177,24 @@ void ClientHandler::PatchClient()
 
 	PatchSendAddress();
 
-#ifdef USE_MAILSLOT
 	m_bMailSlotWorking = true;
 	new std::thread([this]() { MailSlotRecvProcess(); });
 	new std::thread([this]() { MailSlotSendProcess(); });
-#endif
 
 	OnReady();
 }
 
-void ClientHandler::PatchRecvAddress(DWORD dwAddress)
+void ClientHandler::PatchRecvAddress(DWORD iAddress)
 {
-#ifndef USE_MAILSLOT
-	WaitCondition(Read4Byte(dwAddress) == 0);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
-	DWORD dwRecvAddress = Read4Byte(Read4Byte(dwAddress)) + 0x8;
-
-	BYTE byPatch[] =
-	{
-		0x55,									//push ebp
-		0x8B, 0xEC,								//mov ebp,esp
-		0x83, 0xC4, 0xF8,						//add esp,-08
-		0x53,									//push ebx
-		0x8B, 0x45, 0x08,						//mov eax,[ebp+08]
-		0x83, 0xC0, 0x04,						//add eax,04
-		0x8B, 0x10,								//mov edx,[eax]
-		0x89, 0x55, 0xFC,						//mov [ebp-04],edx
-		0x8B, 0x4D, 0x08,						//mov ecx,[ebp+08]
-		0x83, 0xC1, 0x08,						//add ecx,08
-		0x8B, 0x01,								//mov eax,[ecx]
-		0x89, 0x45, 0xF8,						//mov [ebp-08],eax
-		0xFF, 0x75, 0xFC,						//push [ebp-04]
-		0xFF, 0x75, 0xF8,						//push [ebp-08]
-		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- ClientHook::RecvProcess()
-		0xFF, 0xD0,								//call eax
-		0x83, 0xC4, 0x08,						//add esp,08
-		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,		//mov ecx,[00000000] <-- KO_PTR_DLG
-		0xFF, 0x75, 0x0C,						//push [ebp+0C]
-		0xFF, 0x75, 0x08,						//push [ebp+08]
-		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- GetRecvCallAddress()
-		0xFF, 0xD0,								//call eax
-		0x5B,									//pop ebx
-		0x59,									//pop ecx
-		0x59,									//pop ecx
-		0x5D,									//pop ebp
-		0xC2, 0x08, 0x00						//ret 0008
-	};
-
-	ClientHook* pClientHook = new ClientHook(this);
-
-	DWORD dwRecvProcessFunction = (DWORD)(LPVOID*)pClientHook->RecvProcess;
-	CopyBytes(byPatch + 36, dwRecvProcessFunction);
-
-	DWORD dwDlgAddress = dwAddress;
-	CopyBytes(byPatch + 47, dwDlgAddress);
-
-	DWORD dwRecvCallAddress = Read4Byte(dwRecvAddress);
-	CopyBytes(byPatch + 58, dwRecvCallAddress);
-
-	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
-
-	DWORD dwPatchAddress = (DWORD)VirtualAlloc(0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (dwPatchAddress == 0)
+	if (!hProcess)
 		return;
 
-	WriteBytes(dwPatchAddress, vecPatch);
-
-	DWORD dwOldProtection;
-	VirtualProtect((LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	Write4Byte(dwRecvAddress, dwPatchAddress);
-	VirtualProtect((LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
-#else
-
-	DWORD dwAddressReady = 0;
-	while (dwAddressReady == 0)
+	DWORD iAddressReady = 0;
+	while (iAddressReady == 0)
 	{
-		ReadProcessMemory(m_Bot->GetInjectedProcessHandle(), (LPVOID)dwAddress, &dwAddressReady, 4, 0);
+		ReadProcessMemory(hProcess, (LPVOID)iAddress, &iAddressReady, 4, 0);
 	}
 
 	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
@@ -270,6 +204,7 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 #ifdef DEBUG
 		printf("hModuleKernel32 == nullptr\n");
 #endif
+		CloseHandle(hProcess);
 		return;
 	}
 
@@ -277,27 +212,21 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	LPVOID pMailSlotNameAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF_RECV\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
+
+	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (pMailSlotNameAddress == 0)
 	{
+		CloseHandle(hProcess);
 		return;
 	}
 
-	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF_RECV\\") + std::to_string(m_Bot->GetInjectedProcessId());
-
-	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
 	WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
 
 	if (m_RecvHookAddress == 0)
 	{
-		m_RecvHookAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-		if (m_RecvHookAddress == 0)
-		{
-			return;
-		}
-
 		BYTE byHookPatch[] =
 		{
 			0x55,
@@ -329,24 +258,32 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 			0x8B, 0xE5,
 			0x5D,
 			0xC3
-		};
+};
+
+		m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byHookPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+		if (m_RecvHookAddress == 0)
+		{
+			CloseHandle(hProcess);
+			return;
+		}
 
 		CopyBytes(byHookPatch + 35, pMailSlotNameAddress);
 
-		DWORD dwCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 39, (DWORD)pCreateFilePtr);
-		CopyBytes(byHookPatch + 40, dwCreateFileDifference);
+		DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 39, (DWORD)pCreateFilePtr);
+		CopyBytes(byHookPatch + 40, iCreateFileDifference);
 
-		DWORD dwWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 62, (DWORD)pWriteFilePtr);
-		CopyBytes(byHookPatch + 63, dwWriteFileDifference);
+		DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 62, (DWORD)pWriteFilePtr);
+		CopyBytes(byHookPatch + 63, iWriteFileDifference);
 
-		DWORD dwCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 73, (DWORD)pCloseHandlePtr);
-		CopyBytes(byHookPatch + 74, dwCloseHandlePtrDifference);
+		DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 73, (DWORD)pCloseHandlePtr);
+		CopyBytes(byHookPatch + 74, iCloseHandlePtrDifference);
 
 		std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
 		WriteBytes((DWORD)m_RecvHookAddress, vecHookPatch);
 	}
 
-	DWORD dwRecvAddress = Read4Byte(Read4Byte(dwAddress)) + 0x8;
+	DWORD iRecvAddress = Read4Byte(Read4Byte(iAddress)) + 0x8;
 
 	BYTE byPatch[] =
 	{
@@ -379,96 +316,50 @@ void ClientHandler::PatchRecvAddress(DWORD dwAddress)
 		0xC2, 0x08, 0x00						//ret 0008
 	};
 
-	DWORD dwRecvProcessFunction = (DWORD)(LPVOID*)m_RecvHookAddress;
-	CopyBytes(byPatch + 36, dwRecvProcessFunction);
+	DWORD iRecvProcessFunction = (DWORD)(LPVOID*)m_RecvHookAddress;
+	CopyBytes(byPatch + 36, iRecvProcessFunction);
 
-	DWORD dwDlgAddress = dwAddress;
-	CopyBytes(byPatch + 47, dwDlgAddress);
+	DWORD iDlgAddress = iAddress;
+	CopyBytes(byPatch + 47, iDlgAddress);
 
-	DWORD dwRecvCallAddress = Read4Byte(dwRecvAddress);
-	CopyBytes(byPatch + 58, dwRecvCallAddress);
+	DWORD iRecvCallAddress = Read4Byte(iRecvAddress);
+	CopyBytes(byPatch + 58, iRecvCallAddress);
 
 	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
 
-	DWORD dwPatchAddress = (DWORD)VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	LPVOID pPatchAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-	if (dwPatchAddress == 0)
+	if (pPatchAddress == nullptr)
 	{
+		CloseHandle(hProcess);
 		return;
 	}
 
-	WriteBytes(dwPatchAddress, vecPatch);
+	WriteBytes((DWORD)pPatchAddress, vecPatch);
 
 	DWORD dwOldProtection;
-	VirtualProtectEx(m_Bot->GetInjectedProcessHandle(), (LPVOID)dwRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	Write4Byte(Read4Byte(Read4Byte(dwAddress)) + 0x8, dwPatchAddress);
-	VirtualProtectEx(m_Bot->GetInjectedProcessHandle(), (LPVOID)dwRecvAddress, 1, dwOldProtection, &dwOldProtection);
-#endif
+	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	Write4Byte(Read4Byte(Read4Byte(iAddress)) + 0x8, (DWORD)pPatchAddress);
+	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
+	CloseHandle(hProcess);
 
 #ifdef DEBUG
-	printf("PatchRecvAddress: 0x%x patched\n", dwRecvAddress);
+	printf("PatchRecvAddress: 0x%x patched\n", iRecvAddress);
 #endif
 }
 
 void ClientHandler::PatchSendAddress()
 {
-#ifndef USE_MAILSLOT
-	WaitCondition(Read4Byte(GetAddress("KO_SND_FNC")) == 0);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
-	BYTE byPatch1[] =
-	{
-		0x55,										//push ebp
-		0x8B, 0xEC,									//mov ebp,esp 
-		0x60,										//pushad
-		0xFF, 0x75, 0x0C,							//push [ebp+0C]
-		0xFF, 0x75, 0x08,							//push [ebp+08]
-		0xBA, 0x00, 0x00, 0x00, 0x00,				//mov edx,00000000 <-- ClientHook::SendProcess()
-		0xFF, 0xD2,									//call edx
-		0x5E,										//pop esi
-		0x5D,										//pop ebp
-		0x61,										//popad
-		0x6A, 0xFF,									//push-01
-		0xBA, 0x00, 0x00, 0x00, 0x00,				//mov edx,00000000 <-- KO_SND_FNC
-		0x83, 0xC2, 0x5,							//add edx,05
-		0xFF, 0xE2									//jmp edx
-	};
-
-	ClientHook* pClientHook = new ClientHook(this);
-
-	DWORD dwSendProcessFunction = (DWORD)(LPVOID*)pClientHook->SendProcess;
-	CopyBytes(byPatch1 + 11, dwSendProcessFunction);
-
-	DWORD dwKoPtrSndFnc = GetAddress("KO_SND_FNC");
-	CopyBytes(byPatch1 + 23, dwKoPtrSndFnc);
-
-	std::vector<BYTE> vecPatch1(byPatch1, byPatch1 + sizeof(byPatch1));
-
-	DWORD dwPatchAddress = (DWORD)VirtualAlloc(0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (dwPatchAddress == 0)
+	if (!hProcess)
 		return;
 
-	WriteBytes(dwPatchAddress, vecPatch1);
+	DWORD iAddressReady = 0;
 
-	BYTE byPatch2[] =
+	while (iAddressReady == 0)
 	{
-		0xE9, 0x00, 0x00, 0x00, 0x00,
-	};
-
-	DWORD dwCallDifference = Memory::GetDifference(GetAddress("KO_SND_FNC"), dwPatchAddress);
-	CopyBytes(byPatch2 + 1, dwCallDifference);
-
-	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
-
-	DWORD dwOldProtection;
-	VirtualProtect((LPVOID)GetAddress("KO_SND_FNC"), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	WriteBytes(GetAddress("KO_SND_FNC"), vecPatch2);
-	VirtualProtect((LPVOID)GetAddress("KO_SND_FNC"), 1, dwOldProtection, &dwOldProtection);
-#else
-	DWORD dwAddressReady = 0;
-	while (dwAddressReady == 0)
-	{
-		ReadProcessMemory(m_Bot->GetInjectedProcessHandle(), (LPVOID)GetAddress(skCryptDec("KO_SND_FNC")), &dwAddressReady, 4, 0);
+		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_SND_FNC")), &iAddressReady, 4, 0);
 	}
 
 	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
@@ -478,6 +369,7 @@ void ClientHandler::PatchSendAddress()
 #ifdef DEBUG
 		printf("hModuleKernel32 == nullptr\n");
 #endif
+		CloseHandle(hProcess);
 		return;
 	}
 
@@ -485,27 +377,21 @@ void ClientHandler::PatchSendAddress()
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	LPVOID pMailSlotNameAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\KOF_SEND\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	std::vector<BYTE> vecMailSlotName(m_szMailSlotSendName.begin(), m_szMailSlotSendName.end());
+
+	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (pMailSlotNameAddress == 0)
 	{
+		CloseHandle(hProcess);
 		return;
 	}
 
-	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\KOF_SEND\\") + std::to_string(m_Bot->GetInjectedProcessId());
-
-	std::vector<BYTE> vecMailSlotName(m_szMailSlotSendName.begin(), m_szMailSlotSendName.end());
 	WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
 
 	if (m_SendHookAddress == 0)
 	{
-		m_SendHookAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-		if (m_SendHookAddress == 0)
-		{
-			return;
-		}
-
 		BYTE byHookPatch[] =
 		{
 			0x55,
@@ -537,18 +423,26 @@ void ClientHandler::PatchSendAddress()
 			0x8B, 0xE5,
 			0x5D,
 			0xC3
-		};
+};
+
+		m_SendHookAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byHookPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+		if (m_SendHookAddress == 0)
+		{
+			CloseHandle(hProcess);
+			return;
+		}
 
 		CopyBytes(byHookPatch + 35, pMailSlotNameAddress);
 
-		DWORD dwCreateFileDifference = Memory::GetDifference((DWORD)m_SendHookAddress + 39, (DWORD)pCreateFilePtr);
-		CopyBytes(byHookPatch + 40, dwCreateFileDifference);
+		DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_SendHookAddress + 39, (DWORD)pCreateFilePtr);
+		CopyBytes(byHookPatch + 40, iCreateFileDifference);
 
-		DWORD dwWriteFileDifference = Memory::GetDifference((DWORD)m_SendHookAddress + 62, (DWORD)pWriteFilePtr);
-		CopyBytes(byHookPatch + 63, dwWriteFileDifference);
+		DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_SendHookAddress + 62, (DWORD)pWriteFilePtr);
+		CopyBytes(byHookPatch + 63, iWriteFileDifference);
 
-		DWORD dwCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_SendHookAddress + 73, (DWORD)pCloseHandlePtr);
-		CopyBytes(byHookPatch + 74, dwCloseHandlePtrDifference);
+		DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_SendHookAddress + 73, (DWORD)pCloseHandlePtr);
+		CopyBytes(byHookPatch + 74, iCloseHandlePtrDifference);
 
 		std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
 		WriteBytes((DWORD)m_SendHookAddress, vecHookPatch);
@@ -574,35 +468,37 @@ void ClientHandler::PatchSendAddress()
 
 	CopyBytes(byPatch1 + 11, m_SendHookAddress);
 
-	DWORD dwKoPtrSndFnc = GetAddress(skCryptDec("KO_SND_FNC"));
-	CopyBytes(byPatch1 + 23, dwKoPtrSndFnc);
+	DWORD iKoPtrSndFnc = GetAddress(skCryptDec("KO_SND_FNC"));
+	CopyBytes(byPatch1 + 23, iKoPtrSndFnc);
 
 	std::vector<BYTE> vecPatch1(byPatch1, byPatch1 + sizeof(byPatch1));
 
-	LPVOID dwPatchAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, vecPatch1.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	LPVOID pPatchAddress = VirtualAllocEx(hProcess, nullptr, vecPatch1.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-	if (dwPatchAddress == 0)
+	if (pPatchAddress == 0)
 	{
+		CloseHandle(hProcess);
 		return;
 	}
 
-	WriteBytes((DWORD)dwPatchAddress, vecPatch1);
+	WriteBytes((DWORD)pPatchAddress, vecPatch1);
 
 	BYTE byPatch2[] =
 	{
 		0xE9, 0x00, 0x00, 0x00, 0x00
 	};
 
-	DWORD dwCallDifference = Memory::GetDifference(GetAddress(skCryptDec("KO_SND_FNC")), (DWORD)dwPatchAddress);
-	CopyBytes(byPatch2 + 1, dwCallDifference);
+	DWORD iCallDifference = Memory::GetDifference(GetAddress(skCryptDec("KO_SND_FNC")), (DWORD)pPatchAddress);
+	CopyBytes(byPatch2 + 1, iCallDifference);
 
 	std::vector<BYTE> vecPatch2(byPatch2, byPatch2 + sizeof(byPatch2));
 
-	DWORD dwOldProtection;
-	VirtualProtectEx(m_Bot->GetInjectedProcessHandle(), (LPVOID)GetAddress(skCryptDec("KO_SND_FNC")), 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	DWORD iOldProtection;
+	VirtualProtectEx(hProcess, (LPVOID)GetAddress(skCryptDec("KO_SND_FNC")), 1, PAGE_EXECUTE_READWRITE, &iOldProtection);
 	WriteBytes(GetAddress(skCryptDec("KO_SND_FNC")), vecPatch2);
-	VirtualProtectEx(m_Bot->GetInjectedProcessHandle(), (LPVOID)GetAddress(skCryptDec("KO_SND_FNC")), 1, dwOldProtection, &dwOldProtection);
-#endif
+	VirtualProtectEx(hProcess, (LPVOID)GetAddress(skCryptDec("KO_SND_FNC")), 1, iOldProtection, &iOldProtection);
+
+	CloseHandle(hProcess);
 
 #ifdef DEBUG
 	printf("PatchSendAddress: 0x%x patched\n", GetAddress("KO_SND_FNC"));
@@ -627,31 +523,31 @@ void ClientHandler::MailSlotRecvProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-			DWORD dwCurrentMesageSize, dwMesageLeft, dwMessageReadSize;
+			DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
 			OVERLAPPED ov;
 
-			BOOL fResult = GetMailslotInfo(hSlot, NULL, &dwCurrentMesageSize, &dwMesageLeft, NULL);
+			BOOL fResult = GetMailslotInfo(hSlot, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
 
 			if (!fResult)
 				continue;
 
-			if (dwCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+			if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
 				continue;
 
 			std::vector<uint8_t> vecMessageBuffer;
 
-			vecMessageBuffer.resize(dwCurrentMesageSize);
+			vecMessageBuffer.resize(iCurrentMesageSize);
 
 			ov.Offset = 0;
 			ov.OffsetHigh = 0;
 			ov.hEvent = NULL;
 
-			fResult = ReadFile(hSlot, &vecMessageBuffer[0], dwCurrentMesageSize, &dwMessageReadSize, &ov);
+			fResult = ReadFile(hSlot, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
 
 			if (!fResult)
 				continue;
 
-			vecMessageBuffer.resize(dwMessageReadSize);
+			vecMessageBuffer.resize(iMessageReadSize);
 
 			onClientRecvProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
 		}
@@ -684,31 +580,31 @@ void ClientHandler::MailSlotSendProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-			DWORD dwCurrentMesageSize, dwMesageLeft, dwMessageReadSize;
+			DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
 			OVERLAPPED ov;
 
-			BOOL fResult = GetMailslotInfo(hSlot, NULL, &dwCurrentMesageSize, &dwMesageLeft, NULL);
+			BOOL fResult = GetMailslotInfo(hSlot, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
 
 			if (!fResult)
 				continue;
 
-			if (dwCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+			if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
 				continue;
 
 			std::vector<uint8_t> vecMessageBuffer;
 
-			vecMessageBuffer.resize(dwCurrentMesageSize);
+			vecMessageBuffer.resize(iCurrentMesageSize);
 
 			ov.Offset = 0;
 			ov.OffsetHigh = 0;
 			ov.hEvent = NULL;
 
-			fResult = ReadFile(hSlot, &vecMessageBuffer[0], dwCurrentMesageSize, &dwMessageReadSize, &ov);
+			fResult = ReadFile(hSlot, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
 
 			if (!fResult)
 				continue;
 
-			vecMessageBuffer.resize(dwMessageReadSize);
+			vecMessageBuffer.resize(iMessageReadSize);
 
 			onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
 		}
@@ -723,10 +619,10 @@ void ClientHandler::MailSlotSendProcess()
 	}
 }
 
-void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
+void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 {
-	Packet pkt = Packet(byBuffer[0], (size_t)dwLength);
-	pkt.append(&byBuffer[1], dwLength - 1);
+	Packet pkt = Packet(byBuffer[0], (size_t)iLength);
+	pkt.append(&byBuffer[1], iLength - 1);
 
 #ifdef DEBUG
 #ifdef PRINT_RECV_PACKET
@@ -769,7 +665,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 						std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
-						ConnectLoginServer(true);
+						ConnectLoginServer(m_szAccountId, m_szPassword, true);
 					});
 				}
 				break;
@@ -999,7 +895,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 			LoadSkillData();
 
-			new std::thread([this]() { m_Bot->GetWorld()->Load(GetZone()); });
+			new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(GetZone())); });
 
 			m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
 
@@ -1078,8 +974,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 						case 0x01:
 						{
-							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+							GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
+							GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 
 							LoadSkillData();
 						}
@@ -1107,8 +1003,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 						case 0x01:
 						{
-							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-							GetConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+							GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
+							GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 
 							LoadSkillData();
 						}
@@ -1148,14 +1044,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 #endif
 			new std::thread([this]()
 			{
-				WaitCondition(GetConfiguration()->GetConfigMap()->size() == 0)
+				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
 
-				bool bWallHack = GetConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
+				bool bWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
 
 				if (bWallHack)
 					SetAuthority(0);
 
-				bool bDeathEffect = GetConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
+				bool bDeathEffect = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
 
 				if (bDeathEffect)
 				{
@@ -1548,7 +1444,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 									if (pItemData != pItemTable->end())
 									{
-										int iLootMinPrice = GetConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), 0);
+										int iLootMinPrice = GetUserConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), 0);
 
 										if (iLootMinPrice == 0 || (iLootMinPrice > 0 && pItemData->second.iPriceRepair >= iLootMinPrice))
 										{
@@ -1717,7 +1613,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 
 					uint8_t iVictoryNation = pkt.read<uint8_t>();
 
-					new std::thread([this]() { m_Bot->GetWorld()->Load(m_PlayerMySelf.iCity); });
+					new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(m_PlayerMySelf.iCity)); });
 
 #ifdef DEBUG
 					printf("RecvProcess::WIZ_ZONE_CHANGE: Teleport Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n",
@@ -1754,13 +1650,210 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD dwLength)
 			m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
 		}
 		break;	
+
+		case WIZ_CAPTCHA:
+		{
+			uint8_t iUnknown = pkt.read<uint8_t>();
+			uint8_t iOpCode = pkt.read<uint8_t>();
+
+			switch (iOpCode)
+			{
+				case 1:
+				{
+					uint8_t iResult = pkt.read<uint8_t>();
+
+					if (iResult == 1)
+					{
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_CAPTCHA: Image loaded\n");
+#endif
+
+						int32_t iBufferLength;
+						pkt >> iBufferLength;
+
+						std::vector<uint8_t> vecBuffer(iBufferLength);
+						pkt.read(&vecBuffer[0], iBufferLength);
+
+						const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+
+						if (iSelectedCaptchaSolver != 0)
+						{
+							if (!SolveCaptcha(vecBuffer))
+							{
+								RefreshCaptcha();
+							}
+						}
+						else
+						{
+#ifdef DEBUG
+							printf("RecvProcess::WIZ_CAPTCHA: Captcha solver service not selected\n");
+#endif
+						}
+					}
+					else
+					{
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_CAPTCHA: Image loading failed(%d)\n", iResult);
+#endif	
+						const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+
+						if (iSelectedCaptchaSolver != 0)
+						{
+							RefreshCaptcha();
+#ifdef DEBUG
+							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
+#endif
+						}
+					}
+				}
+				break;
+
+				case 2:
+				{
+					uint8_t iResult = pkt.read<uint8_t>();
+
+					if (iResult == 1)
+					{
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_CAPTCHA: Success\n");
+#endif
+					}
+					else
+					{	
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_CAPTCHA: Failed(%d)\n", iResult);
+#endif
+						const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+
+						if (iSelectedCaptchaSolver != 0)
+						{
+							RefreshCaptcha();
+#ifdef DEBUG
+							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
+#endif
+						}
+					}
+				}
+				break;
+
+				default:
+				{
+#ifdef DEBUG
+					printf("RecvProcess::WIZ_CAPTCHA: Not implemented opcode(%d)\n", iOpCode);
+#endif
+				}
+				break;
+			}
+		}
+		break;
 	}
 }
 
-void ClientHandler::SendProcess(BYTE* byBuffer, DWORD dwLength)
+bool ClientHandler::SolveCaptcha(std::vector<uint8_t> vecImageBuffer)
 {
-	Packet pkt = Packet(byBuffer[0], (size_t)dwLength);
-	pkt.append(&byBuffer[1], dwLength - 1);
+	try
+	{
+		const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+
+		if (iSelectedCaptchaSolver == 0)
+		{
+#ifdef DEBUG
+			printf("Captcha solver service not selected\n");
+#endif
+			return false;
+		}
+
+		int iWidth, iHeight, iChannel;
+		unsigned char* captchaImage = (unsigned char*)stbi_load_from_memory((unsigned char*)vecImageBuffer.data(), vecImageBuffer.size(), &iWidth, &iHeight, &iChannel, 3);
+
+		std::vector<unsigned char> captchaConverted;
+		int iRet = stbi_write_jpg_to_func(
+			[](void* context, void* data, int size) {
+				std::vector<unsigned char>* buffer = static_cast<std::vector<unsigned char> *>(context);
+				buffer->insert(buffer->end(), static_cast<unsigned char*>(data), static_cast<unsigned char*>(data) + size);
+			}, &captchaConverted, iWidth, iHeight, iChannel, captchaImage, 100);
+
+		if (!iRet)
+		{
+#ifdef DEBUG
+			printf("Error writing JPG data to memory\n");
+#endif
+			return false;
+		}
+
+		CryptoPP::Base64Encoder encoder;
+		std::string szBase64Output;
+
+		encoder.Put(captchaConverted.data(), captchaConverted.size());
+		encoder.MessageEnd();
+
+		size_t iBase64OutputSize = (size_t)encoder.MaxRetrievable();
+
+		if (iBase64OutputSize == 0)
+		{
+#ifdef DEBUG
+			printf("Error writing image buffer to base64 string, output size 0\n");
+#endif
+			return false;
+		}
+
+		szBase64Output.resize(iBase64OutputSize);
+		encoder.Get(reinterpret_cast<CryptoPP::byte*>(&szBase64Output[0]), szBase64Output.size());
+
+		switch (iSelectedCaptchaSolver)
+		{
+			case 1: //truecaptcha.org
+			{
+				JSON postData;
+
+				postData["userid"] = GetAppConfiguration()->GetString(skCryptDec("CaptchaSolver"), skCryptDec("Username"), "").c_str();
+				postData["apikey"] = GetAppConfiguration()->GetString(skCryptDec("CaptchaSolver"), skCryptDec("Key"), "").c_str();
+				postData["data"] = szBase64Output.c_str();
+
+				std::string szResponse = CurlPost("https://api.apitruecaptcha.org/one/gettext", postData);
+
+				if (szResponse.size() == 0)
+				{
+#ifdef DEBUG
+					printf("Curl Captcha API response empty\n");
+#endif
+					return false;
+				}
+
+				JSON jResponse = JSON::parse(szResponse);
+
+				if (jResponse["success"].get<bool>() == true)
+				{
+					SendCaptcha(jResponse["result"].get<std::string>());
+					return true;
+				}
+				else
+				{
+#ifdef DEBUG
+					printf("SolveCaptcha: %s\n", jResponse["error_message"].get<std::string>().c_str());
+#endif
+					return false;
+				}
+			}
+			break;
+		}
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
+
+	return false;
+}
+
+void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
+{
+	Packet pkt = Packet(byBuffer[0], (size_t)iLength);
+	pkt.append(&byBuffer[1], iLength - 1);
 
 #ifdef DEBUG
 #ifdef PRINT_SEND_PACKET
@@ -1779,7 +1872,6 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD dwLength)
 #ifdef DEBUG
 			printf("SendProcess::WIZ_HOME\n");
 #endif
-			SetTarget(-1);
 			m_vecLootList.clear();
 		}
 		break;
@@ -1876,7 +1968,8 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD dwLength)
 						{
 							if (IsRogue())
 							{
-								bool bArcherCombo = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), true);
+								bool bArcherCombo = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), true);
+
 								DWORD iMobBase = GetMobBase(iTargetID);
 
 								if (bArcherCombo && iMobBase != 0)
@@ -1946,256 +2039,10 @@ TNpc ClientHandler::InitializeNpc(Packet& pkt)
 	return tNpc;
 }
 
-void ClientHandler::PushPhase(DWORD dwAddress)
-{
-	BYTE byCode[] =
-	{
-		0x60,
-		0xC6,0x81,0x0C,0x01,0x0,0x0,0x01,
-		0xFF,0x35,0x0,0x0,0x0,0x0,
-		0xBF,0,0,0,0,
-		0xFF,0xD7,
-		0x83,0xC4,0x04,
-		0xB0,0x01,
-		0x61,
-		0xC2,0x04,0x0
-	};
-
-	CopyBytes(byCode + 10, dwAddress);
-
-	DWORD dwPushPhase = GetAddress(skCryptDec("KO_PTR_PUSH_PHASE"));
-	CopyBytes(byCode + 15, dwPushPhase);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
 void ClientHandler::SetLoginInformation(std::string szAccountId, std::string szPassword)
 {
 	m_szAccountId = szAccountId;
 	m_szPassword = szPassword;
-}
-
-void ClientHandler::ConnectLoginServer(bool bDisconnect)
-{
-	DWORD dwCGameProcIntroLogin = Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO")));
-	DWORD dwCUILoginIntro = Read4Byte(dwCGameProcIntroLogin + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO")));
-
-	DWORD dwCN3UIEditIdBase = Read4Byte(dwCUILoginIntro + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID")));
-	DWORD dwCN3UIEditPwBase = Read4Byte(dwCUILoginIntro + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW")));
-
-	WriteString(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT")), m_szAccountId.c_str());
-	Write4Byte(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH")), m_szAccountId.size());
-	WriteString(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT")), m_szPassword.c_str());
-	Write4Byte(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH")), m_szPassword.size());
-
-	if (bDisconnect)
-	{
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x61,
-			0xC3,
-		};
-
-		DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
-		CopyBytes(byCode + 3, dwPtrIntro);
-		CopyBytes(byCode + 16, dwPtrIntro);
-		CopyBytes(byCode + 29, dwPtrIntro);
-
-		DWORD dwPtrDisconnect = GetAddress(skCryptDec("KO_PTR_LOGIN_DC_REQUEST"));
-		CopyBytes(byCode + 8, dwPtrDisconnect);
-
-		DWORD dwPtrLoginRequest1 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST1"));
-		CopyBytes(byCode + 21, dwPtrLoginRequest1);
-
-		DWORD dwPtrLoginRequest2 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST2"));
-		CopyBytes(byCode + 34, dwPtrLoginRequest2);
-
-		ExecuteRemoteCode(byCode, sizeof(byCode));
-	}
-	else
-	{
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x61,
-			0xC3,
-		};
-
-		DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
-		CopyBytes(byCode + 3, dwPtrIntro);
-		CopyBytes(byCode + 16, dwPtrIntro);
-
-		DWORD dwPtrLoginRequest1 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST1"));
-		CopyBytes(byCode + 8, dwPtrLoginRequest1);
-
-		DWORD dwPtrLoginRequest2 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST2"));
-		CopyBytes(byCode + 21, dwPtrLoginRequest2);
-
-		ExecuteRemoteCode(byCode, sizeof(byCode));
-	}
-}
-
-void ClientHandler::ConnectGameServer(BYTE byServerId)
-{
-	DWORD dwCGameProcIntroLogin = Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO")));
-	DWORD dwCUILoginIntro = Read4Byte(dwCGameProcIntroLogin + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO")));
-
-	Write4Byte(dwCUILoginIntro + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_SERVER_INDEX")), byServerId);
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
-	CopyBytes(byCode + 3, dwPtrIntro);
-
-	DWORD dwPtrServerSelect = GetAddress(skCryptDec("KO_PTR_SERVER_SELECT"));
-	CopyBytes(byCode + 8, dwPtrServerSelect);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-void ClientHandler::SelectCharacterSkip()
-{
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
-
-	DWORD dwPtrCharacterSelectSkip = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_SKIP"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectSkip);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-void ClientHandler::SelectCharacterLeft()
-{
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
-
-	DWORD dwPtrCharacterSelectLeft = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_LEFT"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectLeft);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-void ClientHandler::SelectCharacterRight()
-{
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
-
-	DWORD dwPtrCharacterSelectRight = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_RIGHT"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectRight);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-void ClientHandler::SelectCharacter(BYTE byCharacterIndex)
-{
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
-
-	DWORD dwPtrCharacterSelectEnter = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_ENTER"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectEnter);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-void ClientHandler::SendPacket(Packet vecBuffer)
-{
-	LPVOID pPacketAddress = VirtualAllocEx(m_Bot->GetInjectedProcessHandle(), 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (pPacketAddress == nullptr)
-		return;
-
-	WriteProcessMemory(m_Bot->GetInjectedProcessHandle(), pPacketAddress, vecBuffer.contents(), vecBuffer.size(), 0);
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0x68, 0x0, 0x0, 0x0, 0x0,
-		0x68, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrPkt = GetAddress(skCryptDec("KO_PTR_PKT"));
-
-	CopyBytes(byCode + 3, dwPtrPkt);
-
-	size_t dwPacketSize = vecBuffer.size();
-
-	CopyBytes(byCode + 8, dwPacketSize);
-	CopyBytes(byCode + 13, pPacketAddress);
-
-	DWORD dwPtrSndFnc = GetAddress(skCryptDec("KO_SND_FNC"));
-	CopyBytes(byCode + 18, dwPtrSndFnc);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-	VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pPacketAddress, 0, MEM_RELEASE);
 }
 
 void ClientHandler::LoadSkillData()
@@ -2255,529 +2102,6 @@ void ClientHandler::LoadSkillData()
 	}
 }
 
-void ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking)
-{
-	bool bLegalStatus = GetConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-	if (bLegalStatus)
-	{
-		//Fix for bug report -_-
-		BYTE byFix1Patch[] =
-		{
-			0xE9, 0xC5, 0x00, 0x00, 0x00,
-			0x90
-		};
-
-		WriteProcessMemory(m_Bot->m_hInjectedProcessHandle, (LPVOID)GetAddress(skCryptDec("KO_FIX1")), byFix1Patch, sizeof(byFix1Patch), NULL);
-
-		if (pSkillData.iReCastTime != 0)
-		{
-			if (GetActionState() == PSA_SPELLMAGIC)
-				return;
-		}
-
-		m_mutexUseSkill.lock();
-
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-			0x68, 0x00, 0x00, 0x00, 0x00,
-			0xBF, 0x00, 0x00, 0x00, 0x00,
-			0xFF, 0xD7,
-			0x50,
-			0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-			0x8B, 0x89, 0x00, 0x00, 0x00, 0x00,
-			0x68, 0x00, 0x00, 0x00, 0x00,
-			0xBF, 0x00, 0x00, 0x00, 0x00,
-			0xFF, 0xD7,
-			0x61,
-			0xC3,
-		};
-
-		DWORD iSBEC = GetAddress(skCryptDec("KO_SBEC"));
-		CopyBytes(byCode + 3, iSBEC);
-		CopyBytes(byCode + 8, pSkillData.iID);
-
-		DWORD iSBCA = GetAddress(skCryptDec("KO_SBCA"));
-		CopyBytes(byCode + 13, iSBCA);
-
-		DWORD iDLG = GetAddress(skCryptDec("KO_PTR_DLG"));
-		CopyBytes(byCode + 22, iDLG);
-
-		DWORD iLPEO = GetAddress(skCryptDec("KO_OFF_LPEO"));
-		CopyBytes(byCode + 28, iLPEO);
-		CopyBytes(byCode + 33, iTargetID);
-
-		DWORD iLSCA = GetAddress(skCryptDec("KO_LSCA"));
-		CopyBytes(byCode + 38, iLSCA);
-
-		ExecuteRemoteCode(byCode, sizeof(byCode));
-
-		m_mutexUseSkill.unlock();
-
-		SetSkillUseTime(pSkillData.iID,
-			duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-		);
-	}
-	else
-	{
-		Vector3 v3MyPosition = GetPosition();
-		Vector3 v3TargetPosition = GetTargetPosition();
-
-		switch (pSkillData.iTarget)
-		{
-			case SkillTargetType::TARGET_SELF:
-			case SkillTargetType::TARGET_FRIEND_WITHME:
-			case SkillTargetType::TARGET_FRIEND_ONLY:
-			case SkillTargetType::TARGET_PARTY:
-			case SkillTargetType::TARGET_NPC_ONLY:
-			case SkillTargetType::TARGET_ENEMY_ONLY:
-			case SkillTargetType::TARGET_ALL:
-			case 9: // For God Mode
-			case SkillTargetType::TARGET_AREA_FRIEND:
-			case SkillTargetType::TARGET_AREA_ALL:
-			case SkillTargetType::TARGET_DEAD_FRIEND_ONLY:
-			{
-				if (pSkillData.iReCastTime != 0)
-				{
-					if (GetMoveState() != PSM_STOP)
-					{
-						SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
-					}
-
-					SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
-					std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
-				}
-
-				uint32_t iArrowCount = 0;
-
-				std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>* pSkillExtension2;
-				if (m_Bot->GetSkillExtension2Table(&pSkillExtension2))
-				{
-					auto pSkillExtension2Data = pSkillExtension2->find(pSkillData.iID);
-
-					if (pSkillExtension2Data != pSkillExtension2->end())
-						iArrowCount = pSkillExtension2Data->second.iArrowCount;
-				}
-
-				if ((iArrowCount == 0 && pSkillData.iFlyingFX != 0) || iArrowCount == 1)
-					SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
-
-				if (iArrowCount > 1)
-				{
-					SendStartFlyingAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), 1);
-
-					float fDistance = GetDistance(v3TargetPosition);
-
-					switch (iArrowCount)
-					{
-					case 3:
-					{
-						iArrowCount = 1;
-
-						if (fDistance <= 5.0f)
-							iArrowCount = 3;
-						else if (fDistance < 16.0f)
-							iArrowCount = 2;
-					};
-					break;
-
-					case 5:
-					{
-						iArrowCount = 1;
-
-						if (fDistance <= 5.0f)
-							iArrowCount = 5;
-						else if (fDistance <= 6.0f)
-							iArrowCount = 4;
-						else if (fDistance <= 8.0f)
-							iArrowCount = 3;
-						else if (fDistance < 16.0f)
-							iArrowCount = 2;
-					}
-					break;
-					}
-
-					for (uint32_t i = 0; i < iArrowCount; i++)
-					{
-						SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), (i + 1));
-						SendStartMagicAtTarget(pSkillData, iTargetID, v3TargetPosition, (i + 1));
-					}
-				}
-				else
-					SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
-
-			}
-			break;
-
-			case SkillTargetType::TARGET_AREA:
-			case SkillTargetType::TARGET_PARTY_ALL:
-			case SkillTargetType::TARGET_AREA_ENEMY:
-			{
-				if (pSkillData.iReCastTime != 0)
-				{
-					if (GetMoveState() != PSM_STOP)
-					{
-						SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
-					}
-
-					SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
-					std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
-				}
-
-				if (pSkillData.iFlyingFX != 0)
-					SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
-
-				SendStartSkillMagicAtPosPacket(pSkillData, v3TargetPosition);
-			}
-			break;
-		}
-
-		SetSkillUseTime(pSkillData.iID,
-			duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-		);
-	}
-}
-
-void ClientHandler::SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_CASTING)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< iTargetID
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
-		<< int16_t(pSkillData.iReCastTime);
-
-	if (pSkillData.iTarget == SkillTargetType::TARGET_PARTY)
-	{
-		pkt << uint32_t(0);
-	}
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_CASTING)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< int32_t(-1)
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
-		<< int16_t(pSkillData.iReCastTime);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_FLYING)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< iTargetID
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
-		<< arrowIndex
-		<< uint32_t(0) << uint32_t(0) << int16_t(0);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendStartSkillMagicAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< iTargetID;
-
-	if (pSkillData.iCastTime == 0)
-		pkt << uint32_t(1) << uint32_t(1) << uint32_t(0);
-	else
-	{
-		pkt
-			<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-			<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-			<< uint32_t(v3TargetPosition.m_fY * 10.0f);
-	}
-
-	if (pSkillData.iTarget == SkillTargetType::TARGET_PARTY)
-	{
-		pkt << arrowIndex
-			<< uint32_t(0) << uint32_t(0) << int16_t(0);
-	}
-	else
-	{
-		pkt << arrowIndex
-			<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
-	}
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendStartSkillMagicAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< int32_t(-1)
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_FAIL)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< iTargetID
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
-		<< int32_t(-101)
-		<< arrowIndex
-		<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendCancelSkillPacket(TABLE_UPC_SKILL pSkillData)
-{
-	Packet pkt = Packet(WIZ_MAGIC_PROCESS);
-
-	pkt
-		<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_CANCEL)
-		<< pSkillData.iID
-		<< m_PlayerMySelf.iID
-		<< m_PlayerMySelf.iID
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0)
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition, int16_t iMoveSpeed, uint8_t iMoveType)
-{
-	Packet pkt = Packet(WIZ_MOVE);
-
-	pkt
-		<< uint16_t(vecStartPosition.m_fX * 10.0f)
-		<< uint16_t(vecStartPosition.m_fY * 10.0f)
-		<< int16_t(vecStartPosition.m_fZ * 10.0f)
-		<< iMoveSpeed
-		<< iMoveType
-		<< uint16_t(vecTargetPosition.m_fX * 10.0f)
-		<< uint16_t(vecTargetPosition.m_fY * 10.0f)
-		<< int16_t(vecTargetPosition.m_fZ * 10.0f);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendTownPacket()
-{
-	Packet pkt = Packet(WIZ_HOME);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SetPosition(Vector3 v3Position)
-{
-	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")), v3Position.m_fX);
-	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")), v3Position.m_fY);
-	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")), v3Position.m_fZ);
-}
-
-void ClientHandler::SetMovePosition(Vector3 v3MovePosition)
-{
-	if (v3MovePosition.m_fX == 0.0f && v3MovePosition.m_fY == 0.0f && v3MovePosition.m_fZ == 0.0f)
-	{
-		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 0);
-		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), v3MovePosition.m_fX);
-		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), v3MovePosition.m_fY);
-		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")), v3MovePosition.m_fZ);
-		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 0);
-	}
-	else
-	{
-		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 2);
-		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), v3MovePosition.m_fX);
-		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), v3MovePosition.m_fY);
-		WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")), v3MovePosition.m_fZ);
-		WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 1);
-	}
-}
-
-void ClientHandler::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDistance)
-{
-	Packet pkt = Packet(WIZ_ATTACK);
-
-	pkt
-		<< uint8_t(1) << uint8_t(1)
-		<< iTargetID
-		<< uint16_t(fInterval)
-		<< uint16_t(fDistance)
-		<< uint8_t(0) << uint8_t(1);
-
-	SendPacket(pkt); 
-}
-
-void ClientHandler::SendShoppingMall(ShoppingMallType eType)
-{
-	Packet pkt = Packet(WIZ_SHOPPING_MALL);
-
-	switch (eType)
-	{
-		case ShoppingMallType::STORE_CLOSE:
-			pkt << uint8_t(eType);
-			break;
-
-		case ShoppingMallType::STORE_PROCESS:
-		case ShoppingMallType::STORE_LETTER:
-			pkt << uint8_t(eType) << uint8_t(1);
-			break;
-	}
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendRotation(float fRotation)
-{
-	Packet pkt = Packet(WIZ_ROTATE);
-
-	pkt << int16_t(fRotation * 100.f);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendRequestBundleOpen(uint32_t iBundleID)
-{
-	Packet pkt = Packet(WIZ_BUNDLE_OPEN_REQ);
-
-	pkt << uint32_t(iBundleID);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendBundleItemGet(uint32_t iBundleID, uint32_t iItemID, int16_t iIndex)
-{
-	Packet pkt = Packet(WIZ_ITEM_GET);
-
-	pkt << uint32_t(iBundleID) << uint32_t(iItemID) << int16_t(iIndex);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition)
-{
-	Packet pkt = Packet(WIZ_ITEM_MOVE);
-
-	pkt << uint8_t(iType) << uint8_t(iDirection) << uint32_t(iItemID) << uint8_t(iCurrentPosition) << uint8_t(iTargetPosition);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendTargetHpRequest(int32_t bTargetID, bool bBroadcast)
-{
-	Packet pkt = Packet(WIZ_TARGET_HP);
-
-	pkt << int32_t(bTargetID) << uint8_t(bBroadcast ? 1 : 0);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SetTarget(int32_t iTargetID, bool bSelectFromClient)
-{
-	DWORD iMobBase = GetMobBase(iTargetID);
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0xB9, 0x00, 0x00, 0x00, 0x00,
-		0x8B, 0x09,
-		0xB8, 0x00, 0x00, 0x00, 0x00,
-		0x50,
-		0xBE, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xD6,
-		0x61,
-		0xC3,
-	};
-
-	DWORD iDlg = GetAddress(skCryptDec("KO_PTR_DLG"));
-	CopyBytes(byCode + 2, iDlg);
-	CopyBytes(byCode + 9, iMobBase);
-
-	DWORD iSelectMob = GetAddress(skCryptDec("KO_SELECT_MOB"));
-	CopyBytes(byCode + 15, iSelectMob);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-bool ClientHandler::UseItem(uint32_t iItemID)
-{
-	std::map<uint32_t, __TABLE_ITEM>* pItemTable;
-	if (!m_Bot->GetItemTable(&pItemTable))
-		return false;
-
-	std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
-	if (!m_Bot->GetSkillTable(&pSkillTable))
-		return false;
-
-	auto pItemData = pItemTable->find(iItemID);
-
-	if (pItemData != pItemTable->end())
-	{
-		auto pSkillData = pSkillTable->find(pItemData->second.dwEffectID1);
-
-		if (pSkillData != pSkillTable->end())
-		{
-			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-				std::chrono::system_clock::now().time_since_epoch()
-				);
-
-			std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(pSkillData->second.iID);
-
-			if (pSkillData->second.iCooldown > 0 && msLastSkillUseItem.count() > 0)
-			{
-				int64_t iSkillCooldownTime = static_cast<int64_t>(pSkillData->second.iCooldown) * 100;
-
-				if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-					return false;
-			}
-
-			UseSkill(pSkillData->second, GetID());
-
-			return true;
-		}
-	}
-
-	return false;
-}
-
 void ClientHandler::AttackProcess()
 {
 #ifdef DEBUG
@@ -2810,24 +2134,24 @@ void ClientHandler::AttackProcess()
 			if (!m_Bot->GetSkillExtension2Table(&pSkillExtension2))
 				continue;
 
-			bool bLegalStatus = GetConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
+			bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
 
 			if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
-			bool bAttackStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
 
 			if (!bAttackStatus)
 				continue;
 
-			bool bBasicAttack = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-			bool bMoveToTarget = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+			bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+			bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
 			Vector3 v3TargetPosition = GetTargetPosition();
 
-			DWORD iTargetBase = GetMobBase(GetClientSelectedTarget());
+			DWORD iTargetBase = GetClientSelectedTargetBase();
 
-			if (iTargetBase == 0)
+			if (iTargetBase == 0 || Read4Byte(iTargetBase) == 0)
 				continue;
 			else
 			{
@@ -2862,14 +2186,14 @@ void ClientHandler::AttackProcess()
 				}
 			}
 
-			bool bAttackRangeLimit = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
-			int iAttackRangeLimitValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
+			bool bAttackRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
+			int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
 
 			if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
 				continue;
 
-			std::vector<int> vecAttackSkillList = GetConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-			bool bAttackSpeed = GetConfiguration()->GetBool("Attack", "AttackSpeed", false);
+			std::vector<int> vecAttackSkillList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
+			bool bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", false);
 
 			if (vecAttackSkillList.size() == 0)
 			{
@@ -2885,7 +2209,7 @@ void ClientHandler::AttackProcess()
 
 				if (bAttackSpeed)
 				{
-					int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
+					int iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
 
 					if (iAttackSpeedValue > 0)
 						std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
@@ -2906,9 +2230,9 @@ void ClientHandler::AttackProcess()
 
 				for (const auto& x : vecAttackSkillList)
 				{
-					DWORD iTargetBase = GetMobBase(GetClientSelectedTarget());
+					DWORD iTargetBase = GetClientSelectedTargetBase();
 
-					if (iTargetBase == 0)
+					if (iTargetBase == 0 || Read4Byte(iTargetBase) == 0)
 						break;
 					else
 					{
@@ -2975,7 +2299,7 @@ void ClientHandler::AttackProcess()
 
 						if (bAttackSpeed)
 						{
-							int iAttackSpeedValue = GetConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
+							int iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
 
 							if (iAttackSpeedValue > 0)
 								std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
@@ -3024,11 +2348,11 @@ void ClientHandler::SearchTargetProcess()
 			if (IsRouting())
 				continue;
 
-			bool bSearchTargetSpeed = GetConfiguration()->GetBool("Attack", "SearchTargetSpeed", false);
+			bool bSearchTargetSpeed = GetUserConfiguration()->GetBool("Attack", "SearchTargetSpeed", false);
 
 			if (bSearchTargetSpeed)
 			{
-				int iSearchTargetSpeedValue = GetConfiguration()->GetInt("Attack", "SearchTargetSpeedValue", 100);
+				int iSearchTargetSpeedValue = GetUserConfiguration()->GetInt("Attack", "SearchTargetSpeedValue", 100);
 
 				if (iSearchTargetSpeedValue > 0)
 					std::this_thread::sleep_for(std::chrono::milliseconds(iSearchTargetSpeedValue));
@@ -3038,12 +2362,12 @@ void ClientHandler::SearchTargetProcess()
 			else
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-			bool bLegalStatus = GetConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
+			bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
 
 			if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
 				continue;
 			
-			bool bAttackStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
 
 			if (!bAttackStatus)
 				continue;
@@ -3053,9 +2377,9 @@ void ClientHandler::SearchTargetProcess()
 			{
 				std::vector<EntityInfo> vecFilteredTarget;
 
-				bool bAutoTarget = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
-				bool bRangeLimit = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
-				int iRangeLimitValue = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
+				bool bAutoTarget = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
+				bool bRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
+				int iRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
 
 				if (bAutoTarget)
 				{
@@ -3073,7 +2397,7 @@ void ClientHandler::SearchTargetProcess()
 				}
 				else
 				{
-					std::vector<int> vecSelectedNpcList = GetConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
+					std::vector<int> vecSelectedNpcList = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
 
 					std::copy_if(vecOutMobList.begin(), vecOutMobList.end(),
 						std::back_inserter(vecFilteredTarget),
@@ -3105,10 +2429,10 @@ void ClientHandler::SearchTargetProcess()
 
 					if (pSelectedTarget.m_iId != GetClientSelectedTarget())
 					{
-						SetTarget(pSelectedTarget.m_iId);
+						SetTarget(pSelectedTarget.m_iBase);
 
-						bool bBasicAttack = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-						bool bMoveToTarget = GetConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+						bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+						bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
 						if (bBasicAttack)
 						{
@@ -3171,7 +2495,7 @@ void ClientHandler::AutoLootProcess()
 			if (IsRouting())
 				continue;
 
-			bool bAutoLoot = GetConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
+			bool bAutoLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
 
 			if (bAutoLoot)
 			{
@@ -3200,7 +2524,7 @@ void ClientHandler::AutoLootProcess()
 
 					auto pFindedLoot = vecFilteredLoot.at(0);
 
-					bool bMoveToLoot = GetConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), false);
+					bool bMoveToLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), false);
 
 					if (bMoveToLoot)
 					{
@@ -3225,7 +2549,7 @@ void ClientHandler::AutoLootProcess()
 							{
 								std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
-								bool bLegalStatus = GetConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
+								bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
 
 								if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
 									continue;
@@ -3304,11 +2628,11 @@ void ClientHandler::MinorProcess()
 			if (!GetAvailableSkill(&vecAvailableSkills))
 				continue;
 
-			bool bMinorProtection = GetConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Minor"), false);
+			bool bMinorProtection = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Minor"), false);
 
 			if (bMinorProtection)
 			{
-				int32_t iHpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), 30);
+				int32_t iHpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), 30);
 
 				if (GetHp() > 0 && (int32_t)std::ceil((GetHp() * 100) / GetMaxHp()) < iHpProtectionValue)
 				{
@@ -3362,7 +2686,7 @@ void ClientHandler::PotionProcess()
 			if (IsBlinking())
 				continue;
 
-			bool bMpProtectionEnable = GetConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
+			bool bMpProtectionEnable = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
 
 			if (bMpProtectionEnable)
 			{
@@ -3371,7 +2695,7 @@ void ClientHandler::PotionProcess()
 				if (iMp > 0 && iMaxMp > 0)
 				{
 					int32_t iMpProtectionPercent = (int32_t)std::ceil((iMp * 100) / iMaxMp);
-					int32_t iMpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 50);
+					int32_t iMpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 50);
 
 					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
 						std::chrono::system_clock::now().time_since_epoch()
@@ -3390,7 +2714,7 @@ void ClientHandler::PotionProcess()
 				}
 			}
 
-			bool bHpProtectionEnable = GetConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Hp"), false);
+			bool bHpProtectionEnable = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Hp"), false);
 
 			if (bHpProtectionEnable)
 			{
@@ -3399,7 +2723,7 @@ void ClientHandler::PotionProcess()
 				if (iHp > 0 && iMaxHp > 0)
 				{
 					int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
-					int32_t iHpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
+					int32_t iHpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
 
 					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
 						std::chrono::system_clock::now().time_since_epoch()
@@ -3463,16 +2787,16 @@ void ClientHandler::CharacterProcess()
 			if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
 				continue;
 
-			bool bLegalStatus = GetConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
+			bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
 
 			if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
-			bool bCharacterStatus = GetConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
+			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
 
 			if (bCharacterStatus)
 			{
-				std::vector<int> vecCharacterSkillList = GetConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+				std::vector<int> vecCharacterSkillList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 
 				if (vecCharacterSkillList.size() > 0)
 				{
@@ -3540,11 +2864,75 @@ void ClientHandler::CharacterProcess()
 				}
 			}
 
+			bool bAutoTransformation = GetUserConfiguration()->GetBool(skCryptDec("Transformation"), skCryptDec("Auto"), false);
+			int iTransformationItem = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Item"), 381001000);
+			int iTransformationSkill = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 0);
+
+			if (bAutoTransformation && iTransformationSkill > 0 && IsTransformationAvailable())
+			{
+				switch (iTransformationItem)
+				{
+					case 379090000:
+					{
+						auto pTransformationScroll = pSkillTable->find(470001);
+						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+						if (pTransformationScroll != pSkillTable->end()
+							&& pTransformationSkill != pSkillTable->end())
+						{
+							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
+								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+							{
+								UseSkill(pTransformationScroll->second, GetID());
+								UseSkill(pTransformationSkill->second, GetID());
+							}
+						}
+					}
+					break;
+
+					case 379093000:
+					{
+						auto pTransformationScroll = pSkillTable->find(471001);
+						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+						if (pTransformationScroll != pSkillTable->end()
+							&& pTransformationSkill != pSkillTable->end())
+						{
+							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
+								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+							{
+								UseSkill(pTransformationScroll->second, GetID());
+								UseSkill(pTransformationSkill->second, GetID());
+							}
+						}
+					}
+					break;
+
+					case 381001000:
+					{
+						auto pTransformationScroll = pSkillTable->find(472001);
+						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+						if (pTransformationScroll != pSkillTable->end()
+							&& pTransformationSkill != pSkillTable->end())
+						{
+							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0 
+								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+							{
+								UseSkill(pTransformationScroll->second, GetID());
+								UseSkill(pTransformationSkill->second, GetID());
+							}
+						}
+					}
+					break;
+				}
+			}
+
 			if (IsPriest())
 			{
-				bool bAutoHealthBuff = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
+				bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
 
-				int iSelectedHealthBuff = Drawing::Bot->GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
+				int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
 
 				if (iSelectedHealthBuff == -1)
 				{
@@ -3586,9 +2974,9 @@ void ClientHandler::CharacterProcess()
 					}
 				}
 
-				bool bAutoDefenceBuff = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
+				bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
 
-				int iSelectedDefenceBuff = Drawing::Bot->GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
+				int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
 
 				if (iSelectedDefenceBuff == -1)
 				{
@@ -3630,9 +3018,9 @@ void ClientHandler::CharacterProcess()
 					}
 				}
 
-				bool bAutoMindBuff = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+				bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
 
-				int iSelectedMindBuff = Drawing::Bot->GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
+				int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
 
 				if (iSelectedMindBuff == -1)
 				{
@@ -3674,8 +3062,8 @@ void ClientHandler::CharacterProcess()
 					}
 				}
 
-				bool bAutoHeal = GetConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
-				int iSelectedHeal = GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
+				bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
+				int iSelectedHeal = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
 
 				if (iSelectedHeal == -1)
 				{
@@ -3684,7 +3072,7 @@ void ClientHandler::CharacterProcess()
 
 				int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
 
-				int iAutoHealValue = GetConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
+				int iAutoHealValue = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
 				int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
 
 				if (bAutoHeal && iSelectedHeal != -1 && iHpProtectionPercent <= iAutoHealValue)
@@ -3834,7 +3222,7 @@ void ClientHandler::GodModeProcess()
 			if (!m_Bot->GetSkillTable(&pSkillTable))
 				continue;
 
-			bool bGodMode = GetConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("GodMode"), false);
+			bool bGodMode = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("GodMode"), false);
 
 			if (bGodMode)
 			{
@@ -3851,8 +3239,8 @@ void ClientHandler::GodModeProcess()
 					int32_t iHpGodModePercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
 					int32_t iMpGodModePercent = (int32_t)std::ceil((iMp * 100) / iMaxMp);
 
-					int32_t iHpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
-					int32_t iMpProtectionValue = GetConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 25);
+					int32_t iHpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
+					int32_t iMpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 25);
 
 					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
 						std::chrono::system_clock::now().time_since_epoch()
@@ -3940,8 +3328,8 @@ void ClientHandler::RouteProcess()
 
 						std::map<int32_t, SSupplyBuyList> mapSupplyBuyList;
 
-						bool bAutoSupply = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
-						bool bAutoRepair = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+						bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+						bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
 
 						if (bAutoSupply && jSupplyList.size() > 0)
 						{
@@ -3949,7 +3337,7 @@ void ClientHandler::RouteProcess()
 
 							for (size_t i = 0; i < jSupplyList.size(); i++)
 							{
-								std::vector<int> vecSupplyList = GetConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+								std::vector<int> vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
 
 								std::string szItemIdAttribute = skCryptDec("itemid");
 								std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
@@ -3976,7 +3364,7 @@ void ClientHandler::RouteProcess()
 										continue;
 
 									uint8_t iInventoryPosition = -1;
-									int16_t iItemCount = (int16_t)GetConfiguration()->GetInt(
+									int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
 										skCryptDec("Supply"),
 										std::to_string(iItemId).c_str(),
 										jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
@@ -4173,12 +3561,12 @@ void ClientHandler::SupplyProcess()
 			if (m_msLastSupplyTime > std::chrono::milliseconds(0) && (msCurrentTime - m_msLastSupplyTime) < std::chrono::milliseconds((60 * 5) * 1000))
 				continue;
 
-			bool bAutoRepair = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
-			bool bAutoSupply = GetConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+			bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+			bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
 
 			if (bAutoSupply && IsNeedSupply() || bAutoRepair && IsNeedRepair())
 			{
-				std::string szSelectedRoute = GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+				std::string szSelectedRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
 
 				RouteManager* pRouteManager = m_Bot->GetRouteManager();
 				RouteManager::RouteList pRouteList;
@@ -4209,23 +3597,6 @@ void ClientHandler::SupplyProcess()
 #endif
 }
 
-void ClientHandler::PatchDeathEffect(bool bValue)
-{
-	if (bValue)
-	{
-		if (m_vecOrigDeathEffectFunction.size() == 0)
-			m_vecOrigDeathEffectFunction = ReadBytes(GetAddress(skCryptDec("KO_DEATH_EFFECT")), 2);
-
-		std::vector<uint8_t> vecPatch = { 0x90, 0x90 };
-		WriteBytes(GetAddress(skCryptDec("KO_DEATH_EFFECT")), vecPatch);
-	}
-	else
-	{
-		if (m_vecOrigDeathEffectFunction.size() > 0)
-			WriteBytes(GetAddress(skCryptDec("KO_DEATH_EFFECT")), m_vecOrigDeathEffectFunction);
-	}
-}
-
 void ClientHandler::SetRoute(std::vector<Route> vecRoute)
 {
 	m_vecRoute = vecRoute;
@@ -4236,311 +3607,3 @@ void ClientHandler::ClearRoute()
 	m_vecRoute.clear();
 }
 
-void ClientHandler::SendNpcEvent(int32_t iTargetID)
-{
-	Packet pkt = Packet(WIZ_NPC_EVENT);
-
-	pkt << uint8_t(1) << int32_t(iTargetID) << int32_t(-1);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition)
-{
-	Packet pkt = Packet(WIZ_ITEM_TRADE);
-
-	pkt
-		<< uint8_t(1)
-		<< uint32_t(iSellingGroup)
-		<< uint32_t(iNpcId)
-		<< uint8_t(1)
-		<< int32_t(iItemId)
-		<< uint8_t(iInventoryPosition)
-		<< int16_t(iCount)
-		<< uint8_t(iShopPage)
-		<< uint8_t(iShopPosition);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemBuy> vecItemList)
-{
-	Packet pkt = Packet(WIZ_ITEM_TRADE);
-
-	pkt
-		<< uint8_t(1)
-		<< uint32_t(iSellingGroup)
-		<< uint32_t(iNpcId)
-		<< uint8_t(vecItemList.size());
-
-	for (auto &e : vecItemList)
-	{
-		pkt  
-			<< int32_t(e.m_iItemId)
-			<< uint8_t(e.m_iInventoryPosition)
-			<< int16_t(e.m_iCount)
-			<< uint8_t(e.m_iShopPage)
-			<< uint8_t(e.m_iShopPosition);
-	}
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount)
-{
-	Packet pkt = Packet(WIZ_ITEM_TRADE);
-
-	pkt
-		<< uint8_t(2)
-		<< uint32_t(iSellingGroup)
-		<< uint32_t(iNpcId)
-		<< uint8_t(1)
-		<< int32_t(iItemId)
-		<< uint8_t(iInventoryPosition)
-		<< int16_t(iCount);
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemSell> vecItemList)
-{
-	Packet pkt = Packet(WIZ_ITEM_TRADE);
-
-	pkt
-		<< uint8_t(2)
-		<< uint32_t(iSellingGroup)
-		<< uint32_t(iNpcId)
-		<< uint8_t(vecItemList.size());
-
-	for (auto& e : vecItemList)
-	{
-		pkt
-			<< int32_t(e.m_iItemId)
-			<< uint8_t(e.m_iInventoryPosition)
-			<< int16_t(e.m_iCount);
-	}
-
-	SendPacket(pkt);
-}
-
-void ClientHandler::SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId)
-{
-	Packet pkt = Packet(WIZ_ITEM_REPAIR);
-
-	pkt
-		<< uint8_t(iDirection)
-		<< uint8_t(iInventoryPosition)
-		<< int32_t(iNpcId)
-		<< int32_t(iItemId);
-
-	SendPacket(pkt);
-}
-
-bool ClientHandler::IsNeedRepair()
-{
-	for (uint8_t i = 0; i < SLOT_MAX; i++)
-	{
-		switch (i)
-		{
-			case 1:
-			case 4:
-			case 6:
-			case 8:
-			case 10:
-			case 12:
-			case 13:
-			{
-				TInventory pInventory = GetInventoryItemSlot(i);
-
-				if (pInventory.iItemID == 0)
-					continue;
-
-				if (pInventory.iDurability != 0)
-					continue;
-
-				return true;
-			}
-			break;
-		}
-	}
-
-	return false;
-}
-
-bool ClientHandler::IsNeedSupply()
-{
-	auto jSupplyList = m_Bot->GetSupplyList();
-
-	if (jSupplyList.size() > 0)
-	{
-		for (size_t i = 0; i < jSupplyList.size(); i++)
-		{
-			std::string szItemIdAttribute = skCryptDec("itemid");
-			std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
-			std::string szCountAttribute = skCryptDec("count");
-
-			int32_t iSupplyItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
-			int32_t iSupplyItemCount = jSupplyList[i][szCountAttribute.c_str()].get<int32_t>();
-
-			std::vector<int> vecSupplyList = GetConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
-
-			bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iSupplyItemId) != vecSupplyList.end();
-
-			if (!bSelected)
-				continue;
-
-			TInventory pInventoryItem = GetInventoryItem(iSupplyItemId);
-
-			if (pInventoryItem.iItemID == 0)
-				return true;
-
-			if (pInventoryItem.iItemID != 0)
-			{
-				if (pInventoryItem.iCount <= 3 && pInventoryItem.iCount < iSupplyItemCount)
-					return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-void ClientHandler::StepCharacterForward(bool bStart)
-{
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-		0x6A, 0x01,
-		0x6A, 0x00,
-		0xB8, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xD0,
-		0x61,
-		0xC3,
-	};
-
-	DWORD iDlg = GetAddress(skCryptDec("KO_PTR_DLG"));
-	CopyBytes(byCode + 3, iDlg);
-
-	int8_t iStart = bStart ? 1 : 0;
-	CopyBytes(byCode + 10, iStart);
-
-	DWORD iWscb = GetAddress(skCryptDec("KO_WSCB"));
-	CopyBytes(byCode + 12, iWscb);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-void ClientHandler::BasicAttack()
-{
-	DWORD iMobBase = GetMobBase(GetTarget());
-
-	if (iMobBase == 0)
-		return;
-
-	if (!IsEnemy(iMobBase))
-		return;
-
-	DWORD iHp = GetHp(iMobBase);
-	DWORD iMaxHp = GetMaxHp(iMobBase);
-	DWORD iState = GetActionState(iMobBase);
-
-	if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
-		return;
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-		0xB8, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xD0,
-		0x61,
-		0xC3
-	};
-
-	DWORD iDlg = GetAddress(skCryptDec("KO_PTR_DLG"));
-	CopyBytes(byCode + 3, iDlg);
-
-	DWORD iLrca = GetAddress(skCryptDec("KO_LRCA"));
-	CopyBytes(byCode + 8, iLrca);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}
-
-DWORD ClientHandler::GetSkillBase(uint32_t iSkillID)
-{
-	DWORD iFlags;
-	if (!GetHandleInformation(m_Bot->m_hInjectedProcessHandle, &iFlags))
-		m_Bot->m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-	LPVOID pBaseAddress = VirtualAllocEx(m_Bot->m_hInjectedProcessHandle, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (pBaseAddress == 0)
-	{
-		return 0;
-	}
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-		0x68, 0x00, 0x00, 0x00, 0x00,
-		0xBF, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xD7,
-		0xA3, 0x00, 0x00, 0x00, 0x00,
-		0x61,
-		0xC3,
-	};
-
-	DWORD iSbec = GetAddress(skCryptDec("KO_SBEC"));
-	CopyBytes(byCode + 3, iSbec);
-	CopyBytes(byCode + 8, iSkillID);
-
-	DWORD iSbca = GetAddress(skCryptDec("KO_SBCA"));
-	CopyBytes(byCode + 13, iSbca);
-	CopyBytes(byCode + 20, pBaseAddress);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-
-	DWORD iSkillBase = Read4Byte((DWORD)pBaseAddress);
-
-	VirtualFreeEx(m_Bot->GetInjectedProcessHandle(), pBaseAddress, 0, MEM_RELEASE);
-
-	return iSkillBase;
-}
-
-void ClientHandler::StopMove()
-{
-	if (GetMoveState() == PSM_STOP)
-		return;
-
-	DWORD iFlags;
-	if (!GetHandleInformation(m_Bot->m_hInjectedProcessHandle, &iFlags))
-		m_Bot->m_hInjectedProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-	LPVOID pBaseAddress = VirtualAllocEx(m_Bot->m_hInjectedProcessHandle, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (pBaseAddress == nullptr)
-		return;
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x6A, 0x00,
-		0x6A, 0x00,
-		0xB9, 0x00, 0x00, 0x00, 0x00,
-		0x8B, 0x09,
-		0xB8, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xD0,
-		0x61,
-		0xC3,
-	};
-
-	DWORD iDLG = GetAddress(skCryptDec("KO_PTR_DLG"));
-	CopyBytes(byCode + 6, iDLG);
-
-	DWORD i06 = GetAddress(skCryptDec("KO_PTR_06"));
-	CopyBytes(byCode + 13, i06);
-
-	ExecuteRemoteCode(byCode, sizeof(byCode));
-}

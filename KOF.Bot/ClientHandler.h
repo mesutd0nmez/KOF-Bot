@@ -23,7 +23,6 @@ public:
 	void StopHandler();
 	void Process();
 
-
 private:
 	TNpc InitializeNpc(Packet& pkt);
 
@@ -46,13 +45,11 @@ private:
 	std::function<void(BYTE*, DWORD)> onClientRecvProcess;
 	std::function<void(BYTE*, DWORD)> onClientSendProcess;
 
-#ifdef USE_MAILSLOT
 	std::string m_szMailSlotRecvName;
 	std::string m_szMailSlotSendName;
 
 	LPVOID m_RecvHookAddress;
 	LPVOID m_SendHookAddress;
-#endif
 
 private:
 	struct ClientHook
@@ -105,49 +102,10 @@ private:
 	ClientHook* m_ClientHook;
 
 private:
-	void PushPhase(DWORD dwAddress);
 	void SetLoginInformation(std::string szAccountId, std::string szPassword);
-	void ConnectLoginServer(bool bDisconnect = false);
-	void ConnectGameServer(BYTE byServerId);
-
-	void SelectCharacterSkip();
-	void SelectCharacterLeft();
-	void SelectCharacterRight();
-	void SelectCharacter(BYTE byCharacterIndex);
-
-private:
-	void SendPacket(Packet byBuffer);
 
 public:
 	void LoadSkillData();
-
-private:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking = false);
-
-	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
-	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
-	void SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex = 0);
-	void SendStartSkillMagicAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex = 0);
-	void SendStartSkillMagicAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
-	void SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex = 0);
-	void SendCancelSkillPacket(TABLE_UPC_SKILL pSkillData);
-
-public:
-	void SendTownPacket();
-	void SetPosition(Vector3 v3Position);
-	void SetMovePosition(Vector3 v3MovePosition);
-	void SendShoppingMall(ShoppingMallType eType);
-	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
-	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
-	void SetTarget(int32_t iTargetID, bool bSelectFromClient = true);
-	bool UseItem(uint32_t iItemID);
-
-private:
-	void SendBasicAttackPacket(int32_t iTargetID, float fInterval = 1.0f, float fDistance = 2.0f);
-	void SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition, int16_t iMoveSpeed, uint8_t iMoveType);
-	void SendRotation(float fRotation);
-	void SendRequestBundleOpen(uint32_t iBundleID);
-	void SendBundleItemGet(uint32_t iBundleID, uint32_t iItemID, int16_t iIndex);
 
 private:
 	bool IsConfigurationLoaded() { return m_bConfigurationLoaded; };
@@ -179,21 +137,11 @@ private:
 
 private:
 	bool m_bWorking;
-
-#ifdef USE_MAILSLOT
-private:
 	bool m_bMailSlotWorking;
-#endif
 
 private:
 	std::string m_szAccountId;
 	std::string m_szPassword;
-
-public:
-	void PatchDeathEffect(bool bValue);
-
-private:
-	std::vector<uint8_t> m_vecOrigDeathEffectFunction;
 
 public:
 	void SetRoute(std::vector<Route> vecRoute);
@@ -204,40 +152,11 @@ private:
 	std::vector<Route> m_vecRoute;
 
 private:
-	void SendNpcEvent(int32_t iTargetID);
-	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition);
-	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemBuy> vecItemList);
-	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount);
-	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemSell> vecItemList);
-	void SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId);
-
-private:
-	bool IsNeedRepair();
-	bool IsNeedSupply();
-
-private:
 	std::chrono::milliseconds m_msLastSupplyTime;
 	std::chrono::milliseconds m_msLastPotionUseTime;
 
-public:
-	void StepCharacterForward(bool bStart);
-	void BasicAttack();
-
-	DWORD GetSkillBase(uint32_t iSkillID);
-
 private:
-	std::map<uint32_t, DWORD> m_mapSkillBase;
-
-private:
-	LPVOID m_pClientBasicAttackAddress;
-	LPVOID m_pClientSkillAddress;
-	LPVOID m_pClientSkillFunctionAddress;
-
-public:
-	void StopMove();
-
-public:
-	std::recursive_mutex m_mutexUseSkill;
+	bool SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
 };
 
 

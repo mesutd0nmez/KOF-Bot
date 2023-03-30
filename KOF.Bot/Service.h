@@ -42,11 +42,9 @@ private:
 
 protected:
 	Ini* m_iniPointer;
+	Ini* m_iniAppConfiguration;
 	Ini* m_iniUserConfiguration;
 	std::string m_szToken;
-
-private:
-	Ini* m_iniConfiguration;
 
 public:
 	PlatformType m_ePlatformType;
