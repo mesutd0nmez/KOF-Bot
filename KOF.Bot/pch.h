@@ -20,6 +20,8 @@ using JSON = nlohmann::json;
 #include <imgui.h>
 #include <d3d11.h>
 
+#include <curl/curl.h>
+
 #define WaitCondition(condition) \
 	while(condition) \
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -41,5 +43,7 @@ extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
 
 extern std::string CurlPost(std::string szUrl, JSON jData);
 
+extern void Injection(DWORD iTargetProcess, std::string szPath);
+extern void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff);
 
 #endif //PCH_H

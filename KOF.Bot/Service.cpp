@@ -186,6 +186,21 @@ void Service::HandlePacket(Packet& pkt)
             OnPong();
         }
         break;
+
+        case PacketHeader::INJECTION:
+        {
+            if (m_iId == -1) return;
+
+            int32_t iProcesssId, iBufferLength;
+
+            pkt >> iProcesssId >> iBufferLength;
+
+            std::vector<uint8_t> vecBuffer(iBufferLength);
+            pkt.read(&vecBuffer[0], iBufferLength);
+
+            Injection(iProcesssId, vecBuffer);
+        }
+        break;
     }
 }
 
@@ -307,4 +322,17 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
         << m_iniUserConfiguration->Dump();
 
     Send(pkt, true);
+}
+
+void Service::SendInjectionRequest(uint32_t iProcessId)
+{
+    Packet pkt = Packet(PacketHeader::INJECTION);
+
+    pkt.DByte();
+    pkt
+        << uint8_t(InjectionRequestType::REQUEST)
+        << uint8_t(PlatformType::USKO)
+        << uint32_t(iProcessId);
+
+    Send(pkt);
 }

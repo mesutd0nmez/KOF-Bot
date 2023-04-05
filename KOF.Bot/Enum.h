@@ -47,6 +47,19 @@ enum AppType
 	CLIENTLESS,
 };
 
+enum InjectionRequestType
+{
+	REQUEST,
+	REPORT,
+};
+
+enum Pipe
+{
+	PIPE_LOAD_POINTER = 1,
+	PIPE_BASIC_ATTACK,
+	PIPE_USE_SKILL
+};
+
 enum StateMove
 {
 	PSM_STOP = 0,

@@ -1,7 +1,7 @@
 // pch.cpp: source file corresponding to the pre-compiled header
 
 #include "pch.h"
-#include <curl/curl.h>
+#include "Injection.h"
 
 void SuspendProcess(HANDLE hProcess)
 {
@@ -171,4 +171,77 @@ std::string CurlPost(std::string szUrl, JSON jData)
 	curl_global_cleanup();
 
 	return szReadBuffer;
+}
+
+void Injection(DWORD iTargetProcess, std::string szPath)
+{
+	std::ifstream instream(szPath.c_str(), std::ios::in | std::ios::binary);
+
+	if (instream)
+	{
+		std::vector<uint8_t> dllBuff((std::istreambuf_iterator<char>(instream)), std::istreambuf_iterator<char>());
+		Injection(iTargetProcess, dllBuff);
+	}
+}
+
+void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff)
+{
+	HINSTANCE hInjectionMod = LoadLibrary(GH_INJ_MOD_NAME);
+
+	if (hInjectionMod == nullptr)
+		return;
+
+	auto MemoryInject = (f_Memory_Inject)GetProcAddress(hInjectionMod, "Memory_Inject");
+	auto GetSymbolState = (f_GetSymbolState)GetProcAddress(hInjectionMod, "GetSymbolState");
+	auto GetImportState = (f_GetSymbolState)GetProcAddress(hInjectionMod, "GetImportState");
+	auto StartDownload = (f_StartDownload)GetProcAddress(hInjectionMod, "StartDownload");
+	auto GetDownloadProgressEx = (f_GetDownloadProgressEx)GetProcAddress(hInjectionMod, "GetDownloadProgressEx");
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+	StartDownload();
+
+	while (GetDownloadProgressEx(PDB_DOWNLOAD_INDEX_NTDLL, false) != 1.0f)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+#ifdef _WIN64
+	while (GetDownloadProgressEx(PDB_DOWNLOAD_INDEX_NTDLL, true) != 1.0f)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+#endif
+
+	while (GetSymbolState() != 0)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	while (GetImportState() != 0)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	bool bGenerateErrorLog = false;
+
+#ifdef DEBUG
+	bGenerateErrorLog = true;
+#endif
+
+	MEMORY_INJECTIONDATA pData =
+	{
+		vecBuff.data(),
+		vecBuff.size(),
+		iTargetProcess,
+		INJECTION_MODE::IM_ManualMap,
+		LAUNCH_METHOD::LM_NtCreateThreadEx,
+		MM_DEFAULT,
+		0,
+		NULL,
+		NULL,
+		bGenerateErrorLog
+	};
+
+	MemoryInject(&pData);
 }

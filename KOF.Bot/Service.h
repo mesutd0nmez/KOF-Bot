@@ -41,6 +41,9 @@ private:
 	void OnClose(int32_t iErrorCode);
 
 protected:
+	void SendInjectionRequest(uint32_t iProcessId);
+
+protected:
 	Ini* m_iniPointer;
 	Ini* m_iniAppConfiguration;
 	Ini* m_iniUserConfiguration;

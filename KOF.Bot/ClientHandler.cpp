@@ -658,15 +658,18 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 					printf("RecvProcess::LS_LOGIN_REQ: Account already in-game\n");
 #endif
-					new std::thread([this]()
+					if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 					{
+						new std::thread([this]()
+						{
 #ifdef DEBUG
-						printf("RecvProcess::LS_LOGIN_REQ: Reconnecting login server\n");
+							printf("RecvProcess::LS_LOGIN_REQ: Reconnecting login server\n");
 
-						std::this_thread::sleep_for(std::chrono::milliseconds(500));
+							std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
-						ConnectLoginServer(m_szAccountId, m_szPassword, true);
-					});
+							ConnectLoginServer(m_szAccountId, m_szPassword, true);
+						});
+					}
 				}
 				break;
 
@@ -1518,11 +1521,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					uint32_t iGold = pkt.read<uint32_t>();
 
-					m_PlayerMySelf.tInventory[14 + iPos].iItemID = iItemID;
-					m_PlayerMySelf.tInventory[14 + iPos].iCount = iItemCount;
-
-					m_PlayerMySelf.iGold = iGold;
-
 					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
@@ -1666,44 +1664,52 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_CAPTCHA: Image loaded\n");
-#endif
 
 						int32_t iBufferLength;
 						pkt >> iBufferLength;
 
 						std::vector<uint8_t> vecBuffer(iBufferLength);
 						pkt.read(&vecBuffer[0], iBufferLength);
-
-						const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
-
-						if (iSelectedCaptchaSolver != 0)
-						{
-							if (!SolveCaptcha(vecBuffer))
-							{
-								RefreshCaptcha();
-							}
-						}
-						else
-						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CAPTCHA: Captcha solver service not selected\n");
 #endif
-						}
+						new std::thread([&,vecBuffer]()
+						{ 
+							
+
+							const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+
+							if (iSelectedCaptchaSolver != 0)
+							{
+								if (!SolveCaptcha(vecBuffer))
+								{
+									RefreshCaptcha();
+								}
+							}
+							else
+							{
+#ifdef DEBUG
+								printf("RecvProcess::WIZ_CAPTCHA: Captcha solver service not selected\n");
+#endif
+							}
+						});					
 					}
 					else
 					{
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_CAPTCHA: Image loading failed(%d)\n", iResult);
 #endif	
-						const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
-
-						if (iSelectedCaptchaSolver != 0)
+						new std::thread([&]()
 						{
-							RefreshCaptcha();
+							const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+
+							if (iSelectedCaptchaSolver != 0)
+							{
+								std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+								RefreshCaptcha();
 #ifdef DEBUG
-							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
+								printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
 #endif
-						}
+							}
+						});
 					}
 				}
 				break;
@@ -1970,7 +1976,7 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 							{
 								bool bArcherCombo = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), true);
 
-								DWORD iMobBase = GetMobBase(iTargetID);
+								DWORD iMobBase = GetEntityBase(iTargetID);
 
 								if (bArcherCombo && iMobBase != 0)
 								{
@@ -2126,6 +2132,9 @@ void ClientHandler::AttackProcess()
 			if (IsRouting())
 				continue;
 
+			if (IsDeath())
+				continue;
+
 			std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
 			if (!m_Bot->GetSkillTable(&pSkillTable))
 				continue;
@@ -2134,9 +2143,7 @@ void ClientHandler::AttackProcess()
 			if (!m_Bot->GetSkillExtension2Table(&pSkillExtension2))
 				continue;
 
-			bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-			if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
+			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
 			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -2144,14 +2151,13 @@ void ClientHandler::AttackProcess()
 			if (!bAttackStatus)
 				continue;
 
-			bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 			bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
 			Vector3 v3TargetPosition = GetTargetPosition();
 
 			DWORD iTargetBase = GetClientSelectedTargetBase();
 
-			if (iTargetBase == 0 || Read4Byte(iTargetBase) == 0)
+			if (iTargetBase == 0)
 				continue;
 			else
 			{
@@ -2165,24 +2171,11 @@ void ClientHandler::AttackProcess()
 				if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
 					continue;
 
-				if (bBasicAttack)
+				if (bMoveToTarget
+					&& GetDistance(v3TargetPosition) >= 1.0f
+					&& GetActionState() != PSA_SPELLMAGIC)
 				{
-					DWORD iIsInBasicAttackProcess = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_BASIC_ATTACK_STATE")));
-
-					if (bMoveToTarget
-						&& iIsInBasicAttackProcess == 0
-						&& GetDistance(v3TargetPosition) >= 1.0f
-						&& GetActionState() != PSA_SPELLMAGIC)
-						BasicAttack();
-				}
-				else
-				{
-					if (bMoveToTarget
-						&& GetDistance(v3TargetPosition) >= 1.0f
-						&& GetActionState() != PSA_SPELLMAGIC)
-					{
-						SetMovePosition(v3TargetPosition);
-					}
+					SetMovePosition(v3TargetPosition);
 				}
 			}
 
@@ -2197,14 +2190,12 @@ void ClientHandler::AttackProcess()
 
 			if (vecAttackSkillList.size() == 0)
 			{
-				Vector3 v3TargetPosition = GetTargetPosition();
+				bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 
-				if (GetDistance(v3TargetPosition) <= 3.0f)
+				if (bBasicAttack 
+					&& GetActionState() != PSA_SPELLMAGIC)
 				{
-					if (bBasicAttack)
-					{
-						BasicAttack();
-					}
+					BasicAttack();
 				}
 
 				if (bAttackSpeed)
@@ -2232,7 +2223,7 @@ void ClientHandler::AttackProcess()
 				{
 					DWORD iTargetBase = GetClientSelectedTargetBase();
 
-					if (iTargetBase == 0 || Read4Byte(iTargetBase) == 0)
+					if (iTargetBase == 0)
 						break;
 					else
 					{
@@ -2244,6 +2235,7 @@ void ClientHandler::AttackProcess()
 							break;
 
 						Vector3 v3TargetPosition = GetTargetPosition();
+
 						if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
 							break;
 
@@ -2255,6 +2247,9 @@ void ClientHandler::AttackProcess()
 
 					if (pSkillData != pSkillTable->end())
 					{
+						if (pSkillData->second.iReCastTime != 0 && GetActionState() == PSA_SPELLMAGIC)
+							continue;
+
 						uint32_t iNeedItem = pSkillData->second.dwNeedItem;
 
 						uint32_t iNeedItemCount = 1;
@@ -2292,7 +2287,9 @@ void ClientHandler::AttackProcess()
 						if (iNeedItem != 0 && iExistItemCount < iNeedItemCount)
 							continue;
 
-						UseSkill(pSkillData->second, GetTarget(), true);
+						UseSkill(pSkillData->second, GetTarget());
+
+						bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 
 						if (bBasicAttack)
 							BasicAttack();
@@ -2348,6 +2345,12 @@ void ClientHandler::SearchTargetProcess()
 			if (IsRouting())
 				continue;
 
+			if (IsDeath())
+				continue;
+
+			if (GetActionState() == PSA_SPELLMAGIC)
+				continue;
+
 			bool bSearchTargetSpeed = GetUserConfiguration()->GetBool("Attack", "SearchTargetSpeed", false);
 
 			if (bSearchTargetSpeed)
@@ -2361,11 +2364,6 @@ void ClientHandler::SearchTargetProcess()
 			}
 			else
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-			bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-			if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
-				continue;
 			
 			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
 
@@ -2431,29 +2429,13 @@ void ClientHandler::SearchTargetProcess()
 					{
 						SetTarget(pSelectedTarget.m_iBase);
 
-						bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 						bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
-						if (bBasicAttack)
+						if (bMoveToTarget
+							&& GetDistance(pSelectedTarget.m_v3Position) >= 1.0f
+							&& GetActionState() != PSA_SPELLMAGIC)
 						{
-							DWORD iIsInBasicAttackProcess = Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_BASIC_ATTACK_STATE")));
-
-							if (bMoveToTarget
-								&& GetDistance(pSelectedTarget.m_v3Position) >= 1.0f
-								&& GetActionState() != PSA_SPELLMAGIC)
-							{
-								SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
-								BasicAttack();
-							}
-						}
-						else
-						{
-							if (bMoveToTarget
-								&& GetDistance(pSelectedTarget.m_v3Position) >= 1.0f
-								&& GetActionState() != PSA_SPELLMAGIC)
-							{
-								SetMovePosition(pSelectedTarget.m_v3Position);
-							}
+							SetMovePosition(pSelectedTarget.m_v3Position);
 						}
 					}
 				}
@@ -2493,6 +2475,12 @@ void ClientHandler::AutoLootProcess()
 				continue;
 
 			if (IsRouting())
+				continue;
+
+			if (IsDeath())
+				continue;
+
+			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
 			bool bAutoLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
@@ -2549,9 +2537,7 @@ void ClientHandler::AutoLootProcess()
 							{
 								std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
-								bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-								if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
+								if (GetActionState() == PSA_SPELLMAGIC)
 									continue;
 
 								SetMovePosition(Vector3(pNpc->fX, pNpc->fZ, pNpc->fY));
@@ -2624,6 +2610,9 @@ void ClientHandler::MinorProcess()
 			if (IsBlinking())
 				continue;
 
+			if (IsDeath())
+				continue;
+
 			std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
 			if (!GetAvailableSkill(&vecAvailableSkills))
 				continue;
@@ -2686,33 +2675,8 @@ void ClientHandler::PotionProcess()
 			if (IsBlinking())
 				continue;
 
-			bool bMpProtectionEnable = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
-
-			if (bMpProtectionEnable)
-			{
-				int16_t iMp = GetMp(); int16_t iMaxMp = GetMaxMp();
-
-				if (iMp > 0 && iMaxMp > 0)
-				{
-					int32_t iMpProtectionPercent = (int32_t)std::ceil((iMp * 100) / iMaxMp);
-					int32_t iMpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 50);
-
-					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch()
-					);
-
-					if (iMpProtectionPercent <= iMpProtectionValue && (m_msLastPotionUseTime.count() + 2000) <= msNow.count())
-					{
-
-						if (ManaPotionProcess())
-						{
-							m_msLastPotionUseTime = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);
-						}
-					}
-				}
-			}
+			if (IsDeath())
+				continue;
 
 			bool bHpProtectionEnable = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Hp"), false);
 
@@ -2725,21 +2689,50 @@ void ClientHandler::PotionProcess()
 					int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
 					int32_t iHpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
 
-					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+					/*std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
 						std::chrono::system_clock::now().time_since_epoch()
-					);
+					);*/
 
-					if (iHpProtectionPercent <= iHpProtectionValue && (m_msLastPotionUseTime.count() + 2000) <= msNow.count())
+					if (iHpProtectionPercent <= iHpProtectionValue /*&& (m_msLastPotionUseTime.count() + 2000) <= msNow.count()*/)
 					{
 						if (HealthPotionProcess())
 						{
-							m_msLastPotionUseTime = duration_cast<std::chrono::milliseconds>(
+							/*m_msLastPotionUseTime = duration_cast<std::chrono::milliseconds>(
 								std::chrono::system_clock::now().time_since_epoch()
-							);
+							);*/
 						}
 					}
 				}
 			}
+
+			bool bMpProtectionEnable = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
+
+			if (bMpProtectionEnable)
+			{
+				int16_t iMp = GetMp(); int16_t iMaxMp = GetMaxMp();
+
+				if (iMp > 0 && iMaxMp > 0)
+				{
+					int32_t iMpProtectionPercent = (int32_t)std::ceil((iMp * 100) / iMaxMp);
+					int32_t iMpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 50);
+
+					/*std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);*/
+
+					if (iMpProtectionPercent <= iMpProtectionValue /*&& (m_msLastPotionUseTime.count() + 2000) <= msNow.count()*/)
+					{
+
+						if (ManaPotionProcess())
+						{
+							/*m_msLastPotionUseTime = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);*/
+						}
+					}
+				}
+			}
+			
 		}
 		catch (const std::exception& e)
 		{
@@ -2766,9 +2759,12 @@ void ClientHandler::CharacterProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 			if (IsBlinking())
+				continue;
+
+			if (IsDeath())
 				continue;
 
 			std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
@@ -2787,9 +2783,7 @@ void ClientHandler::CharacterProcess()
 			if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
 				continue;
 
-			bool bLegalStatus = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-			if (bLegalStatus && GetActionState() == PSA_SPELLMAGIC)
+			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
 			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
@@ -2866,7 +2860,7 @@ void ClientHandler::CharacterProcess()
 
 			bool bAutoTransformation = GetUserConfiguration()->GetBool(skCryptDec("Transformation"), skCryptDec("Auto"), false);
 			int iTransformationItem = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Item"), 381001000);
-			int iTransformationSkill = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 0);
+			int iTransformationSkill = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 472020);
 
 			if (bAutoTransformation && iTransformationSkill > 0 && IsTransformationAvailable())
 			{
@@ -2928,184 +2922,357 @@ void ClientHandler::CharacterProcess()
 				}
 			}
 
-			if (IsPriest())
+			std::vector<Party> vecParty;
+			if (GetPartyList(vecParty))
 			{
-				bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
-
-				int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
-
-				if (iSelectedHealthBuff == -1)
+				if (IsPriest())
 				{
-					iSelectedHealthBuff = GetProperHealthBuff(GetMaxHp());
-				}
-
-				if (bAutoHealthBuff && iSelectedHealthBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
-				{
-					auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-						[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
-
-					if (it != vecAvailableSkills->end())
+					for (auto& e : vecParty)
 					{
-						std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						PartyBuffInfo pMemberBuffInfo;
+						memset(&pMemberBuffInfo, 0, sizeof(pMemberBuffInfo));
+						GetPartyMemberBuffInfo(e.iID, pMemberBuffInfo);
 
-						std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+						bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
 
-						bool bUse = true;
+						int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
 
-						if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+						if (iSelectedHealthBuff == -1)
 						{
-							int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-							if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-								bUse = false;
+							iSelectedHealthBuff = GetProperHealthBuff(e.iMaxHP);
 						}
 
-						if (GetMp() < it->iExhaustMSP)
+						if (pMemberBuffInfo.bHealth == false
+							&& bAutoHealthBuff
+							&& iSelectedHealthBuff != -1 
+							&& (e.iID != GetID() || (e.iID == GetID() && !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))))
 						{
-							bUse = false;
+							auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+								[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
+
+							if (it != vecAvailableSkills->end())
+							{
+								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+									std::chrono::system_clock::now().time_since_epoch()
+								);
+
+								std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+								bool bUse = true;
+
+								if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+								{
+									int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+									if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+										bUse = false;
+								}
+
+								if (GetMp() < it->iExhaustMSP)
+								{
+									bUse = false;
+								}
+
+								if (bUse)
+								{
+									WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+									UseSkill(*it, e.iID);
+									pMemberBuffInfo.bHealth = true;
+								}
+							}
 						}
 
-						if (bUse)
+						bool bIsNearby = (e.iID == GetID()) || (e.iID != GetID() && GetEntityBase(e.iID) > 0);
+
+						bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
+
+						int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
+
+						if (iSelectedDefenceBuff == -1)
 						{
-							UseSkill(*it, GetID());
+							iSelectedDefenceBuff = GetProperDefenceBuff();
+						}
+
+						if (pMemberBuffInfo.bAc == false 
+							&& bIsNearby 
+							&& bAutoDefenceBuff 
+							&& iSelectedDefenceBuff != -1
+							&& (e.iID != GetID() || (e.iID == GetID() && !IsBuffActive(BuffType::BUFF_TYPE_AC))))
+						{
+							auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+								[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
+
+							if (it != vecAvailableSkills->end())
+							{
+								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+									std::chrono::system_clock::now().time_since_epoch()
+								);
+
+								std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+								bool bUse = true;
+
+								if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+								{
+									int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+									if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+										bUse = false;
+								}
+
+								if (GetMp() < it->iExhaustMSP)
+								{
+									bUse = false;
+								}
+
+								if (bUse)
+								{
+									WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+									UseSkill(*it, e.iID);
+									pMemberBuffInfo.bAc = true;
+								}
+							}
+						}
+
+						bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+
+						int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
+
+						if (iSelectedMindBuff == -1)
+						{
+							iSelectedMindBuff = GetProperMindBuff();
+						}
+
+						if (pMemberBuffInfo.bResistance == false 
+							&& bIsNearby 
+							&& bAutoMindBuff 
+							&& iSelectedMindBuff != -1
+							&& (e.iID != GetID() || (e.iID == GetID() && !IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))))
+						{
+							auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+								[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
+
+							if (it != vecAvailableSkills->end())
+							{
+								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+									std::chrono::system_clock::now().time_since_epoch()
+								);
+
+								std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+								bool bUse = true;
+
+								if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+								{
+									int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+									if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+										bUse = false;
+								}
+
+								if (GetMp() < it->iExhaustMSP)
+								{
+									bUse = false;
+								}
+
+								if (bUse)
+								{
+									WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+									UseSkill(*it, e.iID);
+									pMemberBuffInfo.bResistance = true;
+								}
+							}
+						}
+
+						Party pPartyMember;
+						if (GetPartyMember(e.iID, pPartyMember))
+						{
+							SetPartyMemberBuffInfo(e.iID, pMemberBuffInfo);
 						}
 					}
 				}
-
-				bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
-
-				int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
-
-				if (iSelectedDefenceBuff == -1)
+			}
+			else
+			{
+				if (IsPriest())
 				{
-					iSelectedDefenceBuff = GetProperDefenceBuff();
-				}
+					bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
 
-				if (bAutoDefenceBuff && iSelectedDefenceBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_AC))
-				{
-					auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-						[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
+					int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
 
-					if (it != vecAvailableSkills->end())
+					if (iSelectedHealthBuff == -1)
 					{
-						std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						iSelectedHealthBuff = GetProperHealthBuff(GetMaxHp());
+					}
 
-						std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+					if (bAutoHealthBuff && iSelectedHealthBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
+					{
+						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+							[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
 
-						bool bUse = true;
-
-						if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+						if (it != vecAvailableSkills->end())
 						{
-							int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
 
-							if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+							bool bUse = true;
+
+							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+							{
+								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+									bUse = false;
+							}
+
+							if (GetMp() < it->iExhaustMSP)
+							{
 								bUse = false;
-						}
+							}
 
-						if (GetMp() < it->iExhaustMSP)
-						{
-							bUse = false;
-						}
-
-						if (bUse)
-						{
-							UseSkill(*it, GetID());
+							if (bUse)
+							{
+								UseSkill(*it, GetID());
+							}
 						}
 					}
-				}
 
-				bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+					bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
 
-				int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
+					int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
 
-				if (iSelectedMindBuff == -1)
-				{
-					iSelectedMindBuff = GetProperMindBuff();
-				}
-
-				if (bAutoMindBuff && iSelectedMindBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))
-				{
-					auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-						[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
-
-					if (it != vecAvailableSkills->end())
+					if (iSelectedDefenceBuff == -1)
 					{
-						std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						iSelectedDefenceBuff = GetProperDefenceBuff();
+					}
 
-						std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+					if (bAutoDefenceBuff && iSelectedDefenceBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_AC))
+					{
+						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+							[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
 
-						bool bUse = true;
-
-						if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+						if (it != vecAvailableSkills->end())
 						{
-							int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
 
-							if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+							bool bUse = true;
+
+							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+							{
+								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+									bUse = false;
+							}
+
+							if (GetMp() < it->iExhaustMSP)
+							{
 								bUse = false;
-						}
+							}
 
-						if (GetMp() < it->iExhaustMSP)
-						{
-							bUse = false;
-						}
-
-						if (bUse)
-						{
-							UseSkill(*it, GetID());
+							if (bUse)
+							{
+								UseSkill(*it, GetID());
+							}
 						}
 					}
-				}
 
-				bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
-				int iSelectedHeal = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
+					bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
 
-				if (iSelectedHeal == -1)
-				{
-					iSelectedHeal = GetProperHeal();
-				}
+					int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
 
-				int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
-
-				int iAutoHealValue = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
-				int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
-
-				if (bAutoHeal && iSelectedHeal != -1 && iHpProtectionPercent <= iAutoHealValue)
-				{
-					auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-						[iSelectedHeal](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHeal; });
-
-					if (it != vecAvailableSkills->end())
+					if (iSelectedMindBuff == -1)
 					{
-						std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						iSelectedMindBuff = GetProperMindBuff();
+					}
 
-						std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+					if (bAutoMindBuff && iSelectedMindBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))
+					{
+						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+							[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
 
-						bool bUse = true;
-
-						if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+						if (it != vecAvailableSkills->end())
 						{
-							int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
 
-							if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+							bool bUse = true;
+
+							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+							{
+								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+									bUse = false;
+							}
+
+							if (GetMp() < it->iExhaustMSP)
+							{
 								bUse = false;
-						}
+							}
 
-						if (GetMp() < it->iExhaustMSP)
-						{
-							bUse = false;
+							if (bUse)
+							{
+								UseSkill(*it, GetID());
+							}
 						}
+					}
 
-						if (bUse)
+					bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
+					int iSelectedHeal = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
+
+					if (iSelectedHeal == -1)
+					{
+						iSelectedHeal = GetProperHeal();
+					}
+
+					int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
+
+					int iAutoHealValue = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
+					int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
+
+					if (bAutoHeal && iSelectedHeal != -1 && iHpProtectionPercent <= iAutoHealValue)
+					{
+						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+							[iSelectedHeal](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHeal; });
+
+						if (it != vecAvailableSkills->end())
 						{
-							UseSkill(*it, GetID());
+							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
+
+							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+							bool bUse = true;
+
+							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+							{
+								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+									bUse = false;
+							}
+
+							if (GetMp() < it->iExhaustMSP)
+							{
+								bUse = false;
+							}
+
+							if (bUse)
+							{
+								UseSkill(*it, GetID());
+							}
 						}
 					}
 				}
@@ -3218,6 +3385,9 @@ void ClientHandler::GodModeProcess()
 			if (IsBlinking())
 				continue;
 
+			if (IsDeath())
+				continue;
+
 			std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
 			if (!m_Bot->GetSkillTable(&pSkillTable))
 				continue;
@@ -3299,9 +3469,15 @@ void ClientHandler::RouteProcess()
 			if (m_vecRoute.size() == 0)
 				continue;
 
+			if (IsDeath())
+				continue;
+
 			Route pRoute = m_vecRoute.front();
 
 			float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+
+			if (GetActionState() == PSA_SPELLMAGIC)
+				continue;
 
 			if (fDistance > 3.0f)
 				SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
@@ -3413,6 +3589,10 @@ void ClientHandler::RouteProcess()
 								while (GetDistance(Vector3(GetX(), 0.0f, GetY()), e.second.m_vec3NpcPosition) > 3.0f)
 								{
 									std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+									if (GetActionState() == PSA_SPELLMAGIC)
+										continue;
+
 									SetMovePosition(e.second.m_vec3NpcPosition);
 								}
 
@@ -3472,6 +3652,10 @@ void ClientHandler::RouteProcess()
 								while (GetDistance(Vector3(GetX(), 0.0f, GetY()), vec3FindedNpcPosition) > 3.0f)
 								{
 									std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+									if (GetActionState() == PSA_SPELLMAGIC)
+										continue;
+
 									SetMovePosition(vec3FindedNpcPosition);
 								}
 
@@ -3554,6 +3738,9 @@ void ClientHandler::SupplyProcess()
 				continue;
 
 			if (IsRouting())
+				continue;
+
+			if (IsDeath())
 				continue;
 
 			std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());

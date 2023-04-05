@@ -41,6 +41,9 @@ Bot::Bot()
 	m_jHealList.clear();
 
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
+
+	m_hPipe = nullptr;
+	m_bPipeWorking = false;
 }
 
 Bot::~Bot()
@@ -78,6 +81,9 @@ Bot::~Bot()
 	m_jHealList.clear();
 
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
+
+	m_hPipe = nullptr;
+	m_bPipeWorking = false;
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -111,10 +117,6 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 		CloseHandle(hToken);
 	}
 
-	wchar_t* wszAppDataFolder;
-	SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, NULL, &wszAppDataFolder);
-	m_szAppDataFolder = to_string(wszAppDataFolder);
-
 	m_ePlatformType = ePlatformType;
 	m_iSelectedAccount = iSelectedAccount;
 
@@ -135,6 +137,25 @@ void Bot::Process()
 	{
 		if (m_ClientHandler)
 			m_ClientHandler->Process();
+
+		if (m_bPipeWorking == false)
+		{
+			if (ConnectPipeServer())
+			{
+				m_bPipeWorking = true;
+
+				Packet pkt = Packet(PIPE_LOAD_POINTER);
+
+				pkt << int32_t(m_mapAddress.size());
+
+				for (auto e : m_mapAddress)
+				{
+					pkt << e.first << e.second;
+				}
+
+				SendPipeServer(pkt);
+			}
+		}
 	}
 }
 
@@ -142,7 +163,7 @@ void Bot::LoadAccountList()
 {
 	try
 	{
-		m_szAccountListFilePath = m_szAppDataFolder + skCryptDec("\\KOF.Accounts.json");
+		m_szAccountListFilePath = skCryptDec(".\\data\\accounts.json");
 
 		std::ifstream i(m_szAccountListFilePath.c_str());
 		m_AccountList = JSON::parse(i);
@@ -509,8 +530,12 @@ void Bot::OnLoaded()
 
 	ResumeProcess(injectedProcessInfo.hProcess);
 
+	SendInjectionRequest(injectedProcessInfo.dwProcessId);
+
+#ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
+#endif
 #endif
 }
 
@@ -870,4 +895,34 @@ void Bot::BuildAdress()
 
 	delete m_iniPointer;
 	m_iniPointer = nullptr;
+}
+
+bool Bot::ConnectPipeServer()
+{
+	m_hPipe = CreateFileA(skCryptDec("\\\\.\\pipe\\pipeline"),
+		GENERIC_READ | GENERIC_WRITE,
+		0,
+		NULL,
+		OPEN_EXISTING,
+		0,
+		NULL);
+
+	if (m_hPipe != INVALID_HANDLE_VALUE)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void Bot::SendPipeServer(Packet pkt)
+{
+	if (m_hPipe != INVALID_HANDLE_VALUE)
+	{
+		WriteFile(m_hPipe,
+			pkt.contents(),
+			pkt.size(),
+			0,
+			NULL);
+	}
 }

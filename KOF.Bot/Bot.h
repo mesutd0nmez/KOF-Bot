@@ -69,7 +69,6 @@ private:
 	Table<__TABLE_DISGUISE_RING>* m_pTbl_Disguise_Ring;
 
 	std::string m_szAccountListFilePath;
-	std::string m_szAppDataFolder;
 
 public:
 	DWORD GetInjectedProcessId() { return m_dwInjectedProcessId; };
@@ -128,6 +127,12 @@ private:
 
 private:
 	std::chrono::milliseconds m_msLastInitializeHandle;
+
+public:
+	HANDLE m_hPipe;
+	bool m_bPipeWorking;
+	bool ConnectPipeServer();
+	void SendPipeServer(Packet pkt);
 
 public:
 	BYTE ReadByte(DWORD dwAddress);

@@ -6,6 +6,8 @@
 
 //#define DISABLE_XIGNCODE
 
+//#define NO_INITIALIZE_CLIENT_HANDLER
+
 #define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #define DEVELOPMENT_EXE "KnightOnLine.exe"
 #define DEVELOPMENT_PLATFORM 0

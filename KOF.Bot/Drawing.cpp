@@ -667,27 +667,12 @@ void Drawing::DrawGameController()
             ImGui::TextUnformatted(skCryptDec("Quick Action"));
             ImGui::Separator();
 
-            bool bLegalStatus = m_pUserConfiguration->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-            if (bLegalStatus)
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-            else
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
-
-            if (ImGui::Button(skCryptDec("Legal"), ImVec2(129.0f, 0.0f)))
-            {
-                bLegalStatus = !bLegalStatus;
-                m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("Legal"), bLegalStatus);
-            }
-
-            ImGui::PopStyleColor(1);
-
-            ImGui::SameLine();
-
             if (ImGui::Button(skCryptDec("Town"), ImVec2(129.0f, 0.0f)))
             {
                 m_pClient->SendTownPacket();
             }
+
+            ImGui::SameLine();
 
             if (ImGui::Button(skCryptDec("Reload Skill"), ImVec2(129.0f, 0.0f)))
             {
@@ -1532,7 +1517,7 @@ void Drawing::DrawMainTransformationArea()
 
             std::vector<DisguiseSkill> vecDisguiseSkills;
 
-            int iTransformationSkill = m_pUserConfiguration->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 0);
+            int iTransformationSkill = m_pUserConfiguration->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 472020);
 
             std::string szSelectedTransformationSkill = "";
 

@@ -545,3 +545,25 @@ typedef struct  __TABLE_DISGUISE_RING
 	uint8_t				iType;
 	std::string			szDescription;
 } TABLE_DISGUISE_RING;
+
+typedef struct __Party
+{
+	int32_t				iID;
+	std::string			szName;
+	int16_t				iHP;
+	int16_t				iMaxHP;
+	int16_t				iMP;
+	int16_t				iMaxMP;
+	int32_t				iCure;
+} Party;
+
+typedef struct __PartyBuffInfo
+{
+	int32_t				iMemberID;
+	int16_t				iOriginalMaxHP;
+	int16_t				iCurrentMaxHP;
+	bool				bHealth;
+	bool				bAc;
+	bool				bResistance;
+	std::chrono::milliseconds iBuffTime;
+} PartyBuffInfo;

@@ -36,6 +36,8 @@ public:
 
 	bool IsDisconnect();
 
+	bool IsDeath(DWORD iBase = 0);
+
 	float GetX(DWORD iBase = 0);
 	float GetZ(DWORD iBase = 0);
 	float GetY(DWORD iBase = 0);
@@ -51,7 +53,7 @@ public:
 	Vector3 GetTargetPosition();
 	int32_t GetTarget();
 
-	DWORD GetMobBase(int32_t iTargetId);
+	DWORD GetEntityBase(int32_t iTargetId);
 
 	bool IsRogue(int32_t eClass = CLASS_UNKNOWN);
 	bool IsMage(int32_t eClass = CLASS_UNKNOWN);
@@ -100,9 +102,6 @@ protected:
 	
 	std::vector<TNpc> m_vecNpc;
 
-public:
-	std::recursive_mutex m_mutexNpc;
-
 protected:
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
@@ -137,13 +136,13 @@ protected:
 
 	void SendPacket(Packet byBuffer);
 
-	void UseSkillWithClient(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking);
+
 	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking);
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 protected:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking = false);
+	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -192,6 +191,18 @@ protected:
 protected:
 	bool IsNeedRepair();
 	bool IsNeedSupply();
+
+public:
+	int32_t GetPartyMemberCount();
+	bool GetPartyList(std::vector<Party>& vecParty);
+	bool GetPartyMember(int32_t iID, Party& pPartyMember);
+
+public:
+	bool GetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo& pPartyBuffInfo);
+	void SetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo pPartyBuffInfo);
+
+protected:
+	std::map<int32_t, PartyBuffInfo> m_mapPartyBuffInfo;
 
 protected:
 	BYTE ReadByte(DWORD dwAddress);

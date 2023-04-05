@@ -31,6 +31,7 @@
     <ClInclude Include="Enum.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Guard.h" />
+    <ClInclude Include="Injection.h" />
     <ClInclude Include="Json.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Remap.h" />
