@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "Json.h"
 #include "World.h"
-#include "UI.h"
+#include <stb_image.h>
 
 World::World()
 {

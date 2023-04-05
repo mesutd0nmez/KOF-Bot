@@ -1,6 +1,7 @@
 // pch.cpp: source file corresponding to the pre-compiled header
 
 #include "pch.h"
+#include "Injection.h"
 
 void SuspendProcess(HANDLE hProcess)
 {
@@ -121,4 +122,126 @@ BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
 	CloseHandle(hProcess);
 
 	return bStatus;
+}
+
+size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp)
+{
+	((std::string*)userp)->append((char*)contents, size * nmemb);
+	return size * nmemb;
+}
+
+std::string CurlPost(std::string szUrl, JSON jData)
+{
+	CURL* curl;
+	CURLcode res;
+	std::string szReadBuffer;
+
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+
+	curl = curl_easy_init();
+
+	if (curl)
+	{
+		std::string szJson = jData.dump();
+
+		curl_easy_setopt(curl, CURLOPT_URL, szUrl.c_str());
+		curl_easy_setopt(curl, CURLOPT_POST, 1L);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, szJson.c_str());
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &szReadBuffer);
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, FALSE);
+
+		struct curl_slist* headers = NULL;
+		headers = curl_slist_append(headers, "Content-Type: application/json");
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+		res = curl_easy_perform(curl);
+
+		if (res != CURLE_OK)
+		{
+			printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		}
+
+		curl_easy_cleanup(curl);
+		curl_slist_free_all(headers);
+	}
+
+	curl_global_cleanup();
+
+	return szReadBuffer;
+}
+
+void Injection(DWORD iTargetProcess, std::string szPath)
+{
+	std::ifstream instream(szPath.c_str(), std::ios::in | std::ios::binary);
+
+	if (instream)
+	{
+		std::vector<uint8_t> dllBuff((std::istreambuf_iterator<char>(instream)), std::istreambuf_iterator<char>());
+		Injection(iTargetProcess, dllBuff);
+	}
+}
+
+void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff)
+{
+	HINSTANCE hInjectionMod = LoadLibrary(GH_INJ_MOD_NAME);
+
+	if (hInjectionMod == nullptr)
+		return;
+
+	auto MemoryInject = (f_Memory_Inject)GetProcAddress(hInjectionMod, "Memory_Inject");
+	auto GetSymbolState = (f_GetSymbolState)GetProcAddress(hInjectionMod, "GetSymbolState");
+	auto GetImportState = (f_GetSymbolState)GetProcAddress(hInjectionMod, "GetImportState");
+	auto StartDownload = (f_StartDownload)GetProcAddress(hInjectionMod, "StartDownload");
+	auto GetDownloadProgressEx = (f_GetDownloadProgressEx)GetProcAddress(hInjectionMod, "GetDownloadProgressEx");
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+	StartDownload();
+
+	while (GetDownloadProgressEx(PDB_DOWNLOAD_INDEX_NTDLL, false) != 1.0f)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+#ifdef _WIN64
+	while (GetDownloadProgressEx(PDB_DOWNLOAD_INDEX_NTDLL, true) != 1.0f)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+#endif
+
+	while (GetSymbolState() != 0)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	while (GetImportState() != 0)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	bool bGenerateErrorLog = false;
+
+#ifdef DEBUG
+	bGenerateErrorLog = true;
+#endif
+
+	MEMORY_INJECTIONDATA pData =
+	{
+		vecBuff.data(),
+		vecBuff.size(),
+		iTargetProcess,
+		INJECTION_MODE::IM_ManualMap,
+		LAUNCH_METHOD::LM_NtCreateThreadEx,
+		MM_DEFAULT,
+		0,
+		NULL,
+		NULL,
+		bGenerateErrorLog
+	};
+
+	MemoryInject(&pData);
 }

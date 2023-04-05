@@ -19,7 +19,8 @@ using JSON = nlohmann::json;
 
 #include <imgui.h>
 #include <d3d11.h>
-#include <stb_image.h>
+
+#include <curl/curl.h>
 
 #define WaitCondition(condition) \
 	while(condition) \
@@ -39,5 +40,10 @@ extern std::string to_string(wchar_t const* wcstr);
 extern std::string to_string(std::wstring const& wstr);
 
 extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
+
+extern std::string CurlPost(std::string szUrl, JSON jData);
+
+extern void Injection(DWORD iTargetProcess, std::string szPath);
+extern void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff);
 
 #endif //PCH_H

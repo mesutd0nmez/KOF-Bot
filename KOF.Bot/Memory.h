@@ -3,221 +3,75 @@
 #include <Windows.h>
 #include <string>
 #include <vector>
+#include <mutex>
 
 #define CopyBytes(Dest,Src) memcpy(Dest, (BYTE*)&Src, sizeof(Src))
 
 class Memory
 {
+protected:
+    inline static std::mutex m_mutexExecutionCode;
+
 public:
-    inline static BYTE ReadByte(DWORD dwProcessId, DWORD dwAddress)
+    inline static BYTE ReadByte(HANDLE hProcess, DWORD dwAddress)
     {
-#ifdef _WINDLL
-        if (!IsBadReadPtr((LPVOID*)dwAddress, sizeof(BYTE)))
-        {
-            return(*(BYTE*)(dwAddress));
-        }
-
-        return 0;
-#else
         BYTE nValue = 0;
-
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess == nullptr)
-            return nValue;
-
         ReadProcessMemory(hProcess, (LPVOID)dwAddress, &nValue, 1, 0);
-        CloseHandle(hProcess);
-
         return nValue;
-#endif
     }
 
-    inline static DWORD Read4Byte(DWORD dwProcessId, DWORD dwAddress)
+    inline static DWORD Read4Byte(HANDLE hProcess, DWORD dwAddress)
     {
-#ifdef _WINDLL
-        if (!IsBadReadPtr((LPVOID*)dwAddress, sizeof(DWORD)))
-        {
-            return(*(DWORD*)(dwAddress));
-        }
-
-        return 0;
-#else
         DWORD nValue = 0;
-
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess == nullptr)
-            return nValue;
-
         ReadProcessMemory(hProcess, (LPVOID)dwAddress, &nValue, 4, 0);
-        CloseHandle(hProcess);
-
         return nValue;
-#endif
     }
 
-    inline static float ReadFloat(DWORD dwProcessId, DWORD dwAddress)
+    inline static float ReadFloat(HANDLE hProcess, DWORD dwAddress)
     {
-#ifdef _WINDLL
-        if (!IsBadReadPtr((LPVOID*)dwAddress, sizeof(float)))
-        {
-            return(*(float*)(dwAddress));
-        }
-
-        return 0;
-#else
         float nValue = 0.0f;
-
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess == nullptr)
-            return nValue;
-
         ReadProcessMemory(hProcess, (LPVOID)dwAddress, &nValue, 4, 0);
-        CloseHandle(hProcess);
 
         return nValue;
-#endif
     }
 
-    inline static std::string ReadString(DWORD dwProcessId, DWORD dwAddress, size_t nSize)
+    inline static std::string ReadString(HANDLE hProcess, DWORD dwAddress, size_t nSize)
     {
-#ifdef _WINDLL
-        if (!IsBadReadPtr((LPVOID*)dwAddress, nSize))
-        {
-            return(*(std::string*)(dwAddress));
-        }
-
-        return "";
-#else
         std::string strValue = "";
-
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess == nullptr)
-            return strValue;
-
         ReadProcessMemory(hProcess, (LPVOID)dwAddress, &strValue[0], nSize, 0);
-        CloseHandle(hProcess);
-
         return strValue;
-#endif
     }
 
-    inline static std::vector<BYTE> ReadBytes(DWORD dwProcessId, DWORD dwAddress, size_t nSize)
+    inline static std::vector<BYTE> ReadBytes(HANDLE hProcess, DWORD dwAddress, size_t nSize)
     {
         std::vector<BYTE> byValue(nSize);
-
-#ifdef _WINDLL
-        if (!IsBadReadPtr((LPVOID*)dwAddress, nSize))
-        {
-            BYTE readBytes = *(BYTE*)(dwAddress);
-            memcpy(byValue.data(), &readBytes, nSize);
-        }
-
-        return byValue;
-#else
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess == nullptr)
-            return byValue;
-
         ReadProcessMemory(hProcess, (LPVOID)dwAddress, &byValue[0], nSize, 0);
-        CloseHandle(hProcess);
-
         return byValue;
-#endif
     }
 
-    inline static void WriteByte(DWORD dwProcessId, DWORD dwAddress, BYTE byValue)
+    inline static void WriteByte(HANDLE hProcess, DWORD dwAddress, BYTE byValue)
     {
-#ifdef _WINDLL
-        if (!IsBadWritePtr((LPVOID*)dwAddress, sizeof(BYTE)))
-        {
-            memcpy((LPVOID*)dwAddress, &byValue, sizeof(BYTE));
-        }
-#else
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess != nullptr)
-        {
-            WriteProcessMemory(hProcess, (LPVOID)dwAddress, &byValue, 1, 0);
-            CloseHandle(hProcess);
-        }
-#endif
+        WriteProcessMemory(hProcess, (LPVOID)dwAddress, &byValue, 1, 0);
     }
 
-    inline static void Write4Byte(DWORD dwProcessId, DWORD dwAddress, DWORD dwValue)
+    inline static void Write4Byte(HANDLE hProcess, DWORD dwAddress, int iValue)
     {
-#ifdef _WINDLL
-        if (!IsBadWritePtr((LPVOID*)dwAddress, sizeof(DWORD)))
-        {
-            memcpy((LPVOID*)dwAddress, &dwValue, sizeof(DWORD));
-        }
-#else
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess != nullptr)
-        {
-            WriteProcessMemory(hProcess, (LPVOID)dwAddress, &dwValue, 4, 0);
-            CloseHandle(hProcess);
-        }
-#endif
+        WriteProcessMemory(hProcess, (LPVOID)dwAddress, &iValue, 4, 0);
     }
 
-    inline static void WriteFloat(DWORD dwProcessId, DWORD dwAddress, float fValue)
+    inline static void WriteFloat(HANDLE hProcess, DWORD dwAddress, float fValue)
     {
-#ifdef _WINDLL
-        if (!IsBadWritePtr((LPVOID*)dwAddress, sizeof(float)))
-        {
-            memcpy((LPVOID*)dwAddress, &fValue, sizeof(float));
-        }
-#else
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess != nullptr)
-        {
-            WriteProcessMemory(hProcess, (LPVOID)dwAddress, &fValue, 4, 0);
-            CloseHandle(hProcess);
-        }
-#endif
+        WriteProcessMemory(hProcess, (LPVOID)dwAddress, &fValue, 4, 0);
     }
 
-    inline static void WriteString(DWORD dwProcessId, DWORD dwAddress, std::string strValue)
+    inline static void WriteString(HANDLE hProcess, DWORD dwAddress, std::string strValue)
     {
-#ifdef _WINDLL
-        if (!IsBadWritePtr((LPVOID*)dwAddress, strValue.size()))
-        {
-            memcpy((LPVOID*)dwAddress, &strValue[0], strValue.size());
-        }
-#else
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess != nullptr)
-        {
-            WriteProcessMemory(hProcess, (LPVOID)dwAddress, &strValue[0], strValue.size(), NULL);
-            CloseHandle(hProcess);
-        }
-#endif
+        WriteProcessMemory(hProcess, (LPVOID)dwAddress, &strValue[0], strValue.size(), NULL);
     }
 
-    inline static void WriteBytes(DWORD dwProcessId, DWORD dwAddress, std::vector<BYTE> byValue)
+    inline static void WriteBytes(HANDLE hProcess, DWORD dwAddress, std::vector<BYTE> byValue)
     {
-#ifdef _WINDLL
-        if (!IsBadWritePtr((LPVOID*)dwAddress, byValue.size()))
-        {
-            memcpy((LPVOID*)dwAddress, byValue.data(), byValue.size());
-        }
-#else
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-        if (hProcess != nullptr)
-        {
-            WriteProcessMemory(hProcess, (LPVOID)dwAddress, byValue.data(), byValue.size(), NULL);
-            CloseHandle(hProcess);
-        }
-#endif
+        WriteProcessMemory(hProcess, (LPVOID)dwAddress, byValue.data(), byValue.size(), NULL);
     }
 
     inline static DWORD GetDifference(DWORD dwSrcAddress, DWORD dwDestAddress)
@@ -235,29 +89,44 @@ public:
         return (dwDestAddress - dwSrcAddress - 5);
     }
 
-    inline static void ExecuteRemoteCode(DWORD dwProcessId, BYTE* byCode, size_t bySize)
+    inline static bool ExecuteRemoteCode(HANDLE hProcess, const BYTE* byCode, SIZE_T bySize)
     {
-        HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
+        if (!hProcess || !byCode || bySize == 0)
+            return false;
 
-        if (hProcess == nullptr)
-            return;
+        LPVOID pAddress = VirtualAllocEx(hProcess, nullptr, bySize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
-        LPVOID pAddress = VirtualAllocEx(hProcess, 0, 1, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (!pAddress)
+            return false;
 
-        if (pAddress == nullptr)
+        std::lock_guard<std::mutex> lock(m_mutexExecutionCode);
+
+        SIZE_T bytesWritten = 0;
+
+        if (!WriteProcessMemory(hProcess, pAddress, byCode, bySize, &bytesWritten) || bytesWritten != bySize)
         {
-            CloseHandle(hProcess);
-            return;
+            VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+            return false;
         }
 
-#ifdef _WINDLL
-        if (!IsBadWritePtr((LPVOID*)pAddress, bySize))
+        HANDLE hThread = CreateRemoteThread(hProcess, nullptr, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(pAddress), nullptr, 0, nullptr);
+
+        if (!hThread)
         {
-            memcpy((LPVOID*)pAddress, byCode, bySize);
+            VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+            return false;
         }
-#else
-        WriteProcessMemory(hProcess, pAddress, byCode, bySize, NULL);
-#endif
+
+        WaitForSingleObject(hThread, INFINITE);
+        CloseHandle(hThread);
+        VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
+
+        return true;
+    }
+
+    inline static bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
+    {
+        std::lock_guard<std::mutex> lock(m_mutexExecutionCode);
 
         HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
 
@@ -265,11 +134,10 @@ public:
         {
             WaitForSingleObject(hThread, INFINITE);
             CloseHandle(hThread);
+            return true;
         }
 
-        VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
-
-        CloseHandle(hProcess);
+        return false;
     }
 };
 

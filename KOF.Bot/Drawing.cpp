@@ -7,13 +7,17 @@
 #include "Guard.h"
 #include "RouteManager.h"
 
+std::string Drawing::m_szMainWindowName = "";
+std::string Drawing::m_szRoutePlannerWindowName = "";
+
 Bot* Drawing::Bot = nullptr;
 bool Drawing::bDraw = true;
 bool Drawing::bDrawRoutePlanner = false;
 bool Drawing::Done = false;
 
 ClientHandler* m_pClient = nullptr;
-Ini* m_pConfiguration = nullptr;
+Ini* m_pUserConfiguration = nullptr;
+Ini* m_pAppConfiguration = nullptr;
 
 WorldData* m_pWorldData = nullptr;
 
@@ -46,7 +50,8 @@ void Drawing::Initialize()
 
 void Drawing::InitializeSceneData()
 {
-    m_pConfiguration = Drawing::Bot->GetConfiguration();
+    m_pUserConfiguration = Drawing::Bot->GetUserConfiguration();
+    m_pAppConfiguration = Drawing::Bot->GetAppConfiguration();
     m_pClient = Drawing::Bot->GetClientHandler();
 
     if (m_pWorldData == nullptr || (m_pWorldData != nullptr && m_pWorldData->iId != m_pClient->GetZone()))
@@ -74,8 +79,6 @@ void Drawing::Draw()
 	if (isActive())
 	{
         InitializeSceneData();
-
-        std::string lpWindowName = skCryptEnc("KOF.Bot");
        
         ImVec2 vWindowSize = { 658, 700 };
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
@@ -88,7 +91,7 @@ void Drawing::Draw()
 		ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
 		ImGui::SetNextWindowSize(vWindowSize);
 		ImGui::SetNextWindowBgAlpha(1.0f);
-		ImGui::Begin(lpWindowName.c_str(), &bDraw, WindowFlags);
+		ImGui::Begin(m_szMainWindowName.c_str(), &bDraw, WindowFlags);
 		{
             DrawGameController();
 		}
@@ -96,10 +99,7 @@ void Drawing::Draw()
         ImGui::End();
 	}
 
-#ifdef _WINDLL
-	if (GetAsyncKeyState(VK_INSERT) & 1)
-		bDraw = !bDraw;
-#endif
+    DrawRoutePlanner();
 }
 
 void Drawing::DrawRoutePlanner()
@@ -110,8 +110,6 @@ void Drawing::DrawRoutePlanner()
 
         if (!Drawing::bDrawRoutePlanner)
             return;
-
-        std::string lpWindowName = skCryptEnc("KOF.RoutePlanner");
 
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
 
@@ -125,22 +123,20 @@ void Drawing::DrawRoutePlanner()
         ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
         ImGui::SetNextWindowSize(vWindowSize);
         ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin(lpWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
+        ImGui::Begin(m_szRoutePlannerWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
         {
             DrawRoutePlannerArea();
         }
 
         ImGui::End();
     }
-
-#ifdef _WINDLL
-    if (GetAsyncKeyState(VK_INSERT) & 1)
-        bDraw = !bDraw;
-#endif
 }
 
 void Drawing::DrawRoutePlannerArea()
 {
+    if(m_pWorldData == nullptr)
+        return;
+
     ImGui::BeginChild(skCryptDec("RoutePlanner.Map"), ImVec2((float)(m_pWorldData->iMapImageWidth + 17.0f), (float)m_pWorldData->iMapImageHeight + 17.0f), true);
     {
         ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
@@ -161,11 +157,11 @@ void Drawing::DrawRoutePlannerArea()
             m_vecRoute.push_back(pRoute);
         }
 
-        Vector3 vec3CurrentPosition = m_pClient->GetPosition();
+        Vector3 v3CurrentPosition = m_pClient->GetPosition();
 
         ImVec2 currentPosition = ImVec2(
-            pOffsetPosition.x + std::ceil(vec3CurrentPosition.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
-            pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (vec3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+            pOffsetPosition.x + std::ceil(v3CurrentPosition.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+            pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (v3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
         ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
         ImGui::GetWindowDrawList()->AddText(currentPosition, IM_COL32(0, 255, 0, 255), skCryptDec("Current Position"));
@@ -193,46 +189,46 @@ void Drawing::DrawRoutePlannerArea()
 
             switch (m_vecRoute[i].eStepType)
             {
-            case RouteStepType::STEP_MOVE:
-            {
-                if (i == 0)
+                case RouteStepType::STEP_MOVE:
                 {
-                    ImVec2 startPosition = ImVec2(
-                        pOffsetPosition.x + std::ceil(m_vecRoute[i].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
-                        pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
+                    if (i == 0)
+                    {
+                        ImVec2 startPosition = ImVec2(
+                            pOffsetPosition.x + std::ceil(m_vecRoute[i].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
+                            pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
-                    ImGui::GetWindowDrawList()->AddCircle(startPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
-                    std::string szStartPoint = skCryptDec("Start Point(") + std::to_string((int)startPosition.x) + skCryptDec(",") + std::to_string((int)startPosition.y) + skCryptDec(")");
-                    ImGui::GetWindowDrawList()->AddText(startPosition, IM_COL32(0, 0, 255, 255), szStartPoint.c_str());
+                        ImGui::GetWindowDrawList()->AddCircle(startPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                        std::string szStartPoint = skCryptDec("Start Point(") + std::to_string((int)startPosition.x) + skCryptDec(",") + std::to_string((int)startPosition.y) + skCryptDec(")");
+                        ImGui::GetWindowDrawList()->AddText(startPosition, IM_COL32(0, 0, 255, 255), szStartPoint.c_str());
+                    }
+                    else
+                    {
+                        std::string szMovePoint = skCryptDec("Move Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                        ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(0, 255, 0, 255), szMovePoint.c_str());
+                    }
                 }
-                else
+                break;
+
+                case RouteStepType::STEP_TOWN:
                 {
-                    std::string szMovePoint = skCryptDec("Move Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
-                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(0, 255, 0, 255), szMovePoint.c_str());
+                    std::string szTownPoint = skCryptDec("Town Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szTownPoint.c_str());
                 }
-            }
-            break;
+                break;
 
-            case RouteStepType::STEP_TOWN:
-            {
-                std::string szTownPoint = skCryptDec("Town Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
-                ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szTownPoint.c_str());
-            }
-            break;
+                case RouteStepType::STEP_SUPPLY:
+                {
+                    std::string szSupplyPoint = skCryptDec("Supply Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(75, 0, 130, 255), szSupplyPoint.c_str());
+                }
+                break;
 
-            case RouteStepType::STEP_SUPPLY:
-            {
-                std::string szSupplyPoint = skCryptDec("Supply Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
-                ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(75, 0, 130, 255), szSupplyPoint.c_str());
-            }
-            break;
-
-            case RouteStepType::STEP_INN:
-            {
-                std::string szInnPoint = skCryptDec("Inn Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
-                ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(128, 0, 0, 255), szInnPoint.c_str());
-            }
-            break;
+                case RouteStepType::STEP_INN:
+                {
+                    std::string szInnPoint = skCryptDec("Inn Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(128, 0, 0, 255), szInnPoint.c_str());
+                }
+                break;
             }
         }
 
@@ -288,11 +284,11 @@ void Drawing::DrawRoutePlannerArea()
                 {
                     pRouteManager->Delete(m_szSelectedRoute, m_pClient->GetZone());
 
-                    std::string szSelectedRouteConfiguration = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                    std::string szSelectedRouteConfiguration = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
 
                     if (szSelectedRouteConfiguration == m_szSelectedRoute)
                     {
-                        Drawing::Bot->GetConfiguration()->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                        m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
                     }
 
                     if (m_szRouteName == m_szSelectedRoute)
@@ -322,7 +318,7 @@ void Drawing::DrawRoutePlannerArea()
                 if (ImGui::Button(skCryptDec("Stop"), ImVec2(174.0f, 0.0f)))
                 {
                     m_pClient->ClearRoute();
-                    m_pClient->SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+                    m_pClient->StopMove();
                 }
                 ImGui::PopStyleColor(1);
             }
@@ -507,48 +503,37 @@ void Drawing::DrawGameController()
                         );
                     }
 
-                    Guard npcListLock(m_pClient->m_vecNpcLock);
-                    std::vector<TNpc>* vecNpcList;
-                    if (m_pClient->GetNpcList(&vecNpcList))
+                    std::vector<EntityInfo> vecOutMobList;
+                    if (m_pClient->SearchMob(vecOutMobList) > 0)
                     {
-                        for (const TNpc& pNpc : *vecNpcList)
+                        for (const EntityInfo& pMob : vecOutMobList)
                         {
-                            if (m_pClient->GetDistance(pNpc.fX, pNpc.fY) > MAX_VIEW_RANGE)
-                                continue;
-
                             ImVec2 pNpcPosition = ImVec2(
-                                pOffsetPosition.x + std::ceil(pNpc.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pNpc.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                                pOffsetPosition.x + std::ceil(pMob.m_v3Position.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pMob.m_v3Position.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                            if (pNpc.iMonsterOrNpc == 1)
-                                ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
-                            else
-                                ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                            ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
                         }
                     }
 
-                    Guard playerListLock(m_pClient->m_vecPlayerLock);
-                    std::vector<TPlayer>* vecPlayerList;
-                    if (m_pClient->GetPlayerList(&vecPlayerList))
+                    /*std::vector<EntityInfo> vecOutPlayerList;
+                    if (m_pClient->SearchPlayer(vecOutPlayerList) > 0)
                     {
-                        for (const TPlayer& pPlayer : *vecPlayerList)
+                        for (const EntityInfo& pPlayer : vecOutPlayerList)
                         {
-                            if (m_pClient->GetDistance(pPlayer.fX, pPlayer.fY) > MAX_VIEW_RANGE)
-                                continue;
-
                             ImVec2 pPlayerPosition = ImVec2(
-                                pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                                pOffsetPosition.x + std::ceil(pPlayer.m_v3Position.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.m_v3Position.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                             ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
                         }
-                    }
+                    }*/
 
-                    Vector3 vec3CurrentPosition = m_pClient->GetPosition();
+                    Vector3 v3CurrentPosition = m_pClient->GetPosition();
 
                     ImVec2 currentPosition = ImVec2(
-                        pOffsetPosition.x + std::ceil(vec3CurrentPosition.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                        pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (vec3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                        pOffsetPosition.x + std::ceil(v3CurrentPosition.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                        pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (v3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                     ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
 
@@ -564,7 +549,7 @@ void Drawing::DrawGameController()
                         ImGui::GetWindowDrawList()->AddLine(currentPosition, movePosition, IM_COL32(0, 255, 0, 255), 2.0f);
                     }
 
-                    std::string szSelectedRouteConfiguration = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                    std::string szSelectedRouteConfiguration = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
 
                     RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
 
@@ -611,7 +596,7 @@ void Drawing::DrawGameController()
             RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
 
             ImGui::SetNextItemWidth(266);
-            std::string szSelectedRoute = Drawing::Bot->GetConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+            std::string szSelectedRoute = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
             if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.RouteList"), szSelectedRoute.c_str()))
             {
                 RouteManager::RouteList pRouteList;
@@ -623,7 +608,7 @@ void Drawing::DrawGameController()
 
                         if (ImGui::Selectable(e.first.c_str(), is_selected))
                         {
-                            Drawing::Bot->GetConfiguration()->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), e.first.c_str());
+                            m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), e.first.c_str());
                         }
 
                         if (is_selected)
@@ -641,7 +626,7 @@ void Drawing::DrawGameController()
                 if (ImGui::Button(skCryptDec("Stop"), ImVec2(129.0f, 0.0f)))
                 {
                     m_pClient->ClearRoute();
-                    m_pClient->SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+                    m_pClient->StopMove();
                 }
                 ImGui::PopStyleColor(1);
             }
@@ -673,7 +658,7 @@ void Drawing::DrawGameController()
 
             if (ImGui::Button(skCryptDec("Clear"), ImVec2(266, 0.0f)))
             {
-                Drawing::Bot->GetConfiguration()->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
             }
         }
 
@@ -682,26 +667,19 @@ void Drawing::DrawGameController()
             ImGui::TextUnformatted(skCryptDec("Quick Action"));
             ImGui::Separator();
 
-            bool bLegalStatus = Drawing::Bot->GetConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("Legal"), false);
-
-            if (bLegalStatus)
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-            else
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
-
-            if (ImGui::Button(skCryptDec("Legal"), ImVec2(129.0f, 0.0f)))
-            {
-                bLegalStatus = !bLegalStatus;
-                m_pConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("Legal"), bLegalStatus);
-            }
-
-            ImGui::PopStyleColor(1);
-
-            ImGui::SameLine();
-
             if (ImGui::Button(skCryptDec("Town"), ImVec2(129.0f, 0.0f)))
             {
                 m_pClient->SendTownPacket();
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button(skCryptDec("Reload Skill"), ImVec2(129.0f, 0.0f)))
+            {
+                m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
+                m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+
+                m_pClient->LoadSkillData();
             }
         }
 
@@ -714,7 +692,7 @@ void Drawing::DrawGameController()
             ImGui::TextUnformatted(skCryptDec("Automation"));
             ImGui::Separator();
 
-            bool bAttackStatus = m_pConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+            bool bAttackStatus = m_pUserConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
 
             if (bAttackStatus)
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
@@ -724,13 +702,13 @@ void Drawing::DrawGameController()
             if (ImGui::Button(skCryptDec("Attack"), ImVec2(129.0f, 0.0f)))
             {
                 bAttackStatus = !bAttackStatus;
-                m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), bAttackStatus);
+                m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), bAttackStatus);
             }
 
             ImGui::PopStyleColor(1);
             ImGui::SameLine();
 
-            bool bCharacterStatus = m_pConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
+            bool bCharacterStatus = m_pUserConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
 
             if (bCharacterStatus)
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
@@ -740,7 +718,7 @@ void Drawing::DrawGameController()
             if (ImGui::Button(skCryptDec("Character"), ImVec2(129.0f, 0.0f)))
             {
                 bCharacterStatus = !bCharacterStatus;
-                m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Character"), bCharacterStatus);
+                m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Character"), bCharacterStatus);
             }
 
             ImGui::PopStyleColor(1);
@@ -760,6 +738,13 @@ void Drawing::DrawGameController()
                 DrawMainProtectionArea();
                 DrawMainFeaturesArea();
                 DrawMainAutoLootArea();
+
+                if (m_pClient->IsPriest())
+                {
+                    DrawMainPriestArea();
+                }
+
+                DrawMainTransformationArea();
                 DrawMainSettingsArea();
 
                 ImGui::EndTabItem();
@@ -772,10 +757,10 @@ void Drawing::DrawGameController()
 
                 ImGui::Spacing();
                 {
-                    bool bAutoTarget = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
+                    bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
 
                     if (ImGui::Checkbox(skCryptDec("##AutoTargetCheckbox"), &bAutoTarget))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), bAutoTarget ? 1 : 0);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), bAutoTarget ? 1 : 0);
 
                     ImGui::SameLine();
 
@@ -783,33 +768,56 @@ void Drawing::DrawGameController()
 
                     ImGui::SameLine();
 
-                    bool bRangeLimit = m_pConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
+                    bool bRangeLimit = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
 
                     if (ImGui::Checkbox(skCryptDec("##RangeLimitCheckbox"), &bRangeLimit))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimit"), bRangeLimit ? 1 : 0);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimit"), bRangeLimit ? 1 : 0);
 
                     ImGui::SameLine();
 
-                    ImGui::Text(skCryptDec("Range Limit"));
+                    ImGui::Text(skCryptDec("Search Range Limit"));
 
                     ImGui::SameLine();
 
                     ImGui::PushItemWidth(50);
 
-                    int iRangeLimitValue = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_ATTACK_RANGE);
+                    int iRangeLimitValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
 
                     if (ImGui::DragInt(skCryptDec("##RangeLimitValue"), &iRangeLimitValue, 1, 0, 100))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), iRangeLimitValue);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), iRangeLimitValue);
 
                     ImGui::PopItemWidth();
                 }
 
                 ImGui::Spacing();
                 {
-                    bool bAttackSpeed = m_pConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("AttackSpeed"), false);
+                    bool bSearchTargetSpeed = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("SearchTargetSpeed"), false);
+
+                    if (ImGui::Checkbox(skCryptDec("##SearchTargetSpeedCheckbox"), &bSearchTargetSpeed))
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("SearchTargetSpeed"), bSearchTargetSpeed ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text(skCryptDec("Search Target Speed"));
+
+                    ImGui::SameLine();
+
+                    ImGui::PushItemWidth(75);
+
+                    int iSearchTargetSpeedValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("SearchTargetSpeedValue"), 100);
+
+                    if (ImGui::DragInt(skCryptDec("##SearchTargetSpeedValue"), &iSearchTargetSpeedValue, 1, 0, 65535))
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("SearchTargetSpeedValue"), iSearchTargetSpeedValue);
+
+                    ImGui::PopItemWidth();
+                }
+
+                ImGui::Spacing();
+                {
+                    bool bAttackSpeed = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("AttackSpeed"), false);
 
                     if (ImGui::Checkbox(skCryptDec("##AttackSpeedCheckbox"), &bAttackSpeed))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeed"), bAttackSpeed ? 1 : 0);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeed"), bAttackSpeed ? 1 : 0);
 
                     ImGui::SameLine();
 
@@ -819,20 +827,40 @@ void Drawing::DrawGameController()
 
                     ImGui::PushItemWidth(75);
 
-                    int iAttackSpeedValue = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 1000);
+                    int iAttackSpeedValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 1000);
 
                     if (ImGui::DragInt(skCryptDec("##AttackSpeedValue"), &iAttackSpeedValue, 1, 0, 65535))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), iAttackSpeedValue);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), iAttackSpeedValue);
+
+                    ImGui::PopItemWidth();
+
+                    bool bAttackRangeLimit = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
+
+                    if (ImGui::Checkbox(skCryptDec("##AttackRangeLimitCheckbox"), &bAttackRangeLimit))
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), bAttackRangeLimit ? 1 : 0);
+
+                    ImGui::SameLine();
+
+                    ImGui::Text(skCryptDec("Attack Range Limit"));
+
+                    ImGui::SameLine();
+
+                    ImGui::PushItemWidth(50);
+
+                    int iAttackRangeLimitValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
+
+                    if (ImGui::DragInt(skCryptDec("##AttackRangeLimitValue"), &iAttackRangeLimitValue, 1, 0, 100))
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), iAttackRangeLimitValue);
 
                     ImGui::PopItemWidth();
                 }
 
                 ImGui::Spacing();
                 {
-                    bool bBasicAttack = m_pConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+                    bool bBasicAttack = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 
                     if (ImGui::Checkbox(skCryptDec("##BasicAttackCheckbox"), &bBasicAttack))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttack"), bBasicAttack ? 1 : 0);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttack"), bBasicAttack ? 1 : 0);
 
                     ImGui::SameLine();
 
@@ -840,15 +868,30 @@ void Drawing::DrawGameController()
 
                     ImGui::SameLine();
 
-                    bool bMoveToTarget = m_pConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+                    bool bMoveToTarget = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
                     if (ImGui::Checkbox(skCryptDec("##MoveToTargetCheckbox"), &bMoveToTarget))
-                        m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("MoveToTarget"), bMoveToTarget ? 1 : 0);
+                        m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("MoveToTarget"), bMoveToTarget ? 1 : 0);
 
                     ImGui::SameLine();
 
                     ImGui::Text(skCryptDec("Move To Target"));
                 }
+
+                if (m_pClient->IsRogue())
+                {
+                    ImGui::Spacing();
+                    {
+                        bool bArcherCombo = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), true);
+
+                        if (ImGui::Checkbox(skCryptDec("##ArcherComboCheckbox"), &bArcherCombo))
+                            m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ArcherCombo"), bArcherCombo ? 1 : 0);
+
+                        ImGui::SameLine();
+
+                        ImGui::Text(skCryptDec("Archer Combo"));
+                    }
+                }         
 
                 ImGui::Spacing();
 
@@ -871,6 +914,7 @@ void Drawing::DrawGameController()
 
                 ImGui::EndTabItem();
             }
+            
 
             ImGui::EndTabBar();
         }
@@ -886,10 +930,10 @@ void Drawing::DrawMainProtectionArea()
 
     ImGui::Spacing();
     {
-        bool bHpProtection = m_pConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("Hp"), false);
+        bool bHpProtection = m_pUserConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("Hp"), false);
 
         if (ImGui::Checkbox(skCryptDec("##HpPotionCheckbox"), &bHpProtection))
-            m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Hp"), bHpProtection ? 1 : 0);
+            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Hp"), bHpProtection ? 1 : 0);
 
         ImGui::SameLine();
 
@@ -899,10 +943,10 @@ void Drawing::DrawMainProtectionArea()
 
         ImGui::PushItemWidth(50);
 
-        int iHpProtectionValue = m_pConfiguration->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
+        int iHpProtectionValue = m_pUserConfiguration->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
 
         if (ImGui::DragInt(skCryptDec("##HpPotionValue"), &iHpProtectionValue, 1, 0, 100))
-            m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("HpValue"), iHpProtectionValue);
+            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("HpValue"), iHpProtectionValue);
 
         ImGui::PopItemWidth();
 
@@ -910,10 +954,10 @@ void Drawing::DrawMainProtectionArea()
 
     ImGui::Spacing();
     {
-        bool bMpProtection = m_pConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
+        bool bMpProtection = m_pUserConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("Mp"), false);
 
         if (ImGui::Checkbox(skCryptDec("##MpPotionCheckbox"), &bMpProtection))
-            m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Mp"), bMpProtection ? 1 : 0);
+            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Mp"), bMpProtection ? 1 : 0);
 
         ImGui::SameLine();
 
@@ -923,37 +967,39 @@ void Drawing::DrawMainProtectionArea()
 
         ImGui::PushItemWidth(50);
 
-        int iMpProtectionValue = m_pConfiguration->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 25);
+        int iMpProtectionValue = m_pUserConfiguration->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 25);
 
         if (ImGui::DragInt(skCryptDec("##MpPotionValue"), &iMpProtectionValue, 1, 0, 100))
-            m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MpValue"), iMpProtectionValue);
+            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MpValue"), iMpProtectionValue);
 
         ImGui::PopItemWidth();
     }
 
-    ImGui::Spacing();
+    if (m_pClient->IsRogue())
     {
-        bool bMinorProtection = m_pConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("Minor"), false);
+        ImGui::Spacing();
+        {
+            bool bMinorProtection = m_pUserConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("Minor"), false);
 
-        if (ImGui::Checkbox(skCryptDec("##MinorCheckbox"), &bMinorProtection))
-            m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Minor"), bMinorProtection ? 1 : 0);
+            if (ImGui::Checkbox(skCryptDec("##MinorCheckbox"), &bMinorProtection))
+                m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Minor"), bMinorProtection ? 1 : 0);
 
-        ImGui::SameLine();
+            ImGui::SameLine();
 
-        ImGui::Text(skCryptDec("Minor"));
+            ImGui::Text(skCryptDec("Minor"));
 
-        ImGui::SameLine();
+            ImGui::SameLine();
 
-        ImGui::PushItemWidth(50);
+            ImGui::PushItemWidth(50);
 
-        int iMinorProtectionValue = m_pConfiguration->GetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), 30);
+            int iMinorProtectionValue = m_pUserConfiguration->GetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), 30);
 
-        if (ImGui::DragInt(skCryptDec("##MinorValue"), &iMinorProtectionValue, 1, 0, 100))
-            m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), iMinorProtectionValue);
+            if (ImGui::DragInt(skCryptDec("##MinorValue"), &iMinorProtectionValue, 1, 0, 100))
+                m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), iMinorProtectionValue);
 
-        ImGui::PopItemWidth();
+            ImGui::PopItemWidth();
+        }
     }
-
 }
 
 void Drawing::DrawMainFeaturesArea()
@@ -965,24 +1011,27 @@ void Drawing::DrawMainFeaturesArea()
 
         ImGui::Spacing();
         {
-            bool bGodMode = m_pConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("GodMode"), false);
+            if (Drawing::Bot->GetPlatformType() == PlatformType::CNKO)
+            {
+                bool bGodMode = m_pUserConfiguration->GetBool(skCryptDec("Protection"), skCryptDec("GodMode"), false);
 
-            if (ImGui::Checkbox(skCryptDec("##GodMode"), &bGodMode))
-                m_pConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("GodMode"), bGodMode ? 1 : 0);
+                if (ImGui::Checkbox(skCryptDec("##GodMode"), &bGodMode))
+                    m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("GodMode"), bGodMode ? 1 : 0);
 
-            ImGui::SameLine();
+                ImGui::SameLine();
 
-            ImGui::Text(skCryptDec("God Mode"));
+                ImGui::Text(skCryptDec("God Mode"));
 
-            ImGui::SameLine();
+                ImGui::SameLine();
+            }
 
-            bool bWallHack = m_pConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
+            bool bWallHack = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
 
             if (ImGui::Checkbox(skCryptDec("##WallHack"), &bWallHack))
             {
                 m_pClient->SetAuthority(bWallHack ? 0 : 1);
 
-                m_pConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("WallHack"), bWallHack ? 1 : 0);
+                m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("WallHack"), bWallHack ? 1 : 0);
             }
 
             ImGui::SameLine();
@@ -991,59 +1040,31 @@ void Drawing::DrawMainFeaturesArea()
 
             ImGui::SameLine();
 
-            bool bHyperNoah = m_pConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("HyperNoah"), false);
-
-            if (ImGui::Checkbox(skCryptDec("##HyperNoah"), &bHyperNoah))
-                m_pConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("HyperNoah"), bHyperNoah ? 1 : 0);
-
-            ImGui::SameLine();
-
-            ImGui::Text(skCryptDec("Hyper Noah"));
-        }
-
-        ImGui::Spacing();
-        {
-            bool bOreads = m_pConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("Oreads"), false);
-
-            if (ImGui::Checkbox(skCryptDec("##Oreads"), &bOreads))
-            {
-                m_pClient->SetOreads(bOreads);
-
-                if (bOreads)
-                {
-                    m_pClient->EquipOreads(700039000);
-
-                    //TODO: Need For Class
-
-                    TInventory iItem = m_pClient->GetInventoryItem(110110001); // +1 Dagger 
-
-                    if (iItem.iItemID != 0)
-                    {
-                        m_pClient->SendItemMovePacket(1, ITEM_INVEN_INVEN, iItem.iItemID, iItem.iPos - 14, 35);
-                    }
-                }
-
-                m_pConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("Oreads"), bOreads ? 1 : 0);
-            }
-
-            ImGui::SameLine();
-
-            ImGui::Text(skCryptDec("Oreads"));
-
-            ImGui::SameLine();
-
-            bool bDeathEffect = m_pConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
+            bool bDeathEffect = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
 
             if (ImGui::Checkbox(skCryptDec("##DeathEffect"), &bDeathEffect))
             {
                 m_pClient->PatchDeathEffect(bDeathEffect);
-                m_pConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DeathEffect"), bDeathEffect ? 1 : 0);
+                m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DeathEffect"), bDeathEffect ? 1 : 0);
             }
-                
 
             ImGui::SameLine();
 
-            ImGui::Text(skCryptDec("Patch Death Effect"));
+            ImGui::Text(skCryptDec("Disable Death Effect"));
+
+            if (Drawing::Bot->GetPlatformType() == PlatformType::CNKO)
+            {
+                ImGui::SameLine();
+
+                bool bHyperNoah = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("HyperNoah"), false);
+
+                if (ImGui::Checkbox(skCryptDec("##HyperNoah"), &bHyperNoah))
+                    m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("HyperNoah"), bHyperNoah ? 1 : 0);
+
+                ImGui::SameLine();
+
+                ImGui::Text(skCryptDec("Hyper Noah"));
+            }
         }
     }
 }
@@ -1057,10 +1078,10 @@ void Drawing::DrawMainAutoLootArea()
 
         ImGui::Spacing();
         {
-            bool bAutoLoot = m_pConfiguration->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
+            bool bAutoLoot = m_pUserConfiguration->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
 
             if (ImGui::Checkbox(skCryptDec("##AutoLoot"), &bAutoLoot))
-                m_pConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("Enable"), bAutoLoot ? 1 : 0);
+                m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("Enable"), bAutoLoot ? 1 : 0);
 
             ImGui::SameLine();
 
@@ -1068,12 +1089,12 @@ void Drawing::DrawMainAutoLootArea()
 
             ImGui::SameLine();
 
-            bool bMoveToLoot = m_pConfiguration->GetBool(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), false);
+            bool bMoveToLoot = m_pUserConfiguration->GetBool(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), false);
 
             if (ImGui::Checkbox(skCryptDec("##MoveToLoot"), &bMoveToLoot))
             {
                 m_pClient->SetAuthority(bMoveToLoot ? 0 : 1);
-                m_pConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), bMoveToLoot ? 1 : 0);
+                m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), bMoveToLoot ? 1 : 0);
             }
 
             ImGui::SameLine();
@@ -1090,10 +1111,10 @@ void Drawing::DrawMainAutoLootArea()
 
         ImGui::PushItemWidth(100);
 
-        int iLootMinPrice = m_pConfiguration->GetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), 0);
+        int iLootMinPrice = m_pUserConfiguration->GetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), 0);
 
         if (ImGui::DragInt(skCryptDec("##LootMinPrice"), &iLootMinPrice, 1, 0, INT_MAX))
-            m_pConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), iLootMinPrice);
+            m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), iLootMinPrice);
 
         ImGui::PopItemWidth();
     }
@@ -1106,10 +1127,10 @@ void Drawing::DrawMainSupplyArea()
         ImGui::TextUnformatted(skCryptDec("Supply Management"));
         ImGui::Separator();
 
-        bool bAutoRepair = m_pConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+        bool bAutoRepair = m_pUserConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
 
         if (ImGui::Checkbox(skCryptDec("##AutoRepair"), &bAutoRepair))
-            m_pConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepair"), bAutoRepair ? 1 : 0);
+            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepair"), bAutoRepair ? 1 : 0);
 
         ImGui::SameLine();
 
@@ -1117,10 +1138,10 @@ void Drawing::DrawMainSupplyArea()
 
         ImGui::SameLine();
 
-        bool bAutoSupply = m_pConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+        bool bAutoSupply = m_pUserConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
 
         if (ImGui::Checkbox(skCryptDec("##AutoSupply"), &bAutoSupply))
-            m_pConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSupply"), bAutoSupply ? 1 : 0);
+            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSupply"), bAutoSupply ? 1 : 0);
 
         ImGui::SameLine();
 
@@ -1133,58 +1154,405 @@ void Drawing::DrawMainSupplyArea()
         ImGui::TextUnformatted(skCryptDec("Supply List"));
         ImGui::Separator();
 
-        ImGui::Spacing();
+        std::vector<int> vecSupplyList = m_pUserConfiguration->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+
+        auto jSupplyList = Drawing::Bot->GetSupplyList();
+
+        for (size_t i = 0; i < jSupplyList.size(); i++)
         {
-            ImGui::BeginTable(skCryptDec("##SupplyTable"), 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Borders);
+            ImGui::PushID(i);
+
+            std::string szItemIdAttribute = skCryptDec("itemid");
+            std::string szNameAttribute = skCryptDec("name");
+            std::string szCountAttribute = skCryptDec("count");
+
+            bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()) != vecSupplyList.end();
+
+            if (ImGui::Checkbox(skCryptDec("##Enable"), &bSelected))
             {
-                std::vector<int> vecSupplyList = m_pConfiguration->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+                if (bSelected)
+                    vecSupplyList.push_back(jSupplyList[i][szItemIdAttribute.c_str()].get<int>());
+                else
+                    vecSupplyList.erase(std::find(vecSupplyList.begin(), vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()));
 
-                auto jSupplyList = Drawing::Bot->GetSupplyList();
+                m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("Enable"), vecSupplyList);
+            }
 
-                for (size_t i = 0; i < jSupplyList.size(); i++)
+            ImGui::SameLine();
+
+            ImGui::Text(jSupplyList[i][szNameAttribute.c_str()].get<std::string>().c_str());
+
+            ImGui::SameLine();
+
+            int iCount = m_pUserConfiguration->GetInt(skCryptDec("Supply"), std::to_string(jSupplyList[i][szItemIdAttribute.c_str()].get<int>()).c_str(), jSupplyList[i][szCountAttribute.c_str()].get<int>());
+
+            ImGui::SetCursorPosX(205);
+            ImGui::PushItemWidth(133);
+            if (ImGui::DragInt(skCryptDec("##Count"), &iCount, 1, 1, 9998))
+            {
+                m_pUserConfiguration->SetInt(skCryptDec("Supply"), std::to_string(jSupplyList[i][szItemIdAttribute.c_str()].get<int>()).c_str(), iCount);
+            }
+
+            ImGui::PopID();
+        }
+    }
+}
+
+void Drawing::DrawMainPriestArea()
+{
+    ImGui::Spacing();
+    {
+        ImGui::TextUnformatted(skCryptDec("Priest Management"));
+        ImGui::Separator();
+
+        bool bAutoHealthBuff = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoHealthBuff"), &bAutoHealthBuff))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), bAutoHealthBuff ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Health Buff"));
+
+        std::string szSelectedHealthBuff = "Auto";
+        int iSelectedHealthBuff = m_pUserConfiguration->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
+
+        auto jHealthBuffList = Drawing::Bot->GetHealthBuffList();
+
+        std::map<int, std::string> mapHealthBuffList;
+
+        for (size_t i = 0; i < jHealthBuffList.size(); i++)
+        {
+            int iId = jHealthBuffList[i]["id"].get<int>();
+
+            if (iId == iSelectedHealthBuff)
+            {
+                szSelectedHealthBuff = jHealthBuffList[i]["name"].get<std::string>();
+            }
+
+            mapHealthBuffList.insert(std::make_pair(iId, jHealthBuffList[i]["name"].get<std::string>()));
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(185);
+
+        if (ImGui::BeginCombo(skCryptDec("##PriestManagement.HealthBuffList"), szSelectedHealthBuff.c_str()))
+        {
+            for (auto e : mapHealthBuffList)
+            {
+                const bool is_selected = (iSelectedHealthBuff == e.first);
+
+                if (ImGui::Selectable(e.second.c_str(), is_selected))
                 {
-                    ImGui::PushID(i);
-                    ImGui::TableNextRow();
-                    {
-                        std::string szItemIdAttribute = skCryptDec("itemid");
-                        std::string szNameAttribute = skCryptDec("name");
-                        std::string szCountAttribute = skCryptDec("count");
-
-                        ImGui::TableNextColumn();
-                        {
-                            bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()) != vecSupplyList.end();
-
-                            if (ImGui::Checkbox(skCryptDec("##Enable"), &bSelected))
-                            {
-                                if (bSelected)
-                                    vecSupplyList.push_back(jSupplyList[i][szItemIdAttribute.c_str()].get<int>());
-                                else
-                                    vecSupplyList.erase(std::find(vecSupplyList.begin(), vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()));
-
-                                m_pConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("Enable"), vecSupplyList);
-                            }
-                        }
-
-                        ImGui::TableNextColumn();
-                        {
-                            ImGui::Text(jSupplyList[i][szNameAttribute.c_str()].get<std::string>().c_str());
-                        }
-                        
-                        ImGui::TableNextColumn();
-                        {
-                            int iCount = m_pConfiguration->GetInt(skCryptDec("Supply"), std::to_string(jSupplyList[i][szItemIdAttribute.c_str()].get<int>()).c_str(), jSupplyList[i][szCountAttribute.c_str()].get<int>());
-
-                            ImGui::PushItemWidth(133);
-                            if (ImGui::DragInt(skCryptDec("##Count"), &iCount, 1, 1, 9998))
-                            {
-                                m_pConfiguration->SetInt(skCryptDec("Supply"), std::to_string(jSupplyList[i][szItemIdAttribute.c_str()].get<int>()).c_str(), iCount);
-                            }
-                        }
-                    }
-                    ImGui::PopID();
+                    m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), e.first);
                 }
 
-                ImGui::EndTable();
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::EndCombo();
+        }
+
+        bool bAutoDefenceBuff = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoDefenceBuff"), &bAutoDefenceBuff))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), bAutoDefenceBuff ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Defence Buff"));
+
+        std::string szSelectedDefenceBuff = "Auto";
+        int iSelectedDefenceBuff = m_pUserConfiguration->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
+
+        auto jDefenceBuffList = Drawing::Bot->GetDefenceBuffList();
+
+        std::map<int, std::string> mapDefenceBuffList;
+
+        for (size_t i = 0; i < jDefenceBuffList.size(); i++)
+        {
+            int iId = jDefenceBuffList[i]["id"].get<int>();
+
+            if (iId == iSelectedDefenceBuff)
+            {
+                szSelectedDefenceBuff = jDefenceBuffList[i]["name"].get<std::string>();
+            }
+
+            mapDefenceBuffList.insert(std::make_pair(iId, jDefenceBuffList[i]["name"].get<std::string>()));
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(178);
+
+        if (ImGui::BeginCombo(skCryptDec("##PriestManagement.DefenceBuffList"), szSelectedDefenceBuff.c_str()))
+        {
+            for (auto e : mapDefenceBuffList)
+            {
+                const bool is_selected = (iSelectedDefenceBuff == e.first);
+
+                if (ImGui::Selectable(e.second.c_str(), is_selected))
+                {
+                    m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), e.first);
+                }
+
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::EndCombo();
+        }
+
+        bool bAutoMindBuff = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoMindBuff"), &bAutoMindBuff))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), bAutoMindBuff ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Mind Buff"));
+
+        std::string szSelectedMindBuff = "Auto";
+        int iSelectedMindBuff = m_pUserConfiguration->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
+
+        auto jMindBuffList = Drawing::Bot->GetMindBuffList();
+
+        std::map<int, std::string> mapMindBuffList;
+
+        for (size_t i = 0; i < jMindBuffList.size(); i++)
+        {
+            int iId = jMindBuffList[i]["id"].get<int>();
+
+            if (iId == iSelectedMindBuff)
+            {
+                szSelectedMindBuff = jMindBuffList[i]["name"].get<std::string>();
+            }
+
+            mapMindBuffList.insert(std::make_pair(iId, jMindBuffList[i]["name"].get<std::string>()));
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(199);
+
+        if (ImGui::BeginCombo(skCryptDec("##PriestManagement.MindBuffList"), szSelectedMindBuff.c_str()))
+        {
+            for (auto e : mapMindBuffList)
+            {
+                const bool is_selected = (iSelectedMindBuff == e.first);
+
+                if (ImGui::Selectable(e.second.c_str(), is_selected))
+                {
+                    m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), e.first);
+                }
+
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::EndCombo();
+        }
+
+        bool bAutoHeal = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoHeal"), &bAutoHeal))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("AutoHeal"), bAutoHeal ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Heal"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(50);
+
+        int iAutoHealValue = m_pUserConfiguration->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
+
+        if (ImGui::DragInt(skCryptDec("##AutoHealValue"), &iAutoHealValue, 1, 0, 100))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), iAutoHealValue);
+
+        ImGui::PopItemWidth();
+
+        std::string szSelectedHeal = "Auto";
+        int iSelectedHeal = m_pUserConfiguration->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
+
+        auto jHealList = Drawing::Bot->GetHealList();
+
+        std::map<int, std::string> mapHealList;
+
+        for (size_t i = 0; i < jHealList.size(); i++)
+        {
+            int iId = jHealList[i]["id"].get<int>();
+
+            if (iId == iSelectedHeal)
+            {
+                szSelectedHeal = jHealList[i]["name"].get<std::string>();
+            }
+
+            mapHealList.insert(std::make_pair(iId, jHealList[i]["name"].get<std::string>()));
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(176);
+
+        if (ImGui::BeginCombo(skCryptDec("##PriestManagement.HealList"), szSelectedHeal.c_str()))
+        {
+            for (auto e : mapHealList)
+            {
+                const bool is_selected = (iSelectedHeal == e.first);
+
+                if (ImGui::Selectable(e.second.c_str(), is_selected))
+                {
+                    m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), e.first);
+                }
+
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+
+            ImGui::EndCombo();
+        }
+
+        bool bAutoStrength = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("AutoStrength"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoStrength"), &bAutoStrength))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("AutoStrength"), bAutoStrength ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Strength"));
+
+        bool bDebuffProtection = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("DebuffProtection"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##DebuffProtection"), &bDebuffProtection))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("DebuffProtection"), bDebuffProtection ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Debuff Protection (Cure)"));
+
+        bool bPartyProtection = m_pUserConfiguration->GetBool(skCryptDec("Priest"), skCryptDec("PartyProtection"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##PartyProtection"), &bPartyProtection))
+            m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("PartyProtection"), bPartyProtection ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Party Protection"));
+    }
+}
+
+void Drawing::DrawMainTransformationArea()
+{
+    std::map<uint32_t, __TABLE_DISGUISE_RING>* mapDisguiseTable;
+    if (!Drawing::Bot->GetDisguiseRingTable(&mapDisguiseTable))
+        return;
+
+    ImGui::Spacing();
+    {
+        ImGui::TextUnformatted(skCryptDec("Transformation"));
+        ImGui::Separator();
+
+        ImGui::Spacing();
+        {
+            bool bAutoTransformation = m_pUserConfiguration->GetBool(skCryptDec("Transformation"), skCryptDec("Auto"), false);
+
+            if (ImGui::Checkbox(skCryptDec("##AutoTransformationCheckBox"), &bAutoTransformation))
+                m_pUserConfiguration->SetInt(skCryptDec("Transformation"), skCryptDec("Auto"), bAutoTransformation ? 1 : 0);
+
+            ImGui::SameLine();
+
+            ImGui::Text(skCryptDec("Auto"));
+
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(272);
+
+            struct DisguiseItem
+            {
+                uint32_t iID;
+                std::string szName;
+            };
+
+            std::vector<DisguiseItem> vecDisguiseItems;
+
+            vecDisguiseItems.push_back(DisguiseItem(381001000, "Transformation Scroll"));
+            vecDisguiseItems.push_back(DisguiseItem(379090000, "Transformation Totem 1"));
+            vecDisguiseItems.push_back(DisguiseItem(379093000, "Transformation Totem 2"));
+
+            int iTransformationItem = m_pUserConfiguration->GetInt(skCryptDec("Transformation"), skCryptDec("Item"), 381001000);
+
+            std::string szSelectedTransformationItem = "Transformation Scroll";
+
+            const auto pFindedTransformationItem = std::find_if(vecDisguiseItems.begin(), vecDisguiseItems.end(),
+                [&](const DisguiseItem& a) { return a.iID == iTransformationItem; });
+
+            if (pFindedTransformationItem != vecDisguiseItems.end())
+                szSelectedTransformationItem = pFindedTransformationItem->szName;
+
+            if (ImGui::BeginCombo(skCryptDec("##Transformation.ItemList"), szSelectedTransformationItem.c_str()))
+            {
+                for (auto& e : vecDisguiseItems)
+                {
+                    const bool bIsSelected = iTransformationItem == e.iID;
+
+                    if (ImGui::Selectable(e.szName.c_str(), bIsSelected))
+                    {
+                        m_pUserConfiguration->SetInt(skCryptDec("Transformation"), skCryptDec("Item"), e.iID);
+                        m_pUserConfiguration->SetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 0);
+                    }
+
+                    if (bIsSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+
+                ImGui::EndCombo();
+            }
+
+            ImGui::SetNextItemWidth(335);
+
+            struct DisguiseSkill
+            {
+                uint32_t iID;
+                std::string szName;
+            };
+
+            std::vector<DisguiseSkill> vecDisguiseSkills;
+
+            int iTransformationSkill = m_pUserConfiguration->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 472020);
+
+            std::string szSelectedTransformationSkill = "";
+
+            for (auto& [k, v] : *mapDisguiseTable)
+            {
+                if (m_pClient->GetLevel() < v.iRequiredLevel)
+                    continue;
+
+                if (iTransformationItem != v.iItemID)
+                    continue;
+
+                if (iTransformationSkill == v.iSkillID)
+                {
+                    szSelectedTransformationSkill = v.szName;
+                }
+
+                vecDisguiseSkills.push_back(DisguiseSkill(v.iSkillID, v.szName));
+            }
+
+            if (ImGui::BeginCombo(skCryptDec("##Transformation.SkillList"), szSelectedTransformationSkill.c_str()))
+            {
+                for (auto& e : vecDisguiseSkills)
+                {
+                    const bool bIsSelected = iTransformationSkill == e.iID;
+
+                    if (ImGui::Selectable(e.szName.c_str(), bIsSelected))
+                    {
+                        m_pUserConfiguration->SetInt(skCryptDec("Transformation"), skCryptDec("Skill"), e.iID);
+                    }
+
+                    if (bIsSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+
+                ImGui::EndCombo();
             }
         }
     }
@@ -1199,19 +1567,19 @@ void Drawing::DrawMainSettingsArea()
 
         ImGui::Spacing();
         {
-            bool bStopBotIfDead = m_pConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), false);
+            bool bStopBotIfDead = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), false);
 
             if (ImGui::Checkbox(skCryptDec("##StopBotIfDead"), &bStopBotIfDead))
-                m_pConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), bStopBotIfDead ? 1 : 0);
+                m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), bStopBotIfDead ? 1 : 0);
 
             ImGui::SameLine();
 
             ImGui::Text(skCryptDec("Stop bot if character dead"));
 
-            bool bStopBotIfTeleported = m_pConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), false);
+            bool bStopBotIfTeleported = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), false);
 
             if (ImGui::Checkbox(skCryptDec("##StopBotIfTeleported"), &bStopBotIfTeleported))
-                m_pConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), bStopBotIfTeleported ? 1 : 0);
+                m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), bStopBotIfTeleported ? 1 : 0);
 
             ImGui::SameLine();
 
@@ -1225,7 +1593,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
     ImGui::TextUnformatted(skCryptDec("Select automated attack or character skill"));
     ImGui::Separator();
 
-    std::vector<int> vecAttackList = m_pConfiguration->GetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
+    std::vector<int> vecAttackList = m_pUserConfiguration->GetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
 
     std::stringstream strTreeText;
 
@@ -1234,7 +1602,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
 
     strTreeText << skCryptDec("Automated attack skills");
 
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet;
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_DefaultOpen;
     if (ImGui::TreeNodeEx(strTreeText.str().c_str(), flags))
     {
         std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
@@ -1256,7 +1624,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
                     else
                         vecAttackList.erase(std::find(vecAttackList.begin(), vecAttackList.end(), x.iID));
 
-                    m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), vecAttackList);
+                    m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), vecAttackList);
                 }
 
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -1272,7 +1640,7 @@ void Drawing::DrawAutomatedAttackSkillTree()
 
 void Drawing::DrawAutomatedCharacterSkillTree()
 {
-    std::vector<int> vecCharacterSkillList = m_pConfiguration->GetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+    std::vector<int> vecCharacterSkillList = m_pUserConfiguration->GetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 
     std::stringstream strTreeText;
 
@@ -1289,7 +1657,11 @@ void Drawing::DrawAutomatedCharacterSkillTree()
         {
             for (const auto& x : *vecAvailableSkills)
             {
-                if (x.iTarget != SkillTargetType::TARGET_SELF && x.iTarget != SkillTargetType::TARGET_PARTY_ALL && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME)
+                if (x.iTarget != SkillTargetType::TARGET_SELF 
+                    && x.iTarget != SkillTargetType::TARGET_PARTY 
+                    && x.iTarget != SkillTargetType::TARGET_PARTY_ALL 
+                    && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME
+                    && x.iTarget != SkillTargetType::TARGET_FRIEND_ONLY)
                     continue;
 
                 ImGui::PushID(x.iID);
@@ -1303,7 +1675,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
                     else
                         vecCharacterSkillList.erase(std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID));
 
-                    m_pConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), vecCharacterSkillList);
+                    m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), vecCharacterSkillList);
                 }
 
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -1319,9 +1691,9 @@ void Drawing::DrawAutomatedCharacterSkillTree()
 
 void Drawing::DrawMonsterListTree()
 {
-    bool bRangeLimit = m_pConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
-    int iRangeLimitValue = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_ATTACK_RANGE);
-    bool bAutoTarget = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
+    bool bRangeLimit = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
+    int iRangeLimitValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
+    bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
 
     ImGui::TextUnformatted(skCryptDec("Select attackable target"));
     ImGui::Separator();
@@ -1334,44 +1706,37 @@ void Drawing::DrawMonsterListTree()
     {
         std::vector<SNpcData> vecTargetList;
 
-        std::vector<int> vecSelectedNpcList = m_pConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
+        std::vector<int> vecSelectedNpcList = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
 
-        Guard lock(m_pClient->m_vecNpcLock);
-        std::vector<TNpc>* vecNpcList;
-        if (m_pClient->GetNpcList(&vecNpcList))
+        std::vector<EntityInfo> vecOutMobList;
+        if (m_pClient->SearchMob(vecOutMobList) > 0)
         {
             for (const auto& x : vecSelectedNpcList)
             {
                 SNpcData pNpcData;
 
                 pNpcData.iProtoID = x;
-                pNpcData.fDistance = 0.0f;
 
-                const auto pFindedNpc = std::find_if(vecNpcList->begin(), vecNpcList->end(),
-                    [x](const TNpc& a) { return a.iProtoID == x; });
-
-                if (pFindedNpc != vecNpcList->end())
-                    pNpcData.fDistance = m_pClient->GetDistance(pFindedNpc->fX, pFindedNpc->fY);
+                const auto pFindedNpc = std::find_if(vecOutMobList.begin(), vecOutMobList.end(),
+                    [x](const EntityInfo& a) { return a.m_iProtoId == x; });
 
                 vecTargetList.push_back(pNpcData);
             }
 
-            for (const auto& x : *vecNpcList)
+            for (const auto& x : vecOutMobList)
             {
                 const auto pFindedNpc = std::find_if(vecTargetList.begin(), vecTargetList.end(),
-                    [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
+                    [x](const SNpcData& a) { return a.iProtoID == x.m_iProtoId; });
 
-                if ((x.iMonsterOrNpc == 1
-                    || (x.iProtoID >= 19067 && x.iProtoID <= 19069)
-                    || (x.iProtoID >= 19070 && x.iProtoID <= 19072))
-                    && x.iProtoID != 9009
-                    && m_pClient->GetDistance(x.fX, x.fY) <= MAX_VIEW_RANGE
+                if (((bRangeLimit 
+                    && m_pClient->GetDistance(x.m_v3Position) <= (float)iRangeLimitValue) 
+                    || !bRangeLimit) 
+                    && x.m_bEnemy == true
                     && pFindedNpc == vecTargetList.end())
                 {
                     SNpcData pNpcData;
 
-                    pNpcData.iProtoID = x.iProtoID;
-                    pNpcData.fDistance = m_pClient->GetDistance(x.fX, x.fY);
+                    pNpcData.iProtoID = x.m_iProtoId;
 
                     vecTargetList.push_back(pNpcData);
                 }
@@ -1379,21 +1744,6 @@ void Drawing::DrawMonsterListTree()
 
             for (const auto& x : vecTargetList)
             {
-                bool bIsAttackable = false;
-
-                if (bRangeLimit)
-                {
-                    if (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE)
-                        bIsAttackable = true;
-                }
-                else
-                    bIsAttackable = (x.fDistance != 0.0f && x.fDistance <= (float)MAX_ATTACK_RANGE);
-
-                if (bIsAttackable)
-                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-                else
-                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 0, 0, 255));
-
                 ImGui::PushID(x.iProtoID);
 
                 bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
@@ -1425,16 +1775,10 @@ void Drawing::DrawMonsterListTree()
                     else
                         vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
 
-                    m_pConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("NpcList"), vecSelectedNpcList);
+                    m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("NpcList"), vecSelectedNpcList);
                 }
 
-                ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 165, 0, 255));
-                RightText(std::to_string((int)x.fDistance) + skCryptDec("m"));
-                ImGui::PopStyleColor();
                 ImGui::PopID();
-
-                ImGui::PopStyleColor();
             }
         }
 

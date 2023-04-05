@@ -1,12 +1,12 @@
 #pragma once
 
-//#define DEBUG
+#define DEBUG
 //#define PRINT_RECV_PACKET
 //#define PRINT_SEND_PACKET
 
-#define USE_MAILSLOT
-
 //#define DISABLE_XIGNCODE
+
+//#define NO_INITIALIZE_CLIENT_HANDLER
 
 #define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #define DEVELOPMENT_EXE "KnightOnLine.exe"

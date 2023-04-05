@@ -22,6 +22,7 @@ public:
 	void InitializeStaticData();
 	void InitializeRouteData();
 	void InitializeSupplyData();
+	void InitializePriestData();
 
 	void Process();
 	void LoadAccountList();
@@ -30,7 +31,9 @@ public:
 	void Release();
 
 	DWORD GetAddress(std::string szAddressName);
-	Ini* GetConfiguration();
+
+	Ini* GetAppConfiguration();
+	Ini* GetUserConfiguration();
 
 	bool GetSkillTable(std::map<uint32_t, __TABLE_UPC_SKILL>** mapDataOut);
 	bool GetSkillExtension2Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>** mapDataOut);
@@ -40,8 +43,9 @@ public:
 	bool GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut);
 	bool GetMobTable(std::map<uint32_t, __TABLE_MOB_USKO>** mapDataOut);
 	bool GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut);
-
 	bool GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecShopWindow);
+
+	bool GetDisguiseRingTable(std::map<uint32_t, __TABLE_DISGUISE_RING>** mapDataOut);
 
 	JSON m_AccountList;
 
@@ -62,25 +66,12 @@ private:
 	Table<__TABLE_NPC>* m_pTbl_Npc;
 	Table<__TABLE_MOB_USKO>* m_pTbl_Mob;
 	Table<__TABLE_ITEM_SELL>* m_pTbl_ItemSell;
+	Table<__TABLE_DISGUISE_RING>* m_pTbl_Disguise_Ring;
 
 	std::string m_szAccountListFilePath;
-	std::string m_szAppDataFolder;
 
 public:
 	DWORD GetInjectedProcessId() { return m_dwInjectedProcessId; };
-
-	BYTE ReadByte(DWORD dwAddress);
-	DWORD Read4Byte(DWORD dwAddress);
-	float ReadFloat(DWORD dwAddress);
-	std::string ReadString(DWORD dwAddress, size_t nSize);
-	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
-	void WriteByte(DWORD dwAddress, BYTE byValue);
-	void Write4Byte(DWORD dwAddress, DWORD dwValue);
-	void WriteFloat(DWORD dwAddress, float fValue);
-	void WriteString(DWORD dwAddress, std::string strValue);
-	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
-
-	void ExecuteRemoteCode(BYTE* codes, size_t psize);
 
 public:
 	bool IsClosed() { return m_bClosed; }
@@ -94,6 +85,7 @@ private:
 	std::string m_szClientPath;
 	std::string m_szClientExe;
 	DWORD m_dwInjectedProcessId;
+
 	bool m_bTableLoaded;
 	std::chrono::milliseconds m_msLastConfigurationSave;
 
@@ -115,5 +107,45 @@ public:
 protected:
 	JSON m_jSupplyList;
 
+public:
+	JSON GetHealthBuffList() { return m_jHealthBuffList; };
+	JSON GetDefenceBuffList() { return m_jDefenceBuffList; };
+	JSON GetMindBuffList() { return m_jMindBuffList; };
+	JSON GetHealList() { return m_jHealList; };
+
+protected:
+	JSON m_jHealthBuffList;
+	JSON m_jDefenceBuffList;
+	JSON m_jMindBuffList;
+	JSON m_jHealList;
+
+public:
+	void BuildAdress();
+
+private:
+	std::map<std::string, DWORD> m_mapAddress;
+
+private:
+	std::chrono::milliseconds m_msLastInitializeHandle;
+
+public:
+	HANDLE m_hPipe;
+	bool m_bPipeWorking;
+	bool ConnectPipeServer();
+	void SendPipeServer(Packet pkt);
+
+public:
+	BYTE ReadByte(DWORD dwAddress);
+	DWORD Read4Byte(DWORD dwAddress);
+	float ReadFloat(DWORD dwAddress);
+	std::string ReadString(DWORD dwAddress, size_t nSize);
+	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
+	void WriteByte(DWORD dwAddress, BYTE byValue);
+	void Write4Byte(DWORD dwAddress, int iValue);
+	void WriteFloat(DWORD dwAddress, float fValue);
+	void WriteString(DWORD dwAddress, std::string strValue);
+	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
+	bool ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize);
+	bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress);
 };
 

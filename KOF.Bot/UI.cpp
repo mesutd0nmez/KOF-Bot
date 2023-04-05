@@ -131,12 +131,13 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void UI::Render(Bot* pBot)
 {
-    LPCSTR lpWindowName = skCryptEnc("KOF.Bot");
+    Drawing::m_szMainWindowName = skCryptEnc("KOF.Bot");
+    Drawing::m_szRoutePlannerWindowName = skCryptEnc("KOF.RoutePlanner");
 
     ImGui_ImplWin32_EnableDpiAwareness();
-    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(lpWindowName), nullptr };
+    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(Drawing::m_szMainWindowName.c_str()), nullptr };
     ::RegisterClassEx(&wc);
-    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(lpWindowName), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
+    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(Drawing::m_szMainWindowName.c_str()), WS_OVERLAPPEDWINDOW, 100, 100, 50, 50, NULL, NULL, wc.hInstance, NULL);
 
     if (!CreateDeviceD3D(hwnd))
     {
@@ -179,6 +180,9 @@ void UI::Render(Bot* pBot)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
+        if (GetAsyncKeyState(VK_INSERT) & 1)
+            Drawing::bDraw = !Drawing::bDraw;
+
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
@@ -191,12 +195,16 @@ void UI::Render(Bot* pBot)
         if (Drawing::Done)
             break;
 
+
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
+        io.Framerate = 30;
         ImGui::NewFrame();
+        ImGuiIO& io = ImGui::GetIO();
+        io.Framerate = 30;
         {
             Drawing::Draw();
-            Drawing::DrawRoutePlanner();
+            
         }
         ImGui::EndFrame();
 
@@ -213,11 +221,6 @@ void UI::Render(Bot* pBot)
         }
 
         pSwapChain->Present(1, 0);
-
-#ifndef _WINDLL
-            if (!Drawing::isActive())
-                break;
-#endif
     }
 
     Drawing::Done = true;

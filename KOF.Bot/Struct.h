@@ -67,7 +67,25 @@ struct SSupplyBuyList
 struct SNpcData
 {
 	uint32_t iProtoID;
-	float fDistance;
+};
+
+struct EntityInfo
+{
+	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, float fDistance, bool bEnemy) :
+		m_iBase(iBase), m_iId(iId), m_iProtoId(iProtoId), m_iMaxHP(iMaxHP), 
+		m_iHP(iHP), m_iState(iState), m_iNation(iNation), m_v3Position(v3Position), 
+		m_fDistance(fDistance), m_bEnemy(bEnemy) {};
+
+	int32_t m_iBase;
+	int32_t m_iId;
+	int32_t m_iProtoId;
+	int32_t m_iMaxHP;
+	int32_t m_iHP;
+	int32_t m_iState;
+	int32_t m_iNation;
+	Vector3 m_v3Position;
+	float m_fDistance;
+	bool m_bEnemy;
 };
 
 typedef struct SInventory
@@ -487,7 +505,6 @@ typedef struct  __TABLE_MOB_CNKO
 	uint8_t				iUnknown2;
 } TABLE_MOBS_CNKO;
 
-
 typedef struct  __TABLE_ITEM_SELL
 {
 	uint32_t			iID;
@@ -517,3 +534,36 @@ typedef struct  __TABLE_ITEM_SELL
 	uint32_t			iItem22;
 	uint32_t			iItem23;
 } TABLE_ITEM_SELLS;
+
+typedef struct  __TABLE_DISGUISE_RING
+{
+	uint32_t			iID;
+	std::string			szName;
+	int32_t				iRequiredLevel;
+	uint32_t			iSkillID;
+	uint32_t			iItemID;
+	uint8_t				iType;
+	std::string			szDescription;
+} TABLE_DISGUISE_RING;
+
+typedef struct __Party
+{
+	int32_t				iID;
+	std::string			szName;
+	int16_t				iHP;
+	int16_t				iMaxHP;
+	int16_t				iMP;
+	int16_t				iMaxMP;
+	int32_t				iCure;
+} Party;
+
+typedef struct __PartyBuffInfo
+{
+	int32_t				iMemberID;
+	int16_t				iOriginalMaxHP;
+	int16_t				iCurrentMaxHP;
+	bool				bHealth;
+	bool				bAc;
+	bool				bResistance;
+	std::chrono::milliseconds iBuffTime;
+} PartyBuffInfo;

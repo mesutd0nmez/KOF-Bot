@@ -21,3 +21,4 @@
 #include <shellapi.h>
 #include <limits>
 #include <tlhelp32.h>
+#include <cmath>

@@ -1,7 +1,6 @@
 #ifndef DRAWING_H
 #define DRAWING_H
 
-#include <imgui.h>
 #include "Bot.h"
 
 class Drawing
@@ -9,12 +8,16 @@ class Drawing
 public:
 	static Bot* Bot;
 	static bool Done;
+	static bool bDraw;
 
 private:
-	static bool bDraw;
 	static bool bDrawRoutePlanner;
 
 	static void InitializeSceneData();
+
+public:
+	static std::string m_szMainWindowName;
+	static std::string m_szRoutePlannerWindowName;
 
 public:
 	static void Initialize();
@@ -32,7 +35,9 @@ public:
 	static void DrawMainFeaturesArea();
 	static void DrawMainAutoLootArea();
 	static void DrawMainSupplyArea();
+	static void DrawMainTransformationArea();
 	static void DrawMainSettingsArea();
+	static void DrawMainPriestArea();
 
 	static void DrawRoutePlannerArea();
 

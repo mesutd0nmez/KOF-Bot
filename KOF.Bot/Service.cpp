@@ -19,10 +19,12 @@ void Service::Clear()
 
     m_iniPointer = nullptr;
     m_iniUserConfiguration = nullptr;
-    m_iniConfiguration = nullptr;
+    m_iniAppConfiguration = nullptr;
 
     m_ePlatformType = PlatformType::USKO;
     m_iSelectedAccount = 0;
+
+    m_iAccountTypeFlag = AccountTypeFlag::ACCOUNT_TYPE_FLAG_FREE;
 
     m_isServiceClosed = false;
 }
@@ -30,16 +32,16 @@ void Service::Clear()
 void Service::Initialize()
 {
     std::string szIniPath = skCryptDec(".\\data\\KOF.ini");
-    m_iniConfiguration = new Ini();
-    m_iniConfiguration->Load(szIniPath.c_str());
+    m_iniAppConfiguration = new Ini();
+    m_iniAppConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
+    m_szToken = m_iniAppConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
-#ifdef DEBUG
-    Connect(skCryptDec("127.0.0.1"), 8888);
-#else
+//#ifdef DEBUG
+//    Connect(skCryptDec("127.0.0.1"), 8888);
+//#else
     Connect(skCryptDec("watchdog.kofbot.com"), 8888);
-#endif 
+//#endif 
 }
 
 void Service::OnConnect()
@@ -55,6 +57,8 @@ void Service::OnError(int32_t iErrorCode)
 #ifdef DEBUG
     printf("Connection error: %d\n", iErrorCode);
 #endif
+
+    m_isServiceClosed = true;
 }
 
 void Service::OnClose(int32_t iErrorCode)
@@ -97,6 +101,11 @@ void Service::HandlePacket(Packet& pkt)
 
             pkt.DByte();
             pkt >> iType >> iStatus;
+
+            if (iStatus == 1)
+            {
+                pkt >> m_iAccountTypeFlag;
+            }
 
             if (iStatus == 1)
             {
@@ -177,6 +186,21 @@ void Service::HandlePacket(Packet& pkt)
             OnPong();
         }
         break;
+
+        case PacketHeader::INJECTION:
+        {
+            if (m_iId == -1) return;
+
+            int32_t iProcesssId, iBufferLength;
+
+            pkt >> iProcesssId >> iBufferLength;
+
+            std::vector<uint8_t> vecBuffer(iBufferLength);
+            pkt.read(&vecBuffer[0], iBufferLength);
+
+            Injection(iProcesssId, vecBuffer);
+        }
+        break;
     }
 }
 
@@ -207,7 +231,7 @@ void Service::SendLogin(std::string szToken)
     {
         HardwareId::DiskObject& Disk{ HWID.Disk.at(i) };
 
-        if (HWID.Disk.at(i).MediaType == 3 || HWID.Disk.at(i).MediaType == 4)
+        if (Disk.IsBootDrive && (HWID.Disk.at(i).MediaType == 3 || HWID.Disk.at(i).MediaType == 4))
         {
             if (i == 0)
                 szHddSerial += to_string(Disk.SerialNumber);
@@ -298,4 +322,17 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
         << m_iniUserConfiguration->Dump();
 
     Send(pkt, true);
+}
+
+void Service::SendInjectionRequest(uint32_t iProcessId)
+{
+    Packet pkt = Packet(PacketHeader::INJECTION);
+
+    pkt.DByte();
+    pkt
+        << uint8_t(InjectionRequestType::REQUEST)
+        << uint8_t(PlatformType::USKO)
+        << uint32_t(iProcessId);
+
+    Send(pkt);
 }
