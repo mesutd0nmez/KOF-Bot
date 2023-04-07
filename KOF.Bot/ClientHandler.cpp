@@ -106,22 +106,6 @@ void ClientHandler::Process()
 		printf("Client connection closed\n");
 #endif
 		StopHandler();
-
-		if (m_Bot->GetPlatformType() == PlatformType::CNKO)
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-
-			PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
-
-			new std::thread([this]()
-			{
-				WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-				ConnectLoginServer(m_szAccountId, m_szPassword);
-			});
-		}
 	}
 }
 
@@ -136,9 +120,11 @@ void ClientHandler::OnReady()
 	new std::thread([this]() { m_Bot->InitializeSupplyData(); });
 	new std::thread([this]() { m_Bot->InitializePriestData(); });
 
-	if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+	if (m_Bot->m_iSelectedAccount <= (int32_t)m_Bot->m_AccountList.size())
 	{
 		PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 		new std::thread([this]()
 		{
@@ -146,16 +132,18 @@ void ClientHandler::OnReady()
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-			if (m_Bot->m_iSelectedAccount <= (int32_t)m_Bot->m_AccountList.size())
-			{
-				auto jSelectedAccount = m_Bot->m_AccountList.at(m_Bot->m_iSelectedAccount);
+			m_Bot->m_jSelectedAccount = m_Bot->m_AccountList.at(m_Bot->m_iSelectedAccount);
 
-				SetLoginInformation(
-					jSelectedAccount["accountId"].get<std::string>(),
-					jSelectedAccount["password"].get<std::string>());
+			std::string szAccountIdAttribute = skCryptDec("accountId");
+			std::string szPasswordAttribute = skCryptDec("password");
 
-				ConnectLoginServer(m_szAccountId, m_szPassword);
-			}
+			SetLoginInformation(
+				m_Bot->m_jSelectedAccount[szAccountIdAttribute.c_str()].get<std::string>(),
+				m_Bot->m_jSelectedAccount[szPasswordAttribute.c_str()].get<std::string>());
+
+			WriteLoginInformation(m_szAccountId, m_szPassword);
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			ConnectLoginServer();
 		});
 	}
 }
@@ -664,10 +652,12 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						{
 #ifdef DEBUG
 							printf("RecvProcess::LS_LOGIN_REQ: Reconnecting login server\n");
-
-							std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
-							ConnectLoginServer(m_szAccountId, m_szPassword, true);
+							std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+							WriteLoginInformation(m_szAccountId, m_szPassword);
+							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+							ConnectLoginServer(true);
 						});
 					}
 				}
@@ -713,7 +703,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						std::this_thread::sleep_for(std::chrono::milliseconds(500));
 #endif
-						ConnectGameServer(1);
+						std::string szServerIndexAttribute = skCryptDec("serverIndex");
+						ConnectGameServer(m_Bot->m_jSelectedAccount[szServerIndexAttribute.c_str()].get<int32_t>() - 1);
 					});
 				}
 
@@ -739,7 +730,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Character list loaded\n");
 #endif
 
-				if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+				if (m_Bot->GetPlatformType() == PlatformType::USKO || m_Bot->GetPlatformType() == PlatformType::CNKO)
 				{
 					new std::thread([this]()
 					{
@@ -750,7 +741,25 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 						SelectCharacterSkip();
-						SelectCharacter(1);
+
+						std::string szCharacterIndexAttribute = skCryptDec("characterIndex");
+
+						int32_t iCharacterIndex = m_Bot->m_jSelectedAccount[szCharacterIndexAttribute.c_str()].get<int32_t>() - 1;
+
+						if (iCharacterIndex > 0)
+						{
+							for (size_t i = 0; i < iCharacterIndex; i++)
+							{
+								std::this_thread::sleep_for(std::chrono::milliseconds(100));
+								SelectCharacterLeft();
+								std::this_thread::sleep_for(std::chrono::milliseconds(100));
+								SelectCharacterSkip();
+							}
+						}
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+						SelectCharacter();
 					});
 				}
 			}
@@ -1047,6 +1056,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif
 			new std::thread([this]()
 			{
+				WaitCondition(GetUserConfiguration() == nullptr)
 				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
 
 				bool bWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
@@ -1443,7 +1453,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 								std::map<uint32_t, __TABLE_ITEM>* pItemTable;
 								if (m_Bot->GetItemTable(&pItemTable))
 								{
-									auto pItemData = pItemTable->find(iItemID);
+									uint32_t iItemBaseID = iItemID / 1000 * 1000;
+
+									auto pItemData = pItemTable->find(iItemBaseID);
 
 									if (pItemData != pItemTable->end())
 									{
@@ -1664,17 +1676,15 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_CAPTCHA: Image loaded\n");
-
+#endif
 						int32_t iBufferLength;
 						pkt >> iBufferLength;
 
 						std::vector<uint8_t> vecBuffer(iBufferLength);
 						pkt.read(&vecBuffer[0], iBufferLength);
-#endif
+
 						new std::thread([&,vecBuffer]()
 						{ 
-							
-
 							const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
 
 							if (iSelectedCaptchaSolver != 0)
@@ -2193,7 +2203,8 @@ void ClientHandler::AttackProcess()
 				bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 
 				if (bBasicAttack 
-					&& GetActionState() != PSA_SPELLMAGIC)
+					&& GetActionState() != PSA_SPELLMAGIC
+					&& GetDistance(v3TargetPosition) < 3.0f)
 				{
 					BasicAttack();
 				}
@@ -2223,6 +2234,8 @@ void ClientHandler::AttackProcess()
 				{
 					DWORD iTargetBase = GetClientSelectedTargetBase();
 
+					v3TargetPosition = GetTargetPosition();
+
 					if (iTargetBase == 0)
 						break;
 					else
@@ -2234,13 +2247,22 @@ void ClientHandler::AttackProcess()
 						if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
 							break;
 
-						Vector3 v3TargetPosition = GetTargetPosition();
+						v3TargetPosition = GetTargetPosition();
 
 						if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
 							break;
 
 						if (!IsEnemy(iTargetBase))
 							break;
+					}
+
+					bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+
+					if (bBasicAttack
+						&& GetActionState() != PSA_SPELLMAGIC
+						&& GetDistance(v3TargetPosition) < 3.0f)
+					{
+						BasicAttack();
 					}
 
 					auto pSkillData = pSkillTable->find(x);
@@ -2287,12 +2309,9 @@ void ClientHandler::AttackProcess()
 						if (iNeedItem != 0 && iExistItemCount < iNeedItemCount)
 							continue;
 
-						UseSkill(pSkillData->second, GetTarget());
+						UseSkill(pSkillData->second, GetTarget(), 0, true);
 
 						bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-
-						if (bBasicAttack)
-							BasicAttack();
 
 						if (bAttackSpeed)
 						{
@@ -3758,7 +3777,9 @@ void ClientHandler::SupplyProcess()
 				RouteManager* pRouteManager = m_Bot->GetRouteManager();
 				RouteManager::RouteList pRouteList;
 
-				if (pRouteManager && pRouteManager->GetRouteList(GetZone(), pRouteList))
+				uint8_t iZoneID = GetRepresentZone(GetZone());
+
+				if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
 				{
 					auto pRoute = pRouteList.find(szSelectedRoute);
 

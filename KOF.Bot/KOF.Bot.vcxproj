@@ -196,6 +196,9 @@
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>call "$(SolutionDir)Scripts\VMProtect.bat"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

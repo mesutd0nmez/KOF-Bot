@@ -126,13 +126,14 @@ protected:
 	void BasicAttack();
 
 	void PushPhase(DWORD dwAddress);
-	void ConnectLoginServer(std::string szAccountId, std::string szPassword, bool bDisconnect = false);
+	void WriteLoginInformation(std::string szAccountId, std::string szPassword);
+	void ConnectLoginServer(bool bDisconnect = false);
 	void ConnectGameServer(BYTE byServerId);
 
 	void SelectCharacterSkip();
 	void SelectCharacterLeft();
 	void SelectCharacterRight();
-	void SelectCharacter(BYTE byCharacterIndex);
+	void SelectCharacter();
 
 	void SendPacket(Packet byBuffer);
 
@@ -142,7 +143,7 @@ protected:
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 protected:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0);
+	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool iAttacking = false);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -224,4 +225,7 @@ public:
 
 public:
 	uint8_t GetRepresentZone(uint8_t iZone);
+
+private:
+	std::chrono::milliseconds m_msLastBasicAttackTime;
 };

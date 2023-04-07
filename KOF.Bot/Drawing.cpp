@@ -54,13 +54,15 @@ void Drawing::InitializeSceneData()
     m_pAppConfiguration = Drawing::Bot->GetAppConfiguration();
     m_pClient = Drawing::Bot->GetClientHandler();
 
-    if (m_pWorldData == nullptr || (m_pWorldData != nullptr && m_pWorldData->iId != m_pClient->GetZone()))
+    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+    if (m_pWorldData == nullptr || (m_pWorldData != nullptr && m_pWorldData->iId != iZoneID))
     {
         World* pWorld = Drawing::Bot->GetWorld();
 
         if (pWorld)
         {
-            m_pWorldData = pWorld->GetWorldData(m_pClient->GetZone());
+            m_pWorldData = pWorld->GetWorldData(iZoneID);
         } 
 
         if (m_pWorldData != nullptr)
@@ -242,7 +244,10 @@ void Drawing::DrawRoutePlannerArea()
         RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
 
         RouteManager::RouteList pRouteList;
-        if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+
+        uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+        if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
         {
             ImGui::TextUnformatted(skCryptDec("Management"));
             ImGui::Separator();
@@ -282,7 +287,9 @@ void Drawing::DrawRoutePlannerArea()
 
                 if (ImGui::Button(skCryptDec("Delete Plan"), ImVec2(174.0f, 0.0f)))
                 {
-                    pRouteManager->Delete(m_szSelectedRoute, m_pClient->GetZone());
+                    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+                    pRouteManager->Delete(m_szSelectedRoute, iZoneID);
 
                     std::string szSelectedRouteConfiguration = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
 
@@ -415,7 +422,9 @@ void Drawing::DrawRoutePlannerArea()
             {
                 if (pRouteManager)
                 {
-                    pRouteManager->Save(m_szRouteName, m_pClient->GetZone(), m_vecRoute);
+                    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+                    pRouteManager->Save(m_szRouteName, iZoneID, m_vecRoute);
                 }
             }
 
@@ -553,8 +562,10 @@ void Drawing::DrawGameController()
 
                     RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
 
+                    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
                     RouteManager::RouteList pRouteList;
-                    if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+                    if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
                     {
                         auto pPlan = pRouteList.find(szSelectedRouteConfiguration);
 
@@ -599,8 +610,10 @@ void Drawing::DrawGameController()
             std::string szSelectedRoute = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
             if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.RouteList"), szSelectedRoute.c_str()))
             {
+                uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
                 RouteManager::RouteList pRouteList;
-                if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+                if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
                 {
                     for (auto e : pRouteList)
                     {
@@ -635,8 +648,10 @@ void Drawing::DrawGameController()
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
                 if (ImGui::Button(skCryptDec("Run"), ImVec2(129.0f, 0.0f)))
                 {
+                    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
                     RouteManager::RouteList pRouteList;
-                    if (pRouteManager && pRouteManager->GetRouteList(m_pClient->GetZone(), pRouteList))
+                    if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
                     {
                         auto pRoute = pRouteList.find(szSelectedRoute);
 

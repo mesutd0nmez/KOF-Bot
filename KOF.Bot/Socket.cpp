@@ -70,7 +70,7 @@ void Socket::Send(Packet& pkt, bool bCompress)
 
     Packet encryptionPkt = Packet();
 
-    if (bCompress)
+    if (bCompress && pkt.size() > 256)
     {
         encryptionPkt
             << uint8_t(1) //compression enabled
