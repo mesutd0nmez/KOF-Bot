@@ -21,8 +21,8 @@ Ini* m_pAppConfiguration = nullptr;
 
 WorldData* m_pWorldData = nullptr;
 
-ID3D11ShaderResourceView* m_pMapTexture = nullptr;
-ID3D11ShaderResourceView* m_pMinimapTexture = nullptr;
+PDIRECT3DTEXTURE9 m_pMapTexture = nullptr;
+PDIRECT3DTEXTURE9 m_pMinimapTexture = nullptr;
 
 char m_szRouteName[255] = "";
 
@@ -31,6 +31,8 @@ std::vector<Route> m_vecRoute;
 
 float m_fScreenWidth = 0.0f;
 float m_fScreenHeight = 0.0f;
+
+bool m_bInitPos = false;
 
 void Drawing::Active()
 {
@@ -67,8 +69,8 @@ void Drawing::InitializeSceneData()
 
         if (m_pWorldData != nullptr)
         {
-            UI::LoadTextureFromMemory(m_pWorldData->pMiniMapImageData, &m_pMinimapTexture, m_pWorldData->iMiniMapImageWidth, m_pWorldData->iMiniMapImageHeight);
-            UI::LoadTextureFromMemory(m_pWorldData->pMapImageData, &m_pMapTexture, m_pWorldData->iMapImageWidth, m_pWorldData->iMapImageHeight);
+            UI::LoadTextureFromMemory(m_pWorldData->pMiniMapImageRawData, &m_pMinimapTexture);
+            UI::LoadTextureFromMemory(m_pWorldData->pMapImageRawData, &m_pMapTexture);
         }
     }
 
@@ -81,18 +83,26 @@ void Drawing::Draw()
 	if (isActive())
 	{
         InitializeSceneData();
-       
-        ImVec2 vWindowSize = { 658, 700 };
+
+        ImVec2 ScreenRes { 0, 0 };
+        ImVec2 WindowPos { 0, 0 };
+        ImVec2 WindowSize { 658, 700 };
+
+        if (m_bInitPos == false)
+        {
+            RECT ScreenRect;
+            GetWindowRect(GetDesktopWindow(), &ScreenRect);
+            ScreenRes = ImVec2(float(ScreenRect.right), float(ScreenRect.bottom));
+            WindowPos.x = (ScreenRes.x - WindowSize.x) * 0.5f;
+            WindowPos.y = (ScreenRes.y - WindowSize.y) * 0.5f;
+            m_bInitPos = true;
+        }
+
+        ImGui::SetNextWindowPos(ImVec2(WindowPos.x, WindowPos.y), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(WindowSize.x, WindowSize.y));
+        ImGui::SetNextWindowBgAlpha(1.0f);
+
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
-
-        ImVec2 vec2InitialPos = { m_fScreenWidth, m_fScreenHeight };
-
-        vec2InitialPos.x -= vWindowSize.x / 2;
-        vec2InitialPos.y -= vWindowSize.y / 2;
-
-		ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
-		ImGui::SetNextWindowSize(vWindowSize);
-		ImGui::SetNextWindowBgAlpha(1.0f);
 		ImGui::Begin(m_szMainWindowName.c_str(), &bDraw, WindowFlags);
 		{
             DrawGameController();

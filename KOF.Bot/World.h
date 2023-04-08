@@ -12,10 +12,12 @@ struct WorldData
 	float fMapLength;
 
 	unsigned char* pMapImageData;
+	std::vector<uint8_t> pMapImageRawData;
 	int32_t iMapImageWidth;
 	int32_t iMapImageHeight;
 
 	unsigned char* pMiniMapImageData;
+	std::vector<uint8_t> pMiniMapImageRawData;
 	int32_t iMiniMapImageWidth;
 	int32_t iMiniMapImageHeight;
 };

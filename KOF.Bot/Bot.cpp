@@ -532,7 +532,7 @@ void Bot::OnLoaded()
 
 	SendInjectionRequest(injectedProcessInfo.dwProcessId);
 
-	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Release\\Pipeline.dll");
+	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
