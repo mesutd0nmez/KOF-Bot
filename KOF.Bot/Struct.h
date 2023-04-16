@@ -71,10 +71,10 @@ struct SNpcData
 
 struct EntityInfo
 {
-	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, float fDistance, bool bEnemy) :
+	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, float fDistance, bool bEnemy, float fRadius) :
 		m_iBase(iBase), m_iId(iId), m_iProtoId(iProtoId), m_iMaxHP(iMaxHP), 
 		m_iHP(iHP), m_iState(iState), m_iNation(iNation), m_v3Position(v3Position), 
-		m_fDistance(fDistance), m_bEnemy(bEnemy) {};
+		m_fDistance(fDistance), m_bEnemy(bEnemy), m_fRadius(fRadius) {};
 
 	int32_t m_iBase;
 	int32_t m_iId;
@@ -86,6 +86,7 @@ struct EntityInfo
 	Vector3 m_v3Position;
 	float m_fDistance;
 	bool m_bEnemy;
+	float m_fRadius;
 };
 
 typedef struct SInventory
@@ -261,9 +262,9 @@ typedef struct __TABLE_UPC_SKILL
 	int32_t				iReCastTime;		//22
 	int32_t				iCooldown;			//23
 	float				fUnknown1;			//24
-	uint8_t				byPercentSuccess;	//25
-	float				fUnknown2;			//26
-	int32_t				iUnknown3;			//27
+	uint8_t				iUnknown2;			//25
+	float				fUnknown3;			//26
+	int32_t				iPercentSuccess;	//27
 	uint32_t			dw1stTableType;		//28
 	uint32_t			dw2ndTableType;		//29
 	int32_t				iValidDist;			//30

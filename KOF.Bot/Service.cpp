@@ -335,4 +335,8 @@ void Service::SendInjectionRequest(uint32_t iProcessId)
         << uint32_t(iProcessId);
 
     Send(pkt);
+
+#ifdef DEBUG
+    printf("Service: Injection request sended\n");
+#endif
 }

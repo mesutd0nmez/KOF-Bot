@@ -44,6 +44,11 @@ Bot::Bot()
 
 	m_hPipe = nullptr;
 	m_bPipeWorking = false;
+
+	m_jAccountList.clear();
+	m_iSelectedAccount = -1;
+
+	m_jSelectedAccount.clear();
 }
 
 Bot::~Bot()
@@ -84,6 +89,11 @@ Bot::~Bot()
 
 	m_hPipe = nullptr;
 	m_bPipeWorking = false;
+
+	m_jAccountList.clear();
+	m_iSelectedAccount = -1;
+
+	m_jSelectedAccount.clear();
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -142,6 +152,8 @@ void Bot::Process()
 		{
 			if (ConnectPipeServer())
 			{
+				printf("Bot: Connected Pipe server\n");
+
 				m_bPipeWorking = true;
 
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
@@ -166,14 +178,14 @@ void Bot::LoadAccountList()
 		m_szAccountListFilePath = skCryptDec(".\\data\\accounts.json");
 
 		std::ifstream i(m_szAccountListFilePath.c_str());
-		m_AccountList = JSON::parse(i);
+		m_jAccountList = JSON::parse(i);
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 }
@@ -235,6 +247,8 @@ void Bot::InitializeStaticData()
 #ifdef DEBUG
 	printf("InitializeStaticData: Started\n");
 #endif
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 	std::string szPlatformPrefix = "us";
 
@@ -377,10 +391,10 @@ void Bot::InitializeSupplyData()
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 
@@ -427,10 +441,10 @@ void Bot::InitializePriestData()
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 
@@ -479,25 +493,47 @@ void Bot::OnLoaded()
 
 	BuildAdress();
 
-#if !defined(_WINDLL)
 	PROCESS_INFORMATION injectedProcessInfo;
 	std::ostringstream strCommandLine;
 	strCommandLine << GetCurrentProcessId();
 
+#ifdef DEBUG
+	printf("Bot: Knight Online process starting\n");
+#endif
+
 	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
+#ifdef DEBUG
+		printf("Bot: Process cannot started\n");
+#endif
 		Close();
 		return;
 	}
+
+#ifdef DEBUG
+	printf("Bot: Knight Online process started\n");
+#endif
 
 	if (m_ePlatformType == PlatformType::USKO)
 	{
 		DWORD dwXignCodeEntryPoint = 0;
 
+#ifdef DEBUG
+		printf("Bot: Waiting entry point\n");
+#endif
+
 		while (dwXignCodeEntryPoint == 0)
 			ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
 
+#ifdef DEBUG
+		printf("Bot: Entry point ready, Knight Online process suspending\n");
+#endif
+
 		SuspendProcess(injectedProcessInfo.hProcess);
+
+#ifdef DEBUG
+		printf("Bot: Knight Online process suspended, bypass started\n");
+#endif
 
 		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
 		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
@@ -517,6 +553,10 @@ void Bot::OnLoaded()
 				};
 
 				WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
+
+#ifdef DEBUG
+				printf("Bot: Knight Online Patched\n");
+#endif
 			}
 		}
 
@@ -528,16 +568,19 @@ void Bot::OnLoaded()
 
 	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
+#ifdef DEBUG
+	printf("Bot: Bypass finished, Knight Online process resuming\n");
+#endif
+
 	ResumeProcess(injectedProcessInfo.hProcess);
 
 	SendInjectionRequest(injectedProcessInfo.dwProcessId);
 
-	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
+	////Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
-#endif
 #endif
 }
 
@@ -882,6 +925,9 @@ DWORD Bot::GetAddress(std::string szAddressName)
 
 void Bot::BuildAdress()
 {
+#ifdef DEBUG
+	printf("Bot: Address build started\n");
+#endif
 	auto pAddressMap = m_iniPointer->GetConfigMap();
 
 	if (pAddressMap == nullptr)
@@ -897,6 +943,10 @@ void Bot::BuildAdress()
 
 	delete m_iniPointer;
 	m_iniPointer = nullptr;
+
+#ifdef DEBUG
+	printf("Bot: Address build completed\n");
+#endif
 }
 
 bool Bot::ConnectPipeServer()

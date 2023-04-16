@@ -47,7 +47,7 @@ public:
 
 	bool GetDisguiseRingTable(std::map<uint32_t, __TABLE_DISGUISE_RING>** mapDataOut);
 
-	JSON m_AccountList;
+	JSON m_jAccountList;
 	JSON m_jSelectedAccount;
 
 private:

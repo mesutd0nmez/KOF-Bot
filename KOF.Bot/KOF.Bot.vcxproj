@@ -167,7 +167,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Debug;..\KOF.Dependencies\snappy-1.1.9\Debug;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Debug;..\KOF.Dependencies\curl\lib\Debug</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl-d_imp.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl-d_imp.lib;$(CoreLibraryDependencies);Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -195,7 +195,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl_imp.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl_imp.lib;$(CoreLibraryDependencies);Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\snappy-1.1.9\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\curl\lib\Release</AdditionalLibraryDirectories>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>

@@ -18,6 +18,9 @@ D3DPRESENT_PARAMETERS    UI::g_d3dpp = {};
 #pragma comment(lib, "D3dx9")
 #pragma comment(lib, "D3d9")
 
+DWORD UI::g_iLastFrameTime = 0;
+DWORD UI::g_iFPSLimit = 30;
+
 bool UI::CreateDeviceD3D(HWND hWnd)
 {
     if ((g_pD3D = Direct3DCreate9(D3D_SDK_VERSION)) == NULL)
@@ -96,17 +99,21 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
+#define IDI_MYICON 1000
+
 void UI::Render(Bot* pBot)
 {
-    Drawing::m_szMainWindowName = skCryptEnc("KOF.Bot");
-    Drawing::m_szRoutePlannerWindowName = skCryptEnc("KOF.RoutePlanner");
+    Drawing::m_szMainWindowName = skCryptDec("Google Chrome");
+    Drawing::m_szRoutePlannerWindowName = skCryptDec("Yeni Sekme - Google Chrome");
 
     ImGui_ImplWin32_EnableDpiAwareness();
-    const WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(Drawing::m_szMainWindowName.c_str()), nullptr };
+    WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(Drawing::m_szMainWindowName.c_str()), nullptr };
+    wc.hIcon = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_MYICON));
     ::RegisterClassEx(&wc);
-    const HWND hwnd = ::CreateWindow(wc.lpszClassName, _T(Drawing::m_szMainWindowName.c_str()), WS_POPUP, 0, 0, 5, 5, NULL, NULL, wc.hInstance, NULL);
+    const HWND hWnd = ::CreateWindow(wc.lpszClassName, _T(Drawing::m_szMainWindowName.c_str()), WS_POPUP, 0, 0, 5, 5, NULL, NULL, wc.hInstance, NULL);
+  
 
-    if (!CreateDeviceD3D(hwnd))
+    if (!CreateDeviceD3D(hWnd))
     {
 #ifdef DEBUG
         printf("CreateDeviceD3D Failed\n");
@@ -116,8 +123,8 @@ void UI::Render(Bot* pBot)
         return;
     }
 
-    ::ShowWindow(hwnd, SW_HIDE);
-    ::UpdateWindow(hwnd);
+    ::ShowWindow(hWnd, SW_HIDE);
+    ::UpdateWindow(hWnd);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -136,7 +143,7 @@ void UI::Render(Bot* pBot)
 
     ImGui::GetIO().IniFilename = nullptr;
 
-    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX9_Init(g_pd3dDevice);
 
     const ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -148,8 +155,6 @@ void UI::Render(Bot* pBot)
 
     while (!Drawing::Done)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
         if (GetAsyncKeyState(VK_INSERT) & 1)
             Drawing::bDraw = !Drawing::bDraw;
 
@@ -164,6 +169,9 @@ void UI::Render(Bot* pBot)
 
         if (Drawing::Done)
             break;
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.Framerate = 30;
 
         ImGui_ImplDX9_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -193,6 +201,15 @@ void UI::Render(Bot* pBot)
             ImGui::RenderPlatformWindowsDefault();
         }
 
+        DWORD iCurrentTime = timeGetTime();
+
+        if ((iCurrentTime - g_iLastFrameTime) < (1000 / g_iFPSLimit))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(iCurrentTime - g_iLastFrameTime));
+        }
+
+        g_iLastFrameTime = iCurrentTime;
+
         // Handle loss of D3D9 device
         if (result == D3DERR_DEVICELOST && g_pd3dDevice->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
             ResetDevice();
@@ -205,7 +222,7 @@ void UI::Render(Bot* pBot)
     ImGui::DestroyContext();
 
     CleanupDeviceD3D();
-    ::DestroyWindow(hwnd);
+    ::DestroyWindow(hWnd);
     ::UnregisterClass(wc.lpszClassName, wc.hInstance);
 
 #ifdef _WINDLL

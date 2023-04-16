@@ -106,10 +106,10 @@ void World::Load(uint8_t iIndex)
 		}
 		catch (const std::exception& e)
 		{
-			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 			printf("%s\n", e.what());
+#else
+			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
 	}

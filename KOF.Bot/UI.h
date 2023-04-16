@@ -12,6 +12,9 @@ private:
 	static LPDIRECT3DDEVICE9        g_pd3dDevice;
 	static D3DPRESENT_PARAMETERS    g_d3dpp;
 
+	static DWORD g_iLastFrameTime;
+	static DWORD g_iFPSLimit;
+
 	static bool CreateDeviceD3D(HWND hWnd);
 	static void CleanupDeviceD3D();
 	static void ResetDevice();

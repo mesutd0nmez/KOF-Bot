@@ -685,6 +685,16 @@ void Drawing::DrawGameController()
             {
                 m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
             }
+
+           /* if (ImGui::Button(skCryptDec("Send To Magic Bag"), ImVec2(266, 0.0f)))
+            {
+                auto iInvenSlot0 = m_pClient->GetInventoryItemSlot(14);
+
+                if (iInvenSlot0.iItemID != 0)
+                {
+                    m_pClient->SendItemMovePacket(1, ITEM_INVEN_TO_MBAG, iInvenSlot0.iItemID, 0, 0);
+                }
+            }*/
         }
 
         ImGui::Spacing();
@@ -927,6 +937,44 @@ void Drawing::DrawGameController()
 
             if (ImGui::BeginTabItem(skCryptDec("Skill")))
             {
+                ImGui::TextUnformatted(skCryptDec("Features"));
+                ImGui::Separator();
+
+                ImGui::Spacing();
+                {
+                    bool bDisableCasting = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("DisableCasting"), false);
+
+                    if (ImGui::Checkbox(skCryptDec("##DisableCasting"), &bDisableCasting))
+                    {
+                        m_pClient->UpdateSkillSuccessRate(bDisableCasting);
+
+                        m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DisableCasting"), bDisableCasting ? 1 : 0);
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+                    ImGui::Text(skCryptDec("%%100 Skill Success Rate"));
+                    ImGui::PopStyleColor();
+                }
+
+                ImGui::TextUnformatted(skCryptDec("Settings"));
+                ImGui::Separator();
+
+                ImGui::Spacing();
+                {
+                    bool bUseHighLevelSkillFirst = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("UseHighLevelSkillsFirst"), true);
+
+                    if (ImGui::Checkbox(skCryptDec("##UseHighLevelSkillsFirst"), &bUseHighLevelSkillFirst))
+                    {
+                        m_pClient->UpdateSkillSuccessRate(bUseHighLevelSkillFirst);
+
+                        m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("UseHighLevelSkillsFirst"), bUseHighLevelSkillFirst ? 1 : 0);
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::Text(skCryptDec("Use high-level skills first"));
+                }
+
                 DrawAutomatedAttackSkillTree();
                 DrawAutomatedCharacterSkillTree();
 
@@ -1652,8 +1700,8 @@ void Drawing::DrawAutomatedAttackSkillTree()
                     m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), vecAttackList);
                 }
 
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip(x.szDesc.c_str());
+                /*if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip(x.szDesc.c_str());*/
 
                 ImGui::PopID();
             }
@@ -1703,8 +1751,8 @@ void Drawing::DrawAutomatedCharacterSkillTree()
                     m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), vecCharacterSkillList);
                 }
 
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip(x.szDesc.c_str());
+                /*if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip(x.szDesc.c_str());*/
 
                 ImGui::PopID();
             }
@@ -1727,7 +1775,7 @@ void Drawing::DrawMonsterListTree()
         ImGui::BeginDisabled();
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet;
-    if (ImGui::TreeNodeEx(skCryptDec("Target Monster List"), flags))
+    if (ImGui::TreeNodeEx(skCryptDec("Nearby Entity List"), flags))
     {
         std::vector<SNpcData> vecTargetList;
 

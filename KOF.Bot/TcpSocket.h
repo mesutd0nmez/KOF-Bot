@@ -106,40 +106,51 @@ public:
 private:
     static void Receive(TCPSocket* socket)
     {
-        std::vector<char> vecRecieveBuffer;
-        std::vector<char> vecStreamBuffer(socket->BUFFER_SIZE);
-
-        size_t iMessageLength;
-        while ((iMessageLength = recv(socket->sock, &vecStreamBuffer[0], vecStreamBuffer.size(), 0)) > 0)
+        try
         {
-            if (socket->isClosed)
-                return;
+            std::vector<char> vecRecieveBuffer;
+            std::vector<char> vecStreamBuffer(socket->BUFFER_SIZE);
 
-            vecStreamBuffer.resize(iMessageLength);
-            vecRecieveBuffer.insert(std::end(vecRecieveBuffer), std::begin(vecStreamBuffer), std::end(vecStreamBuffer));
-
-            if ((uint8_t)vecStreamBuffer[iMessageLength - 2] == 0xAA
-                && (uint8_t)vecStreamBuffer[iMessageLength - 1] == 0x55)
+            size_t iMessageLength;
+            while ((iMessageLength = recv(socket->sock, &vecStreamBuffer[0], vecStreamBuffer.size(), 0)) > 0)
             {
-                if (socket->onMessageReceived)
-                    socket->onMessageReceived((uint8_t*)vecRecieveBuffer.data(), vecRecieveBuffer.size());
+                if (socket->isClosed)
+                    return;
 
-                vecRecieveBuffer.clear();
+                vecStreamBuffer.resize(iMessageLength);
+                vecRecieveBuffer.insert(std::end(vecRecieveBuffer), std::begin(vecStreamBuffer), std::end(vecStreamBuffer));
+
+                if ((uint8_t)vecStreamBuffer[iMessageLength - 2] == 0xAA
+                    && (uint8_t)vecStreamBuffer[iMessageLength - 1] == 0x55)
+                {
+                    if (socket->onMessageReceived)
+                        socket->onMessageReceived((uint8_t*)vecRecieveBuffer.data(), vecRecieveBuffer.size());
+
+                    vecRecieveBuffer.clear();
+                }
+
+                vecStreamBuffer.clear();
+                vecStreamBuffer.resize(socket->BUFFER_SIZE);
             }
 
-            vecStreamBuffer.clear();
-            vecStreamBuffer.resize(socket->BUFFER_SIZE);
+            if (socket != nullptr)
+            {
+                socket->Close();
+
+                if (socket->onSocketClosed)
+                    socket->onSocketClosed(errno);
+
+                if (socket->deleteAfterClosed && socket != nullptr)
+                    delete socket;
+            }
         }
-
-        if (socket != nullptr)
+        catch (const std::exception& e)
         {
-            socket->Close();
-
-            if (socket->onSocketClosed)
-                socket->onSocketClosed(errno);
-
-            if (socket->deleteAfterClosed && socket != nullptr)
-                delete socket;
+    #ifdef DEBUG
+            printf("%s\n", e.what());
+    #else
+            DBG_UNREFERENCED_PARAMETER(e);
+    #endif
         }
     }
 

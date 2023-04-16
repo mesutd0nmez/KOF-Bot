@@ -118,6 +118,7 @@ private:
 
 private:
 	void AttackProcess();
+	void MoveToTargetProcess();
 	void SearchTargetProcess();
 
 	void AutoLootProcess();

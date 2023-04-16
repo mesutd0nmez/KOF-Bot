@@ -34,6 +34,9 @@ public:
 	int32_t GetClientSelectedTarget();
 	uint32_t GetClientSelectedTargetBase();
 
+	float GetRadius(DWORD iBase = 0);
+	float GetScale(DWORD iBase = 0);
+
 	bool IsDisconnect();
 
 	bool IsDeath(DWORD iBase = 0);
@@ -138,12 +141,12 @@ protected:
 	void SendPacket(Packet byBuffer);
 
 
-	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking);
+	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 protected:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool iAttacking = false);
+	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bAttacking = false, bool bBasicAttack = false);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -158,11 +161,11 @@ public:
 	void SendTownPacket();
 	void SetMovePosition(Vector3 v3MovePosition);
 
+	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
+
 protected:
-	
 	void SetPosition(Vector3 v3Position);
 	void SendShoppingMall(ShoppingMallType eType);
-	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
 	void SetTarget(uint32_t iTargetBase);
 	bool UseItem(uint32_t iItemID);
@@ -228,4 +231,7 @@ public:
 
 private:
 	std::chrono::milliseconds m_msLastBasicAttackTime;
+
+public:
+	void UpdateSkillSuccessRate(bool bDisableCasting);
 };
