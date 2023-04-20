@@ -34,6 +34,8 @@ float m_fScreenHeight = 0.0f;
 
 bool m_bInitPos = false;
 
+int32_t m_iSkillID = 0;
+
 void Drawing::Active()
 {
 	bDraw = true;
@@ -241,6 +243,13 @@ void Drawing::DrawRoutePlannerArea()
                     ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(128, 0, 0, 255), szInnPoint.c_str());
                 }
                 break;
+
+                case RouteStepType::STEP_GENIE:
+                {
+                    std::string szGeniePoint = skCryptDec("Genie Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(210, 105, 30, 255), szGeniePoint.c_str());
+                }
+                break;
             }
         }
 
@@ -407,6 +416,14 @@ void Drawing::DrawRoutePlannerArea()
                 }
             }
 
+            if (ImGui::Button(skCryptDec("Genie Point"), ImVec2(174.0f, 0.0f)))
+            {
+                if (iRouteCount > 0)
+                {
+                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_GENIE;
+                }
+            }
+
             if (iRouteCount == 0)
                 ImGui::EndDisabled();
         }
@@ -522,31 +539,38 @@ void Drawing::DrawGameController()
                         );
                     }
 
-                    std::vector<EntityInfo> vecOutMobList;
-                    if (m_pClient->SearchMob(vecOutMobList) > 0)
+                    auto& tmpVecPlayer = m_pClient->m_vecPlayer;
+
+                    for (const TPlayer& pPlayer : tmpVecPlayer)
                     {
-                        for (const EntityInfo& pMob : vecOutMobList)
+                        ImVec2 pNpcPosition = ImVec2(
+                            pOffsetPosition.x + std::ceil(pPlayer.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                            pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+
+                        ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
+                    }
+
+                    auto &tmpVecNpc = m_pClient->m_vecNpc;
+
+                    for (const TNpc& pMob : tmpVecNpc)
+                    {
+                        if (pMob.iMonsterOrNpc == 1)
                         {
                             ImVec2 pNpcPosition = ImVec2(
-                                pOffsetPosition.x + std::ceil(pMob.m_v3Position.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pMob.m_v3Position.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                                pOffsetPosition.x + std::ceil(pMob.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pMob.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
                             ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(255, 0, 0, 255), 0, 3.0f);
                         }
-                    }
-
-                    /*std::vector<EntityInfo> vecOutPlayerList;
-                    if (m_pClient->SearchPlayer(vecOutPlayerList) > 0)
-                    {
-                        for (const EntityInfo& pPlayer : vecOutPlayerList)
+                        else
                         {
-                            ImVec2 pPlayerPosition = ImVec2(
-                                pOffsetPosition.x + std::ceil(pPlayer.m_v3Position.m_fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
-                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlayer.m_v3Position.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
+                            ImVec2 pNpcPosition = ImVec2(
+                                pOffsetPosition.x + std::ceil(pMob.fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
+                                pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pMob.fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                            ImGui::GetWindowDrawList()->AddCircle(pPlayerPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
+                            ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 191, 255, 255), 0, 3.0f);
                         }
-                    }*/
+                    }
 
                     Vector3 v3CurrentPosition = m_pClient->GetPosition();
 
@@ -685,16 +709,6 @@ void Drawing::DrawGameController()
             {
                 m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
             }
-
-           /* if (ImGui::Button(skCryptDec("Send To Magic Bag"), ImVec2(266, 0.0f)))
-            {
-                auto iInvenSlot0 = m_pClient->GetInventoryItemSlot(14);
-
-                if (iInvenSlot0.iItemID != 0)
-                {
-                    m_pClient->SendItemMovePacket(1, ITEM_INVEN_TO_MBAG, iInvenSlot0.iItemID, 0, 0);
-                }
-            }*/
         }
 
         ImGui::Spacing();
@@ -773,6 +787,11 @@ void Drawing::DrawGameController()
                 DrawMainProtectionArea();
                 DrawMainFeaturesArea();
                 DrawMainAutoLootArea();
+
+                if (m_pClient->IsRogue())
+                {
+                    DrawMainRogueArea();
+                }
 
                 if (m_pClient->IsPriest())
                 {
@@ -987,6 +1006,13 @@ void Drawing::DrawGameController()
 
                 ImGui::EndTabItem();
             }
+
+            if (ImGui::BeginTabItem(skCryptDec("Developer")))
+            {
+                DrawMainDeveloperOnlyArea();
+
+                ImGui::EndTabItem();
+            }
             
 
             ImGui::EndTabBar();
@@ -1071,6 +1097,8 @@ void Drawing::DrawMainProtectionArea()
                 m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), iMinorProtectionValue);
 
             ImGui::PopItemWidth();
+
+           
         }
     }
 }
@@ -1127,8 +1155,6 @@ void Drawing::DrawMainFeaturesArea()
 
             if (Drawing::Bot->GetPlatformType() == PlatformType::CNKO)
             {
-                ImGui::SameLine();
-
                 bool bHyperNoah = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("HyperNoah"), false);
 
                 if (ImGui::Checkbox(skCryptDec("##HyperNoah"), &bHyperNoah))
@@ -1138,6 +1164,8 @@ void Drawing::DrawMainFeaturesArea()
 
                 ImGui::Text(skCryptDec("Hyper Noah"));
             }
+
+            
         }
     }
 }
@@ -1193,6 +1221,102 @@ void Drawing::DrawMainAutoLootArea()
     }
 }
 
+void Drawing::DrawMainDeveloperOnlyArea()
+{
+    ImGui::Spacing();
+    {
+#ifdef DEVELOPER_ONLY
+        ImGui::TextUnformatted(skCryptDec("PUS Bug"));
+        ImGui::Separator();
+
+        if (ImGui::Button(skCryptDec("Inventory (1) -> MBag (1)"), ImVec2(300.0f, 0.0f)))
+        {
+            auto iInvenSlot0 = m_pClient->GetInventoryItemSlot(14);
+
+            if (iInvenSlot0.iItemID != 0)
+            {
+                m_pClient->SendItemMovePacket(1, ITEM_INVEN_TO_MBAG, iInvenSlot0.iItemID, 0, 0);
+                m_pClient->SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+            }
+        }
+
+        if (ImGui::Button(skCryptDec("Inventory (2) -> MBag (2)"), ImVec2(300.0f, 0.0f)))
+        {
+            auto iInvenSlot1 = m_pClient->GetInventoryItemSlot(15);
+
+            if (iInvenSlot1.iItemID != 0)
+            {
+                m_pClient->SendItemMovePacket(1, ITEM_INVEN_TO_MBAG, iInvenSlot1.iItemID, 1, 1);
+                m_pClient->SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+            }
+        }
+
+        ImGui::TextUnformatted(skCryptDec("Fake Item"));
+        ImGui::Separator();
+
+        if (ImGui::Button(skCryptDec("Dagger (+1) -> Oreads (Peri)"), ImVec2(300.0f, 0.0f)))
+        {
+            auto iDagger = m_pClient->GetInventoryItem(110110001); // +1 Dagger 
+
+            if (iDagger.iItemID != 0)
+            {
+                m_pClient->SendItemMovePacket(1, ITEM_INVEN_INVEN, iDagger.iItemID, iDagger.iPos - 14, 35);
+                m_pClient->SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+            }
+        }
+
+        if (ImGui::Button(skCryptDec("Inn Hostess (1) -> MBag Left"), ImVec2(300.0f, 0.0f)))
+        {
+            auto &tmpVecNpc = m_pClient->m_vecNpc;
+            auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+                [&](const TNpc& a) { return a.iProtoID == 16096; });
+
+            if (findedNpc != tmpVecNpc.end())
+            {
+                m_pClient->SendWarehouseGetIn(findedNpc->iID, 110110001, 0, 0, 54, 1);
+            }
+        }
+
+        if (ImGui::Button(skCryptDec("Inn Hostess (2) -> MBag Right"), ImVec2(300.0f, 0.0f)))
+        {
+            auto &tmpVecNpc = m_pClient->m_vecNpc;
+            auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+                [&](const TNpc& a) { return a.iProtoID == 16096; });
+
+            if (findedNpc != tmpVecNpc.end())
+            {
+                m_pClient->SendWarehouseGetIn(findedNpc->iID, 110110001, 0, 1, 68, 1);
+            }
+        }
+
+        ImGui::TextUnformatted(skCryptDec("Use skill with ID"));
+        ImGui::Separator();
+
+        ImGui::DragInt(skCryptDec("##UseSkillID"), &m_iSkillID, 1, 0, 10);
+
+        if (ImGui::Button(skCryptDec("Use Skill"), ImVec2(300.0f, 0.0f)))
+        {
+            std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+            if (Drawing::Bot->GetSkillTable(&pSkillTable))
+            {
+                auto pSkillData = pSkillTable->find(m_iSkillID);
+
+                if (pSkillData != pSkillTable->end())
+                {
+                    if (m_pClient->GetTarget())
+                    {
+                        m_pClient->UseSkillWithPacket(pSkillData->second, m_pClient->GetTarget());
+                    }
+                    else
+                    {
+                        m_pClient->UseSkillWithPacket(pSkillData->second, m_pClient->GetID());
+                    }            
+                }
+            }
+        }
+#endif
+    }
+}
 void Drawing::DrawMainSupplyArea()
 {
     ImGui::Spacing();
@@ -1268,6 +1392,24 @@ void Drawing::DrawMainSupplyArea()
 
             ImGui::PopID();
         }
+    }
+}
+
+void Drawing::DrawMainRogueArea()
+{
+    ImGui::Spacing();
+    {
+        ImGui::TextUnformatted(skCryptDec("Rogue Management"));
+        ImGui::Separator();
+
+        bool bPartySwift = m_pUserConfiguration->GetBool(skCryptDec("Rogue"), skCryptDec("PartySwift"), true);
+
+        if (ImGui::Checkbox(skCryptDec("##RoguePartySwift"), &bPartySwift))
+            m_pUserConfiguration->SetInt(skCryptDec("Rogue"), skCryptDec("PartySwift"), bPartySwift ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Party Swift"));
     }
 }
 
@@ -1777,82 +1919,75 @@ void Drawing::DrawMonsterListTree()
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Bullet;
     if (ImGui::TreeNodeEx(skCryptDec("Nearby Entity List"), flags))
     {
-        std::vector<SNpcData> vecTargetList;
+        auto &tmpVecNpc = m_pClient->m_vecNpc;
 
+        std::vector<SNpcData> vecTargetList;
         std::vector<int> vecSelectedNpcList = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
 
-        std::vector<EntityInfo> vecOutMobList;
-        if (m_pClient->SearchMob(vecOutMobList) > 0)
+        for (const auto& x : vecSelectedNpcList)
         {
-            for (const auto& x : vecSelectedNpcList)
+            SNpcData pNpcData;
+
+            pNpcData.iProtoID = x;
+
+            vecTargetList.push_back(pNpcData);
+        }
+
+        for (const auto& x : tmpVecNpc)
+        {
+            if (x.iMonsterOrNpc != 1)
+                continue;
+
+            const auto pFindedNpc = std::find_if(vecTargetList.begin(), vecTargetList.end(),
+                [x](const SNpcData& a) { return a.iProtoID == x.iProtoID; });
+
+            if (pFindedNpc != vecTargetList.end())
+                continue;
+
+            SNpcData pNpcData;
+
+            pNpcData.iProtoID = x.iProtoID;
+
+            vecTargetList.push_back(pNpcData);
+        }
+
+        for (const auto& x : vecTargetList)
+        {
+            ImGui::PushID(x.iProtoID);
+
+            bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
+
+            std::string szNpcName = skCryptDec("~Unknown~");
+
+            std::map<uint32_t, __TABLE_NPC>* pNpcTable;
+            if (Drawing::Bot->GetNpcTable(&pNpcTable))
             {
-                SNpcData pNpcData;
+                auto pNpcInfo = pNpcTable->find(x.iProtoID);
 
-                pNpcData.iProtoID = x;
-
-                const auto pFindedNpc = std::find_if(vecOutMobList.begin(), vecOutMobList.end(),
-                    [x](const EntityInfo& a) { return a.m_iProtoId == x; });
-
-                vecTargetList.push_back(pNpcData);
+                if (pNpcInfo != pNpcTable->end())
+                    szNpcName = pNpcInfo->second.szText;
             }
 
-            for (const auto& x : vecOutMobList)
+            std::map<uint32_t, __TABLE_MOB_USKO>* pMobTable;
+            if (Drawing::Bot->GetMobTable(&pMobTable))
             {
-                const auto pFindedNpc = std::find_if(vecTargetList.begin(), vecTargetList.end(),
-                    [x](const SNpcData& a) { return a.iProtoID == x.m_iProtoId; });
+                auto pMobInfo = pMobTable->find(x.iProtoID);
 
-                if (((bRangeLimit 
-                    && m_pClient->GetDistance(x.m_v3Position) <= (float)iRangeLimitValue) 
-                    || !bRangeLimit) 
-                    && x.m_bEnemy == true
-                    && pFindedNpc == vecTargetList.end())
-                {
-                    SNpcData pNpcData;
-
-                    pNpcData.iProtoID = x.m_iProtoId;
-
-                    vecTargetList.push_back(pNpcData);
-                }
+                if (pMobInfo != pMobTable->end())
+                    szNpcName = pMobInfo->second.szText;
             }
 
-            for (const auto& x : vecTargetList)
+            if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
             {
-                ImGui::PushID(x.iProtoID);
+                if (bSelected)
+                    vecSelectedNpcList.push_back(x.iProtoID);
+                else
+                    vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
 
-                bool bSelected = std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID) != vecSelectedNpcList.end();
-
-                std::string szNpcName = skCryptDec("~Unknown~");
-
-                std::map<uint32_t, __TABLE_NPC>* pNpcTable;
-                if (Drawing::Bot->GetNpcTable(&pNpcTable))
-                {
-                    auto pNpcInfo = pNpcTable->find(x.iProtoID);
-
-                    if (pNpcInfo != pNpcTable->end())
-                        szNpcName = pNpcInfo->second.szText;
-                }
-
-                std::map<uint32_t, __TABLE_MOB_USKO>* pMobTable;
-                if (Drawing::Bot->GetMobTable(&pMobTable))
-                {
-                    auto pMobInfo = pMobTable->find(x.iProtoID);
-
-                    if (pMobInfo != pMobTable->end())
-                        szNpcName = pMobInfo->second.szText;
-                }          
-
-                if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
-                {
-                    if (bSelected)
-                        vecSelectedNpcList.push_back(x.iProtoID);
-                    else
-                        vecSelectedNpcList.erase(std::find(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), x.iProtoID));
-
-                    m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("NpcList"), vecSelectedNpcList);
-                }
-
-                ImGui::PopID();
+                m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("NpcList"), vecSelectedNpcList);
             }
+
+            ImGui::PopID();
         }
 
         ImGui::TreePop();

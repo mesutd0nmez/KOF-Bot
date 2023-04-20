@@ -301,6 +301,7 @@ void Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lp
 	}
 
 	SetString(lpAppName, lpKeyName, lpDefault);
+
 	lpOutString = lpDefault;
 }
 
@@ -313,12 +314,16 @@ std::string Ini::GetString(const char* lpAppName, const char* lpKeyName, const c
 
 const char* Ini::SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
 	ConfigMap::iterator itr = m_configMap.find(lpAppName);
 
 	m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
 
 	itr = m_configMap.find(lpAppName);
 	itr->second[lpKeyName] = lpDefault;
+
 	Save();
+
 	return lpDefault;
 }

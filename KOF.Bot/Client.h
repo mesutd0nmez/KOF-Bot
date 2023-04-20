@@ -74,7 +74,7 @@ public:
 	bool IsBuffActive(int32_t iBuffType);
 	bool IsSkillActive(int32_t iSkillID);
 
-	bool IsBlinking(DWORD iBase = 0);
+	bool IsBlinking(int32_t iTargetID = -1);
 
 	float GetDistance(Vector3 v3Position);
 	float GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition);
@@ -102,15 +102,14 @@ protected:
 protected:
 	Bot* m_Bot;
 	TPlayer m_PlayerMySelf;
-	
-	std::vector<TNpc> m_vecNpc;
 
 protected:
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
-	std::recursive_mutex m_mutexLootList;
+	std::vector<TNpc> m_vecNpc;
+	std::vector<TPlayer> m_vecPlayer;
 
 protected:
 	std::vector<TLoot> m_vecLootList;
@@ -122,6 +121,8 @@ protected:
 
 public:
 	void StopMove();
+
+	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 
 protected:
 	bool IsEnemy(DWORD iBase);
@@ -139,9 +140,6 @@ protected:
 	void SelectCharacter();
 
 	void SendPacket(Packet byBuffer);
-
-
-	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 
@@ -162,10 +160,10 @@ public:
 	void SetMovePosition(Vector3 v3MovePosition);
 
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
-
+	void SendShoppingMall(ShoppingMallType eType);
 protected:
 	void SetPosition(Vector3 v3Position);
-	void SendShoppingMall(ShoppingMallType eType);
+
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
 	void SetTarget(uint32_t iTargetBase);
 	bool UseItem(uint32_t iItemID);
@@ -202,11 +200,7 @@ public:
 	bool GetPartyMember(int32_t iID, Party& pPartyMember);
 
 public:
-	bool GetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo& pPartyBuffInfo);
-	void SetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo pPartyBuffInfo);
-
-protected:
-	std::map<int32_t, PartyBuffInfo> m_mapPartyBuffInfo;
+	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 
 protected:
 	BYTE ReadByte(DWORD dwAddress);
@@ -234,4 +228,13 @@ private:
 
 public:
 	void UpdateSkillSuccessRate(bool bDisableCasting);
+
+protected:
+	std::vector<PartyMember> m_vecPartyMembers;
+
+protected:
+	bool m_bLunarWarDressUp;
+
+protected:
+	std::vector<int32_t> m_vecRegionUserList;
 };

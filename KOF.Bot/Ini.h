@@ -27,6 +27,8 @@ private:
 
 	ConfigMap m_configMap;
 
+	std::recursive_mutex m_mutex;
+
 public:
 	Ini();
 	Ini(const char* lpFilename);

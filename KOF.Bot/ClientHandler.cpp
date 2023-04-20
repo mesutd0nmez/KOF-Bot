@@ -33,7 +33,9 @@ void ClientHandler::Clear()
 	m_bConfigurationLoaded = false;
 
 	m_bMailSlotWorking = false;
+	m_hMailSlotRecv = nullptr;
 	m_szMailSlotRecvName.clear();
+	m_hMailSlotSend = nullptr;
 	m_szMailSlotSendName.clear();
 
 	m_RecvHookAddress = 0;
@@ -95,18 +97,28 @@ void ClientHandler::StopHandler()
 #endif
 
 	m_bWorking = false;
+	m_bMailSlotWorking = false;
 
 	GetClient()->Clear();
 }
 
 void ClientHandler::Process()
 {
-	if (m_bWorking && IsDisconnect())
+	if (m_bWorking)
 	{
+		if (IsDisconnect())
+		{
 #ifdef DEBUG
-		printf("Client connection closed\n");
+			printf("Client connection closed\n");
 #endif
-		StopHandler();
+			StopHandler();
+		}
+	}
+
+	if (m_bMailSlotWorking)
+	{
+		MailSlotRecvProcess();
+		MailSlotSendProcess();
 	}
 }
 
@@ -116,37 +128,44 @@ void ClientHandler::OnReady()
 	printf("Client handler ready\n");
 #endif
 
-	new std::thread([this]() { m_Bot->InitializeStaticData(); });
-	new std::thread([this]() { m_Bot->InitializeRouteData(); });
-	new std::thread([this]() { m_Bot->InitializeSupplyData(); });
-	new std::thread([this]() { m_Bot->InitializePriestData(); });
-
-	if (m_Bot->m_iSelectedAccount != -1 && m_Bot->m_jAccountList.size() > 0)
+#ifndef DISABLE_AUTO_LOGIN
+	new std::thread([this]()
 	{
-		PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
+		WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO")))) == 0)
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		new std::thread([this]() { m_Bot->InitializeStaticData(); });
+		new std::thread([this]() { m_Bot->InitializeRouteData(); });
+		new std::thread([this]() { m_Bot->InitializeSupplyData(); });
+		new std::thread([this]() { m_Bot->InitializePriestData(); });
 
-		new std::thread([this]()
+		if (m_Bot->m_iSelectedAccount != -1 && m_Bot->m_jAccountList.size() > 0)
 		{
-			WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
+			new std::thread([this]()
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
 
-			m_Bot->m_jSelectedAccount = m_Bot->m_jAccountList.at(m_Bot->m_iSelectedAccount);
+				WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
+				WaitCondition(m_Bot->m_bPipeWorking == false);
 
-			std::string szAccountIdAttribute = skCryptDec("accountId");
-			std::string szPasswordAttribute = skCryptDec("password");
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-			SetLoginInformation(
-				m_Bot->m_jSelectedAccount[szAccountIdAttribute.c_str()].get<std::string>(),
-				m_Bot->m_jSelectedAccount[szPasswordAttribute.c_str()].get<std::string>());
+				m_Bot->m_jSelectedAccount = m_Bot->m_jAccountList.at(m_Bot->m_iSelectedAccount);
 
-			WriteLoginInformation(m_szAccountId, m_szPassword);
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			ConnectLoginServer();
-		});
-	}
+				std::string szAccountIdAttribute = skCryptDec("accountId");
+				std::string szPasswordAttribute = skCryptDec("password");
+
+				SetLoginInformation(
+					m_Bot->m_jSelectedAccount[szAccountIdAttribute.c_str()].get<std::string>(),
+					m_Bot->m_jSelectedAccount[szPasswordAttribute.c_str()].get<std::string>());
+
+				WriteLoginInformation(m_szAccountId, m_szPassword);
+				ConnectLoginServer();
+			});
+		}
+	});
+#endif
 }
 
 void ClientHandler::PatchClient()
@@ -167,8 +186,6 @@ void ClientHandler::PatchClient()
 	PatchSendAddress();
 
 	m_bMailSlotWorking = true;
-	new std::thread([this]() { MailSlotRecvProcess(); });
-	new std::thread([this]() { MailSlotSendProcess(); });
 
 	OnReady();
 }
@@ -203,6 +220,20 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 
 	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF_RECV\\") + std::to_string(m_Bot->GetInjectedProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
+
+	if (m_hMailSlotRecv == nullptr)
+	{
+		m_hMailSlotRecv = CreateMailslotA(m_szMailSlotRecvName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
+
+		if (m_hMailSlotRecv == INVALID_HANDLE_VALUE)
+		{
+#ifdef DEBUG
+			printf("CreateMailslot recv failed with %d\n", GetLastError());
+#endif
+			CloseHandle(hProcess);
+			return;
+		}
+	}
 
 	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -369,6 +400,20 @@ void ClientHandler::PatchSendAddress()
 	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\KOF_SEND\\") + std::to_string(m_Bot->GetInjectedProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotSendName.begin(), m_szMailSlotSendName.end());
 
+	if (m_hMailSlotSend == nullptr)
+	{
+		m_hMailSlotSend = CreateMailslotA(m_szMailSlotSendName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
+
+		if (m_hMailSlotSend == INVALID_HANDLE_VALUE)
+		{
+#ifdef DEBUG
+			printf("CreateMailslot send failed with %d\n", GetLastError());
+#endif
+			CloseHandle(hProcess);
+			return;
+		}
+	}
+
 	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
 	if (pMailSlotNameAddress == 0)
@@ -496,115 +541,85 @@ void ClientHandler::PatchSendAddress()
 
 void ClientHandler::MailSlotRecvProcess()
 {
-	HANDLE hSlot = CreateMailslotA(m_szMailSlotRecvName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
-
-	if (hSlot == INVALID_HANDLE_VALUE)
+	try
 	{
-#ifdef DEBUG
-		printf("CreateMailslot failed with %d\n", GetLastError());
-#endif
-		return;
+		DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
+
+		BOOL bResult = GetMailslotInfo(m_hMailSlotRecv, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
+
+		if (!bResult)
+			return;
+
+		if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+			return;
+
+		std::vector<uint8_t> vecMessageBuffer;
+
+		vecMessageBuffer.resize(iCurrentMesageSize);
+
+		OVERLAPPED ov;
+		ov.Offset = 0;
+		ov.OffsetHigh = 0;
+		ov.hEvent = NULL;
+
+		bResult = ReadFile(m_hMailSlotRecv, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
+
+		if (!bResult)
+			return;
+
+		vecMessageBuffer.resize(iMessageReadSize);
+
+		onClientRecvProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
 	}
-
-	while (m_bMailSlotWorking)
+	catch (const std::exception& e)
 	{
-		try
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-			DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
-			OVERLAPPED ov;
-
-			BOOL fResult = GetMailslotInfo(hSlot, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
-
-			if (!fResult)
-				continue;
-
-			if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
-				continue;
-
-			std::vector<uint8_t> vecMessageBuffer;
-
-			vecMessageBuffer.resize(iCurrentMesageSize);
-
-			ov.Offset = 0;
-			ov.OffsetHigh = 0;
-			ov.hEvent = NULL;
-
-			fResult = ReadFile(hSlot, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
-
-			if (!fResult)
-				continue;
-
-			vecMessageBuffer.resize(iMessageReadSize);
-
-			onClientRecvProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
-		}
-		catch (const std::exception& e)
-		{
 #ifdef DEBUG
-			printf("MailSlotRecvProcess:Exception: %s\n", e.what());
+		printf("MailSlotRecvProcess:Exception: %s\n", e.what());
 #else
-			UNREFERENCED_PARAMETER(e);
+		UNREFERENCED_PARAMETER(e);
 #endif
-		}
 	}
 }
 
 void ClientHandler::MailSlotSendProcess()
 {
-	HANDLE hSlot = CreateMailslotA(m_szMailSlotSendName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
-
-	if (hSlot == INVALID_HANDLE_VALUE)
+	try
 	{
-#ifdef DEBUG
-		printf("CreateMailslot failed with %d\n", GetLastError());
-#endif
-		return;
+		DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
+
+		BOOL bResult = GetMailslotInfo(m_hMailSlotSend, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
+
+		if (!bResult)
+			return;
+
+		if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+			return;
+
+		std::vector<uint8_t> vecMessageBuffer;
+
+		vecMessageBuffer.resize(iCurrentMesageSize);
+
+		OVERLAPPED ov;
+		ov.Offset = 0;
+		ov.OffsetHigh = 0;
+		ov.hEvent = NULL;
+
+		bResult = ReadFile(m_hMailSlotSend, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
+
+		if (!bResult)
+			return;
+
+		vecMessageBuffer.resize(iMessageReadSize);
+
+		onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
 	}
-
-	while (m_bMailSlotWorking)
+	catch (const std::exception& e)
 	{
-		try
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-			DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
-			OVERLAPPED ov;
-
-			BOOL fResult = GetMailslotInfo(hSlot, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
-
-			if (!fResult)
-				continue;
-
-			if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
-				continue;
-
-			std::vector<uint8_t> vecMessageBuffer;
-
-			vecMessageBuffer.resize(iCurrentMesageSize);
-
-			ov.Offset = 0;
-			ov.OffsetHigh = 0;
-			ov.hEvent = NULL;
-
-			fResult = ReadFile(hSlot, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
-
-			if (!fResult)
-				continue;
-
-			vecMessageBuffer.resize(iMessageReadSize);
-
-			onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
-		}
-		catch (const std::exception& e)
-		{
 #ifdef DEBUG
-			printf("MailSlotSendProcess:Exception: %s\n", e.what());
+		printf("MailSlotSendProcess:Exception: %s\n", e.what());
 #else
-			UNREFERENCED_PARAMETER(e);
+		UNREFERENCED_PARAMETER(e);
 #endif
-		}
 	}
 }
 
@@ -806,8 +821,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			m_PlayerMySelf.iID = pkt.read<int32_t>();
 
-			int iNameLen = pkt.read<uint8_t>();
-			pkt.readString(m_PlayerMySelf.szName, iNameLen);
+			pkt.readString(m_PlayerMySelf.szName);
 
 			m_PlayerMySelf.fX = (pkt.read<uint16_t>()) / 10.0f;
 			m_PlayerMySelf.fY = (pkt.read<uint16_t>()) / 10.0f;
@@ -840,8 +854,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			int16_t iAllianceID = pkt.read<int16_t>();
 			uint8_t byFlag = pkt.read<uint8_t>();
 
-			uint8_t iKnightNameLen = pkt.read<uint8_t>();
-			pkt.readString(m_PlayerMySelf.szKnights, iKnightNameLen);
+			pkt.readString(m_PlayerMySelf.szKnights);
 
 			m_PlayerMySelf.iKnightsGrade = pkt.read<uint8_t>();
 			m_PlayerMySelf.iKnightsRank = pkt.read<uint8_t>();
@@ -1083,9 +1096,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		{
 			int16_t iNpcCount = pkt.read<int16_t>();
 
-			if (0 == iNpcCount)
-				if (iNpcCount < 0 || iNpcCount >= 1000)
-					return;
+			if (iNpcCount <= 0)
+				return;
 
 			for (int16_t i = 0; i < iNpcCount; i++)
 			{
@@ -1093,7 +1105,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				int32_t iNpcID = pNpc.iID;
 				auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-					[iNpcID](const TNpc& a) { return a.iID == iNpcID; });
+					[&](const TNpc& a) { return a.iID == iNpcID; });
 
 				if (it == m_vecNpc.end())
 					m_vecNpc.push_back(pNpc);
@@ -1121,12 +1133,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						[pNpc](const TNpc& a) { return a.iID == pNpc.iID; });
 
 					if (it == m_vecNpc.end())
+					{
 						m_vecNpc.push_back(pNpc);
+					}
 					else
 						*it = pNpc;
 
 #ifdef DEBUG
-					printf("RecvProcess::WIZ_NPC_INOUT: %d,%d\n", iType, pNpc.iID);
+					printf("RecvProcess::WIZ_NPC_INOUT: INOUT_IN - %d,%d\n", iType, pNpc.iID);
 #endif
 				}
 				break;
@@ -1135,8 +1149,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iNpcID = pkt.read<int32_t>();
 
+					m_vecNpc.erase(
+						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
+							[&](const TNpc& a) { return a.iID == iNpcID; }),
+						m_vecNpc.end());
+
 #ifdef DEBUG
-					printf("RecvProcess::WIZ_NPC_INOUT: %d,%d\n", iType, iNpcID);
+					printf("RecvProcess::WIZ_NPC_INOUT: INOUT_OUT - %d,%d\n", iType, iNpcID);
 #endif
 				}
 				break;
@@ -1156,9 +1175,131 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		{
 			int16_t iNpcCount = pkt.read<int16_t>();
 
+			if (iNpcCount <= 0)
+				return;
+
+			std::vector<int32_t> vecRegionNpcList;
+
+			for (int16_t i = 0; i < iNpcCount; i++)
+			{
+				int32_t iNpcID = pkt.read<int32_t>();
+
+				vecRegionNpcList.push_back(iNpcID);
+			}
+
+			auto& tmpVecNpc = m_vecNpc;
+
+			for (const auto& pNpc : tmpVecNpc)
+			{
+				if (std::find(vecRegionNpcList.begin(), vecRegionNpcList.end(), pNpc.iID) == vecRegionNpcList.end())
+				{
+					/*vecRegionNpcList.erase(
+						std::remove_if(vecRegionNpcList.begin(), vecRegionNpcList.end(),
+							[&](const int32_t& a) { return a == pNpc.iID; }),
+						vecRegionNpcList.end());*/
+
+					m_vecNpc.erase(
+						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
+							[&](const TNpc& a) { return a.iID == pNpc.iID; }),
+						m_vecNpc.end());
+				}
+				else
+				{
+					/*if (pNpc.eState == PSA_DYING || pNpc.eState == PSA_DEATH)
+						continue;
+
+					m_vecNpc.erase(
+						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
+							[&](const TNpc& a) { return a.iID == pNpc.iID; }),
+						m_vecNpc.end());*/
+				}
+			}
+
 #ifdef DEBUG
-			printf("RecvProcess::WIZ_NPC_REGION: New npc count %d\n", iNpcCount);
+			printf("RecvProcess::WIZ_NPC_REGION: Npc region change completed! Region list size %d, current npc list %d\n", vecRegionNpcList.size(), m_vecNpc.size());
 #endif
+		}
+		break;
+
+		case WIZ_REQ_USERIN:
+		{
+			int16_t iUserCount = pkt.read<int16_t>();
+
+			if (iUserCount <= 0)
+				return;
+
+			for (int16_t i = 0; i < iUserCount; i++)
+			{
+				uint8_t iUnknown0 = pkt.read<uint8_t>();
+
+				auto pUser = InitializePlayer(pkt);
+
+				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+					[&](const TPlayer& a) { return a.iID == pUser.iID; });
+
+				if (it == m_vecPlayer.end())
+					m_vecPlayer.push_back(pUser);
+				else
+					*it = pUser;
+			}
+
+#ifdef DEBUG
+			printf("RecvProcess::WIZ_REQ_USERIN: Size %d\n", iUserCount);
+#endif
+		}
+		break;
+
+		case WIZ_USER_INOUT:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+			uint8_t iUnknown0 = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+			case InOut::INOUT_IN:
+			case InOut::INOUT_RESPAWN:
+			case InOut::INOUT_WARP:
+			{
+				auto pPlayer = InitializePlayer(pkt);
+
+				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+					[&](const TPlayer& a) { return a.iID == pPlayer.iID; });
+
+				if (it == m_vecPlayer.end())
+					m_vecPlayer.push_back(pPlayer);
+				else
+					*it = pPlayer;
+
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_USER_INOUT: INOUT_IN | INOUT_RESPAWN | INOUT_WARP - %d,%d\n", iType, pPlayer.iID);
+#endif
+			}
+			break;
+
+			case InOut::INOUT_OUT:
+			{
+				int32_t iPlayerID = pkt.read<int32_t>();
+
+				m_vecPlayer.erase(
+					std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[&](const TPlayer& a) { return a.iID == iPlayerID; }),
+					m_vecPlayer.end());
+
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_USER_INOUT: INOUT_OUT - %d,%d\n", iType, iPlayerID);
+#endif
+			}
+			break;
+
+			default:
+			{
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_USER_INOUT: %d not implemented\n", iType);
+#endif
+			}
+
+			break;
+			}
 		}
 		break;
 
@@ -1168,20 +1309,75 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			switch (iType)
 			{
+				case 0:
+				{
+					m_vecRegionUserList.clear();
+
+#ifdef DEBUG
+					printf("RecvProcess::WIZ_REGIONCHANGE: Region change activity start, current user count: %d\n", m_vecPlayer.size());
+#endif
+				}
+				break;
+
 				case 1:
 				{
 					int16_t iUserCount = pkt.read<int16_t>();
 
+					for (int16_t i = 0; i < iUserCount; i++)
+					{
+						int32_t iUserID = pkt.read<int32_t>();
+
+						if (iUserID == GetID())
+							continue;
+
+						m_vecRegionUserList.push_back(iUserID);
+					}
+
 #ifdef DEBUG
-					printf("RecvProcess::WIZ_REGIONCHANGE: New user count %d\n", iUserCount);
+					printf("RecvProcess::WIZ_REGIONCHANGE: Region change activity user count: %d\n", m_vecRegionUserList.size());
 #endif
+				}
+				break;
+
+				case 2:
+				{
+					auto& tmpVecPlayer = m_vecPlayer;
+
+					for (const auto& pPlayer : tmpVecPlayer)
+					{
+						if (std::find(m_vecRegionUserList.begin(), m_vecRegionUserList.end(), pPlayer.iID) == m_vecRegionUserList.end())
+						{
+							/*m_vecRegionUserList.erase(
+								std::remove_if(m_vecRegionUserList.begin(), m_vecRegionUserList.end(),
+									[&](const int32_t& a) { return a == pPlayer.iID; }),
+								m_vecRegionUserList.end());*/
+
+							m_vecPlayer.erase(
+								std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[&](const TPlayer& a) { return a.iID == pPlayer.iID; }),
+								m_vecPlayer.end());
+						}
+						else
+						{
+							/*m_vecPlayer.erase(
+								std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[&](const TPlayer& a) { return a.iID == pPlayer.iID; }),
+								m_vecPlayer.end());*/
+						}
+					}
+
+#ifdef DEBUG
+					printf("RecvProcess::WIZ_REGIONCHANGE: Region change activity end region user count: %d, current user list: %d\n", m_vecRegionUserList.size(), m_vecPlayer.size());
+#endif
+
+					m_vecRegionUserList.clear();
 				}
 				break;
 
 				default:
 				{
 #ifdef DEBUG
-					printf("RecvProcess::WIZ_REGIONCHANGE: Type %d not implemented!\n", iType);
+					printf("RecvProcess::WIZ_REGIONCHANGE: Type %d not implemented! [%s]\n", iType, pkt.convertToHex().c_str());
 #endif
 				}
 				break;
@@ -1192,6 +1388,188 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		case WIZ_DEAD:
 		{
 			int32_t iID = pkt.read<int32_t>();
+
+			if (m_PlayerMySelf.iID == iID)
+			{
+				m_PlayerMySelf.eState = PSA_DEATH;
+
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
+#endif
+			}
+			else
+			{
+				if (iID >= 5000)
+				{
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+						[&](const TNpc& a) { return a.iID == iID; });
+
+					if (it != m_vecNpc.end())
+					{
+						it->eState = PSA_DEATH;
+
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_DEAD: %d Npc Dead\n", iID);
+#endif
+					}
+				}
+				else
+				{
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[&](const TPlayer& a) { return a.iID == iID; });
+
+					if (it != m_vecPlayer.end())
+					{
+						it->eState = PSA_DEATH;
+
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_DEAD: %d Player Dead\n", iID);
+#endif
+					}
+				}
+			}
+		}
+		break;
+
+		case WIZ_ATTACK:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+			uint8_t iResult = pkt.read<uint8_t>();
+
+			switch (iResult)
+			{
+				case ATTACK_FAIL:
+				{
+					int32_t iAttackID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+	#ifdef DEBUG
+					printf("RecvProcess::WIZ_ATTACK: %d,%d FAIL\n", iAttackID, iTargetID);
+	#endif
+				}
+				break;
+
+				case ATTACK_SUCCESS:
+				{
+					int32_t iAttackID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+	#ifdef DEBUG
+					printf("RecvProcess::WIZ_ATTACK: %d,%d SUCCESS\n", iAttackID, iTargetID);
+	#endif
+				}
+				break;
+
+				case ATTACK_TARGET_DEAD:
+				case ATTACK_TARGET_DEAD_OK:
+				{
+					int32_t iAttackID = pkt.read<int32_t>();
+					int32_t iTargetID = pkt.read<int32_t>();
+
+					if (iTargetID >= 5000)
+					{
+						auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+							[&](const TNpc& a) { return a.iID == iTargetID; });
+
+						if (it != m_vecNpc.end())
+						{
+							it->eState = PSA_DEATH;
+	#ifdef DEBUG
+							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Npc Dead\n", iTargetID);
+	#endif
+						}
+					}
+					else
+					{
+						auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+							[&](const TPlayer& a) { return a.iID == iTargetID; });
+
+						if (it != m_vecPlayer.end())
+						{
+							it->eState = PSA_DEATH;
+
+#ifdef DEBUG
+							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Player Dead\n", iTargetID);
+#endif
+						}
+					}
+				}
+				break;
+
+				default:
+				{
+	#ifdef DEBUG
+					printf("RecvProcess::WIZ_ATTACK: %d not implemented\n", iResult);
+	#endif
+				}
+				break;
+			}
+		}
+		break;
+
+		case WIZ_TARGET_HP:
+		{
+			int32_t iID = pkt.read<int32_t>();
+			uint8_t iUpdateImmediately = pkt.read<uint8_t>();
+
+			int32_t iTargetHPMax = pkt.read<int32_t>();
+			int32_t iTargetHPCur = pkt.read<int32_t>();
+
+			int16_t iTargetHPChange = pkt.read<int16_t>();
+
+			if (m_PlayerMySelf.iID == iID)
+			{
+				m_PlayerMySelf.iHPMax = iTargetHPMax;
+				m_PlayerMySelf.iHP = iTargetHPCur;
+
+				if (m_PlayerMySelf.iHPMax > 0 && m_PlayerMySelf.iHP <= 0)
+					m_PlayerMySelf.eState = PSA_DEATH;
+
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n",
+					m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
+#endif
+			}
+			else
+			{
+				if (iID >= 5000)
+				{
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+						[&](const TNpc& a) { return a.iID == iID; });
+
+					if (it != m_vecNpc.end())
+					{
+						it->iHPMax = iTargetHPMax;
+						it->iHP = iTargetHPCur;
+
+						if (it->iHPMax > 0 && it->iHP <= 0)
+							it->eState = PSA_DEATH;
+
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->iHP, it->iHPMax);
+#endif
+					}
+				}
+				else
+				{
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[iID](const TPlayer& a) { return a.iID == iID; });
+
+					if (it != m_vecPlayer.end())
+					{
+						it->iHPMax = iTargetHPMax;
+						it->iHP = iTargetHPCur;
+
+						if (it->iHPMax > 0 && it->iHP <= 0)
+							it->eState = PSA_DEATH;
+
+#ifdef DEBUG
+						printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n",
+							it->szName.c_str(), it->iHP, it->iHPMax);
+#endif
+					}
+				}
+			}
 		}
 		break;
 
@@ -1205,6 +1583,35 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			int16_t iSpeed = pkt.read<int16_t>();
 			uint8_t iMoveType = pkt.read<uint8_t>();
+
+			if (m_PlayerMySelf.iID == iID)
+			{
+				m_PlayerMySelf.fX = fX;
+				m_PlayerMySelf.fY = fY;
+				m_PlayerMySelf.fZ = fZ;
+
+				m_PlayerMySelf.iMoveSpeed = iSpeed;
+				m_PlayerMySelf.iMoveType = iMoveType;
+			}
+			else
+			{
+				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+					[&](const TPlayer& a) { return a.iID == iID; });
+
+				if (it != m_vecPlayer.end())
+				{
+					it->fX = fX;
+					it->fY = fY;
+					it->fZ = fZ;
+
+					it->iMoveSpeed = iSpeed;
+					it->iMoveType = iMoveType;
+				}
+#ifdef DEBUG
+				else
+					printf("RecvProcess::WIZ_MOVE: %d not in m_vecPlayer list, is ghost player\n", iID);
+#endif
+			}
 		}
 		break;
 
@@ -1219,6 +1626,23 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			float fZ = pkt.read<int16_t>() / 10.0f;
 
 			uint16_t iSpeed = pkt.read<uint16_t>();
+
+			auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+				[&](const TNpc& a) { return a.iID == iID; });
+
+			if (it != m_vecNpc.end())
+			{
+				it->fX = fX;
+				it->fY = fY;
+				it->fZ = fZ;
+
+				it->iMoveSpeed = iSpeed;
+				it->iMoveType = iMoveType;
+			}
+#ifdef DEBUG
+			else
+				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_vecNpc list, is ghost npc\n", iID);
+#endif
 
 		}
 		break;
@@ -1295,38 +1719,87 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			switch (iType)
 			{
-				case 3:
+				case N3_SP_STATE_CHANGE_SIZE:
 				{
 					switch (iBuff)
 					{
-						case 4:
+						case ABNORMAL_NORMAL:
+						{
+							if (m_PlayerMySelf.iID == iID)
+							{
+	#ifdef DEBUG
+								printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_NORMAL\n", m_PlayerMySelf.szName.c_str());
+	#endif
+
+								m_PlayerMySelf.bBlinking = false;
+							}
+							else
+							{
+								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[&](const TPlayer& a) { return a.iID == iID; });
+
+								if (it != m_vecPlayer.end())
+								{
+#ifdef DEBUG
+									printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_NORMAL\n", it->szName.c_str());
+#endif
+
+									it->bBlinking = false;
+								}
+							}
+						}
+						break;
+
+						case ABNORMAL_BLINKING:
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
 #ifdef DEBUG
-								printf("RecvProcess::WIZ_STATE_CHANGE: %s blinking start\n", m_PlayerMySelf.szName.c_str());
+								printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING\n", m_PlayerMySelf.szName.c_str());
 #endif
 
 								m_PlayerMySelf.bBlinking = true;
 							}
 							else
 							{
+								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[&](const TPlayer& a) { return a.iID == iID; });
+
+								if (it != m_vecPlayer.end())
+								{
+#ifdef DEBUG
+									printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING\n", it->szName.c_str());
+#endif
+
+									it->bBlinking = true;
+								}
 							}
 						}
 						break;
 
-						case 7:
+						case ABNORMAL_BLINKING_END:
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
 #ifdef DEBUG
-								printf("RecvProcess::WIZ_STATE_CHANGE: %s blinking end\n", m_PlayerMySelf.szName.c_str());
+								printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING_END\n", m_PlayerMySelf.szName.c_str());
 #endif
 
 								m_PlayerMySelf.bBlinking = false;
 							}
 							else
-							{						
+							{		
+								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+									[&](const TPlayer& a) { return a.iID == iID; });
+
+								if (it != m_vecPlayer.end())
+								{
+#ifdef DEBUG
+									printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING_END\n", it->szName.c_str());
+#endif
+
+									it->bBlinking = false;
+								}
 							}
 						}
 						break;
@@ -1349,6 +1822,29 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif
 				}
 				break;
+			}
+		}
+		break;
+
+		case WIZ_MAP_EVENT:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+			case 9:
+			{
+				m_bLunarWarDressUp = pkt.read<uint8_t>();
+			}
+			break;
+
+			default:
+			{
+#ifdef DEBUG
+				printf("RecvProcess::WIZ_MAP_EVENT: Type %d not implemented\n", iType);
+#endif
+			}
+			break;
 			}
 		}
 		break;
@@ -1415,7 +1911,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			tLoot.msDropTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 			tLoot.iRequestedOpen = false;
 
-			Guard lock(m_mutexLootList);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[tLoot](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
 
@@ -1439,7 +1934,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			uint32_t iBundleID = pkt.read<uint32_t>();
 			uint8_t iResult = pkt.read<uint8_t>();
 
-			Guard lock(m_mutexLootList);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[iBundleID](const TLoot a) { return a.iBundleID == iBundleID; });
 
@@ -1527,7 +2021,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -1554,7 +2047,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					uint32_t iGold = pkt.read<uint32_t>();
 
-					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -1570,7 +2062,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-					Guard lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
@@ -1602,6 +2093,210 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		}
 		break;
 
+		case WIZ_PARTY:
+		{
+			uint8_t iType = pkt.read<uint8_t>();
+
+			switch (iType)
+			{
+				case PartyUpdateType::PARTY_UPDATE_CREATE:
+				{
+					pkt.DByte();
+
+					uint8_t iCommandType = pkt.read<uint8_t>();
+
+					std::string szName;
+					pkt.readString(szName);
+
+					m_vecPartyMembers.clear();
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_INSERT:
+				{
+					pkt.DByte();
+
+					int32_t iMemberID = pkt.read<int32_t>();
+
+					std::string szName;
+					pkt.readString(szName);
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_JOINED:
+				{
+					pkt.DByte();
+
+					int16_t iJoinResponse = pkt.read<int16_t>();
+
+					if (iJoinResponse == -1
+						|| iJoinResponse == -2
+						|| iJoinResponse == -6)
+					{
+						return; // TODO: Level difference
+					}
+
+					PartyMember pPartyMember;
+					memset(&pPartyMember, 0, sizeof(pPartyMember));
+
+					pPartyMember.iMemberID = pkt.read<int32_t>();
+					pPartyMember.iIndex = pkt.read<uint8_t>();
+
+					pkt.readString(pPartyMember.szName);
+
+					pPartyMember.iMaxHP = pkt.read<uint16_t>();
+					pPartyMember.iHP = pkt.read<uint16_t>();
+					pPartyMember.iLevel = pkt.read<uint8_t>();
+					pPartyMember.iClass = pkt.read<uint16_t>();
+					pPartyMember.iMaxMP = pkt.read<uint16_t>();
+					pPartyMember.iMP = pkt.read<uint16_t>();
+
+					pPartyMember.iNation = pkt.read<uint8_t>();
+
+					uint8_t iUnknown1 = pkt.read<uint8_t>();
+					int32_t iUnknown2 = pkt.read<int32_t>();
+
+					uint8_t iUnknown3 = pkt.read<uint8_t>();
+					int8_t iUnknown4 = pkt.read<int8_t>();
+
+					if (pPartyMember.iIndex == 1 && m_vecPartyMembers.size() == 0)
+					{
+						PartyMember pPartyMemberMySelf;
+
+						memset(&pPartyMemberMySelf, 0, sizeof(pPartyMemberMySelf));
+
+						pPartyMemberMySelf.iMemberID = GetID();
+						pPartyMemberMySelf.iIndex = 100;
+						pPartyMemberMySelf.szName = GetName();
+
+						pPartyMemberMySelf.iMaxHP = GetMaxHp();
+						pPartyMemberMySelf.iHP = GetHp();
+						pPartyMemberMySelf.iLevel = GetLevel();
+						pPartyMemberMySelf.iClass = (uint16_t)GetClass();
+						pPartyMemberMySelf.iMaxMP = GetMaxMp();
+						pPartyMemberMySelf.iMP = GetMp();
+
+						pPartyMemberMySelf.iNation = GetNation();
+
+						m_vecPartyMembers.push_back(pPartyMemberMySelf);
+					}
+
+					if (pPartyMember.iIndex == 100)
+					{
+						auto pOldLeader = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+							[&](const PartyMember& a)
+							{
+								return a.iIndex == 100;
+							});
+
+						if (pOldLeader != m_vecPartyMembers.end())
+						{
+							pOldLeader->iIndex = 1;
+
+							auto pNewLeader = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+								[&](const PartyMember& a)
+								{
+									return a.iMemberID == pPartyMember.iMemberID;
+								});
+
+							if (pNewLeader != m_vecPartyMembers.end())
+							{
+								pNewLeader->iIndex = 100;
+							}
+						}
+						else
+						{
+							m_vecPartyMembers.push_back(pPartyMember);
+						}
+					}
+					else
+					{
+						m_vecPartyMembers.push_back(pPartyMember);
+					}
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_LEAVE:
+				{
+					int32_t iMemberID = pkt.read<int32_t>();
+
+					m_vecPartyMembers.erase(
+						std::remove_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+							[&](const PartyMember& a) { return a.iMemberID == iMemberID; }),
+						m_vecPartyMembers.end());
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_DISMISSED:
+				{
+					m_vecPartyMembers.clear();
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_HEALTH_MANA_CHANGE:
+				{
+					int32_t iMemberID = pkt.read<int32_t>();
+
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iMemberID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iMaxHP = pkt.read<uint16_t>();
+						pMember->iHP = pkt.read<uint16_t>();
+						pMember->iMaxMP = pkt.read<uint16_t>();
+						pMember->iMP = pkt.read<uint16_t>();
+					}
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_LEVEL_CHANGE:
+				{
+					int32_t iMemberID = pkt.read<int32_t>();
+
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iMemberID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iLevel = pkt.read<uint8_t>();
+					}
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_CLASS_CHANGE:
+				{
+					int32_t iMemberID = pkt.read<int32_t>();
+
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iMemberID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iClass = pkt.read<uint16_t>();
+					}
+				}
+				break;
+
+				case PartyUpdateType::PARTY_UPDATE_STATUS_CHANGE:
+				{
+					// TODO: !!!
+				}
+				break;
+			}
+
+		}
+		break;
+
 		case WIZ_ZONE_CHANGE:
 		{
 			uint8_t iOpCode = pkt.read<uint8_t>();
@@ -1618,15 +2313,12 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				break;
 				case ZoneChangeOpcode::ZoneChangeTeleport:
 				{
-					SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
-
 					uint8_t iCity = (uint8_t)pkt.read<int16_t>();
 
 					if (m_PlayerMySelf.iCity != iCity)
 					{
 						m_PlayerMySelf.iCity = iCity;
 
-						m_vecNpc.clear();
 						m_mapSkillUseTime.clear();
 
 						m_bIsMovingToLoot = false;
@@ -1646,6 +2338,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(m_PlayerMySelf.iCity)); });
 
+					m_vecNpc.clear();
+					m_vecPlayer.clear();
+
 #ifdef DEBUG
 					printf("RecvProcess::WIZ_ZONE_CHANGE: Teleport Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n",
 						m_PlayerMySelf.iCity, m_PlayerMySelf.fX, m_PlayerMySelf.fY, m_PlayerMySelf.fZ, iVictoryNation);
@@ -1656,7 +2351,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				case ZoneChangeOpcode::ZoneChangeMilitaryCamp:
 				{
-					m_vecNpc.clear();
 					m_mapSkillUseTime.clear();
 
 					m_bIsMovingToLoot = false;
@@ -2052,11 +2746,8 @@ TNpc ClientHandler::InitializeNpc(Packet& pkt)
 
 	if (tNpc.iProtoID == 0)
 	{
-		int iPetOwnerNameLen = pkt.read<uint8_t>();
-		pkt.readString(tNpc.szPetOwnerName, iPetOwnerNameLen);
-
-		int iPetNameLen = pkt.read<uint8_t>();
-		pkt.readString(tNpc.szPetName, iPetNameLen);
+		pkt.readString(tNpc.szPetOwnerName);
+		pkt.readString(tNpc.szPetName);
 	}
 
 	tNpc.iModelGroup = pkt.read<uint8_t>();
@@ -2074,6 +2765,126 @@ TNpc ClientHandler::InitializeNpc(Packet& pkt)
 	tNpc.fRotation = pkt.read<int16_t>() / 100.0f;
 
 	return tNpc;
+}
+
+TPlayer ClientHandler::InitializePlayer(Packet& pkt)
+{
+	TPlayer tPlayer;
+	memset(&tPlayer, 0, sizeof(tPlayer));
+
+	pkt.SByte();
+
+	tPlayer.iID = pkt.read<int32_t>();
+
+	pkt.readString(tPlayer.szName);
+
+	tPlayer.eNation = (Nation)pkt.read<uint8_t>();
+
+	uint8_t iPlayerUnknown1 = pkt.read<uint8_t>();
+	uint8_t iPlayerUnknown2 = pkt.read<uint8_t>();
+	uint8_t iPlayerUnknown3 = pkt.read<uint8_t>();
+
+	tPlayer.iKnightsID = pkt.read<int16_t>();
+	tPlayer.eKnightsDuty = (KnightsDuty)pkt.read<uint8_t>();
+
+	if (tPlayer.iKnightsID > 0)
+	{
+		int16_t iAllianceID = pkt.read<int16_t>();
+
+		pkt.readString(tPlayer.szKnights);
+
+		tPlayer.iKnightsGrade = pkt.read<uint8_t>();
+		tPlayer.iKnightsRank = pkt.read<uint8_t>();
+
+		int16_t sMarkVersion = pkt.read<int16_t>();
+		int16_t sCapeID = pkt.read<int16_t>();
+		uint8_t iR = pkt.read<uint8_t>();
+		uint8_t iG = pkt.read<uint8_t>();
+		uint8_t iB = pkt.read<uint8_t>();
+		uint8_t iClanUnknown2 = pkt.read<uint8_t>();
+		uint8_t iClanUnknown3 = pkt.read<uint8_t>();
+	}
+	else
+	{
+		uint32_t iNoClanUnknown1 = pkt.read<uint32_t>();
+		uint16_t iNoClanUnknown2 = pkt.read<uint16_t>();
+		uint8_t iNoClanUnknown3 = pkt.read<uint8_t>();
+
+		int16_t sCapeID = pkt.read<int16_t>();
+		uint8_t iR = pkt.read<uint8_t>();
+		uint8_t iG = pkt.read<uint8_t>();
+		uint8_t iB = pkt.read<uint8_t>();
+		uint8_t iClanUnknown2 = pkt.read<uint8_t>();
+		uint8_t iClanUnknown3 = pkt.read<uint8_t>();
+	}
+
+	tPlayer.iLevel = pkt.read<uint8_t>();
+
+	tPlayer.eRace = (Race)pkt.read<uint8_t>();
+	tPlayer.eClass = (Class)pkt.read<int16_t>();
+
+	tPlayer.fX = (pkt.read<uint16_t>()) / 10.0f;
+	tPlayer.fY = (pkt.read<uint16_t>()) / 10.0f;
+	tPlayer.fZ = (pkt.read<int16_t>()) / 10.0f;
+
+	tPlayer.iFace = pkt.read<uint8_t>();
+	tPlayer.iHair = pkt.read<int32_t>();
+
+	uint8_t iResHpType = pkt.read<uint8_t>();
+
+	uint32_t iAbnormalType = pkt.read<uint32_t>();
+
+	switch (iAbnormalType)
+	{
+		case ABNORMAL_NORMAL:
+			tPlayer.bBlinking = false;
+			break;
+		case ABNORMAL_BLINKING:
+			tPlayer.bBlinking = true;
+			break;
+		case ABNORMAL_BLINKING_END:
+			tPlayer.bBlinking = false;
+			break;
+	}
+
+	uint8_t iNeedParty = pkt.read<uint8_t>();
+
+	tPlayer.iAuthority = pkt.read<uint8_t>();
+
+	uint8_t iPartyLeader = pkt.read<uint8_t>();
+	uint8_t iInvisibilityType = pkt.read<uint8_t>();
+	uint8_t iTeamColor = pkt.read<uint8_t>();
+	uint8_t iIsHidingHelmet = pkt.read<uint8_t>(); //buyraa
+	uint8_t iIsHidingCospre = pkt.read<uint8_t>();
+	uint8_t iIsDevil = pkt.read<uint8_t>();
+	uint8_t iIsHidingWings = pkt.read<uint8_t>();
+
+	int16_t iDirection = pkt.read<int16_t>();
+
+	uint8_t iIsChicken = pkt.read<uint8_t>();
+	uint8_t iRank = pkt.read<uint8_t>();
+	int8_t iKnightsRank = pkt.read<int8_t>();
+	int8_t iPersonalRank = pkt.read<int8_t>();
+
+	//uint8_t iUnknown5 = pkt.read<uint8_t>(); // 2/8/2023 New
+
+	int32_t iLoop = m_bLunarWarDressUp ? 9 : 16;
+
+	for (int32_t i = 0; i < iLoop; i++)
+	{
+		tPlayer.tInventory[i].iPos = i;
+		tPlayer.tInventory[i].iItemID = pkt.read<uint32_t>();
+		tPlayer.tInventory[i].iDurability = pkt.read<uint16_t>();
+		tPlayer.tInventory[i].iFlag = pkt.read<uint8_t>();
+	}
+
+	tPlayer.iCity = pkt.read<uint8_t>();
+
+	//TODO: Parse remaining bytes
+	uint8_t iTempBuffer[26];
+	pkt.read(iTempBuffer, 26);
+
+	return tPlayer;
 }
 
 void ClientHandler::SetLoginInformation(std::string szAccountId, std::string szPassword)
@@ -2195,19 +3006,13 @@ void ClientHandler::MoveToTargetProcess()
 					continue;
 
 				float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
-				
-				if (GetDistance(v3TargetPosition) > fTargetRadius)
+				float fMySelfRadius = GetRadius() * GetScale();
+
+				if (GetDistance(v3TargetPosition) > fTargetRadius + fMySelfRadius)
 				{
 					if (GetActionState() != PSA_SPELLMAGIC)
 					{
-						SetMovePosition(v3TargetPosition);
-					}
-				}
-				else
-				{
-					if (GetMoveState() != PSM_STOP)
-					{
-						SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+						SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
 					}
 				}
 			}
@@ -2332,10 +3137,11 @@ void ClientHandler::AttackProcess()
 				bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
 
 				float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
+				float fMySelfRadius = GetRadius() * GetScale();
 
 				if (bBasicAttack 
 					&& GetActionState() != PSA_SPELLMAGIC
-					&& GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + fTargetRadius)
+					&& GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
 				{
 					BasicAttack();
 				}
@@ -2414,9 +3220,10 @@ void ClientHandler::AttackProcess()
 						continue;
 
 					float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
+					float fMySelfRadius = GetRadius() * GetScale();
 
 					if (pSkillData->second.iValidDist == 0 
-						&& GetDistance(v3TargetPosition) > (fEffectiveAttackRange / 10.0f) + fTargetRadius)
+						&& GetDistance(v3TargetPosition) > (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
 						continue;
 
 					uint32_t iNeedItem = pSkillData->second.dwNeedItem;
@@ -2440,29 +3247,39 @@ void ClientHandler::AttackProcess()
 
 					std::chrono::milliseconds msLastSkillUseItem = GetSkillUseTime(pSkillData->second.iID);
 
+					bool bUseBasicAttack = false;
+
+					bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+
+					if (bBasicAttack && GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
+					{
+						bUseBasicAttack = true;
+					}
+
 					if (pSkillData->second.iCooldown > 0 && msLastSkillUseItem.count() > 0)
 					{
 						int64_t iSkillCooldownTime = static_cast<int64_t>(pSkillData->second.iCooldown) * 100;
 
 						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
 						{
+							if (bUseBasicAttack)
+							{
+								BasicAttack();
+							}
+
 							continue;
 						}
 					}
 
-					if (GetMp() < pSkillData->second.iExhaustMSP)
-						continue;
-
-					if (iNeedItem != 0 && iExistItemCount < iNeedItemCount)
-						continue;
-
-					bool bUseBasicAttack = false;
-
-					bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-
-					if (bBasicAttack && GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + fTargetRadius)
+					if (GetMp() < pSkillData->second.iExhaustMSP 
+						|| (iNeedItem != 0 && iExistItemCount < iNeedItemCount))
 					{
-						bUseBasicAttack = true;
+						if (bUseBasicAttack)
+						{
+							BasicAttack();
+						}
+
+						continue;
 					}
 
 					UseSkill(pSkillData->second, GetTarget(), 0, true, bUseBasicAttack);
@@ -2544,81 +3361,89 @@ void ClientHandler::SearchTargetProcess()
 			if (!bAttackStatus)
 				continue;
 
-			std::vector<EntityInfo> vecOutMobList;
-			if (SearchMob(vecOutMobList) > 0)
+			bool bAutoTarget = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
+			bool bRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
+			int iRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
+
+			std::vector<TNpc> vecFilteredTarget;
+			
+			if (bAutoTarget)
 			{
-				std::vector<EntityInfo> vecFilteredTarget;
-
-				bool bAutoTarget = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
-				bool bRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
-				int iRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
-
-				if (bAutoTarget)
-				{
-					std::copy_if(vecOutMobList.begin(), vecOutMobList.end(),
-						std::back_inserter(vecFilteredTarget),
-						[&](const EntityInfo& c)
-						{
-							return
-								c.m_bEnemy == true
-								&& c.m_iState != PSA_DYING
-								&& c.m_iState != PSA_DEATH
-								&& ((c.m_iMaxHP == 0) || (c.m_iMaxHP != 0 && c.m_iHP != 0))
-								&& ((bRangeLimit && GetDistance(c.m_v3Position) <= (float)iRangeLimitValue) || !bRangeLimit);
-						});
-				}
-				else
-				{
-					std::vector<int> vecSelectedNpcList = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
-
-					std::copy_if(vecOutMobList.begin(), vecOutMobList.end(),
-						std::back_inserter(vecFilteredTarget),
-						[&](const EntityInfo& c)
-						{
-							return 
-								c.m_bEnemy == true
-								&& c.m_iState != PSA_DYING
-								&& c.m_iState != PSA_DEATH
-								&& ((c.m_iMaxHP == 0) || (c.m_iMaxHP != 0 && c.m_iHP != 0))
-								&& std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.m_iProtoId)
-								&& ((bRangeLimit && GetDistance(c.m_v3Position) <= (float)iRangeLimitValue) || !bRangeLimit);
-						});
-				}
-
-				if (vecFilteredTarget.size() > 0)
-				{
-					auto pSort = [&](EntityInfo const& a, EntityInfo const& b)
+				auto &tmpVecNpc = m_vecNpc;
+				std::copy_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+					std::back_inserter(vecFilteredTarget),
+					[&](const TNpc& c)
 					{
-						if (a.m_fDistance != b.m_fDistance)
-							return a.m_fDistance < b.m_fDistance;
+						return
+							c.iMonsterOrNpc == 1
+							&& c.eState != PSA_DYING
+							&& c.eState != PSA_DEATH
+							&& ((c.iHPMax == 0) || (c.iHPMax > 0 && c.iHP > 0))
+							&& ((bRangeLimit && GetDistance(Vector3(c.fX, c.fZ, c.fY)) <= (float)iRangeLimitValue) || !bRangeLimit);
+					});
+			}
+			else
+			{
+				std::vector<int> vecSelectedNpcList = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
 
-						return false;
-					};
-
-					std::sort(vecFilteredTarget.begin(), vecFilteredTarget.end(), pSort);
-
-					auto pSelectedTarget = vecFilteredTarget.at(0);
-
-					if (pSelectedTarget.m_iId != GetClientSelectedTarget())
+				auto &tmpVecNpc = m_vecNpc;
+				std::copy_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+					std::back_inserter(vecFilteredTarget),
+					[&](const TNpc& c)
 					{
-						SetTarget(pSelectedTarget.m_iBase);
+						return
+							c.iMonsterOrNpc == 1
+							&& c.eState != PSA_DYING
+							&& c.eState != PSA_DEATH
+							&& ((c.iHPMax == 0) || (c.iHPMax > 0 && c.iHP > 0))
+							&& std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.iProtoID)
+							&& ((bRangeLimit && GetDistance(Vector3(c.fX, c.fZ, c.fY)) <= (float)iRangeLimitValue) || !bRangeLimit);
+					});
+			}
+
+			if (vecFilteredTarget.size() > 0)
+			{
+				Vector3 v3CurrentPosition = GetPosition();
+
+				auto pSort = [&](TNpc const& a, TNpc const& b)
+				{
+					auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+					auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+
+					if (fADistance != fBDistance)
+					{
+						return fADistance < fBDistance;
+					}
+
+					return false;
+				};
+
+				std::sort(vecFilteredTarget.begin(), vecFilteredTarget.end(), pSort);
+
+				auto &pSelectedTarget = vecFilteredTarget.front();
+
+				if (pSelectedTarget.iID != GetClientSelectedTarget())
+				{
+					DWORD iTargetBase = GetEntityBase(pSelectedTarget.iID);
+
+					if (iTargetBase != 0)
+					{
+						SetTarget(iTargetBase);
 
 						bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
 						if (bMoveToTarget)
 						{
-							if (GetDistance(pSelectedTarget.m_v3Position) > pSelectedTarget.m_fRadius)
+							float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
+							float fMySelfRadius = GetRadius() * GetScale();
+
+							auto v3TargetPosition = GetTargetPosition();
+
+							if (GetDistance(v3TargetPosition) > (fTargetRadius + fMySelfRadius))
 							{
 								if (GetActionState() != PSA_SPELLMAGIC)
 								{
-									SetMovePosition(pSelectedTarget.m_v3Position);
-								}
-							}
-							else
-							{
-								if (GetMoveState() != PSM_STOP)
-								{
-									SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+									SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
 								}
 							}
 						}
@@ -2672,14 +3497,13 @@ void ClientHandler::AutoLootProcess()
 
 			if (bAutoLoot)
 			{
-				std::vector<TLoot> vecFilteredLoot;
-
 				std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
 					std::chrono::system_clock::now().time_since_epoch()
 				);
 
-				Guard lock(m_mutexLootList);
-				std::copy_if(m_vecLootList.begin(), m_vecLootList.end(),
+				auto &vecLootList = m_vecLootList;
+				std::vector<TLoot> vecFilteredLoot;
+				std::copy_if(vecLootList.begin(), vecLootList.end(),
 					std::back_inserter(vecFilteredLoot),
 					[&](const TLoot& c)
 					{
@@ -2695,7 +3519,7 @@ void ClientHandler::AutoLootProcess()
 
 					std::sort(vecFilteredLoot.begin(), vecFilteredLoot.end(), pSort);
 
-					auto pFindedLoot = vecFilteredLoot.at(0);
+					auto &pFindedLoot = vecFilteredLoot.front();
 
 					bool bMoveToLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), false);
 
@@ -2715,17 +3539,19 @@ void ClientHandler::AutoLootProcess()
 
 						if (pNpc != m_vecNpc.end())
 						{
+							auto v3NpcPosition = Vector3(pNpc->fX, pNpc->fZ, pNpc->fY);
+
 							while (m_bWorking 
 								&& (pFindedLoot.msDropTime.count() + 30000) > msNow.count()
-								&& GetDistance(pNpc->fX, pNpc->fY) > 1.0f 
-								&& GetDistance(pNpc->fX, pNpc->fY) < 50.0f)
+								&& GetDistance(v3NpcPosition) > 1.0f
+								&& GetDistance(v3NpcPosition) < 50.0f)
 							{
 								std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 								if (GetActionState() == PSA_SPELLMAGIC)
 									continue;
 
-								SetMovePosition(Vector3(pNpc->fX, pNpc->fZ, pNpc->fY));
+								SetMovePosition(v3NpcPosition);
 								SetMovingToLoot(true);
 							}
 
@@ -2944,7 +3770,7 @@ void ClientHandler::CharacterProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
 			if (IsBlinking())
 				continue;
@@ -3057,424 +3883,44 @@ void ClientHandler::CharacterProcess()
 				}
 			}
 
-			bool bAutoTransformation = GetUserConfiguration()->GetBool(skCryptDec("Transformation"), skCryptDec("Auto"), false);
-			int iTransformationItem = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Item"), 381001000);
-			int iTransformationSkill = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 472020);
+			TransformationProcess();
 
-			if (bAutoTransformation && iTransformationSkill > 0 && IsTransformationAvailable())
+			bool bPartyProtection = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("PartyProtection"), true);
+			
+			if (m_vecPartyMembers.size() > 0)
 			{
-				switch (iTransformationItem)
+				if (IsPriest() || IsRogue())
 				{
-					case 379090000:
+					std::vector<PartyMember> tmpVecPartyMembers;
+					std::copy(m_vecPartyMembers.begin(), m_vecPartyMembers.end(), std::back_inserter(tmpVecPartyMembers));
+
+					auto pSort = [](PartyMember const& a, PartyMember const& b)
 					{
-						auto pTransformationScroll = pSkillTable->find(470001);
-						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+						return a.iHP < b.iHP;
+					};
 
-						if (pTransformationScroll != pSkillTable->end()
-							&& pTransformationSkill != pSkillTable->end())
-						{
-							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
-							{
-								UseSkill(pTransformationScroll->second, GetID());
-								UseSkill(pTransformationSkill->second, GetID());
-							}
-						}
-					}
-					break;
+					std::sort(tmpVecPartyMembers.begin(), tmpVecPartyMembers.end(), pSort);
 
-					case 379093000:
+					bool bPartySwift = GetUserConfiguration()->GetBool(skCryptDec("Rogue"), skCryptDec("PartySwift"), true);
+
+					for (auto& pMember : tmpVecPartyMembers)
 					{
-						auto pTransformationScroll = pSkillTable->find(471001);
-						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
-
-						if (pTransformationScroll != pSkillTable->end()
-							&& pTransformationSkill != pSkillTable->end())
+						if (bPartyProtection && IsPriest())
 						{
-							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
-							{
-								UseSkill(pTransformationScroll->second, GetID());
-								UseSkill(pTransformationSkill->second, GetID());
-							}
-						}
-					}
-					break;
-
-					case 381001000:
-					{
-						auto pTransformationScroll = pSkillTable->find(472001);
-						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
-
-						if (pTransformationScroll != pSkillTable->end()
-							&& pTransformationSkill != pSkillTable->end())
-						{
-							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0 
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
-							{
-								UseSkill(pTransformationScroll->second, GetID());
-								UseSkill(pTransformationSkill->second, GetID());
-							}
-						}
-					}
-					break;
-				}
-			}
-
-			std::vector<Party> vecParty;
-			if (GetPartyList(vecParty))
-			{
-				if (IsPriest())
-				{
-					for (auto& e : vecParty)
-					{
-						PartyBuffInfo pMemberBuffInfo;
-						memset(&pMemberBuffInfo, 0, sizeof(pMemberBuffInfo));
-						GetPartyMemberBuffInfo(e.iID, pMemberBuffInfo);
-
-						bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
-
-						int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
-
-						if (iSelectedHealthBuff == -1)
-						{
-							iSelectedHealthBuff = GetProperHealthBuff(e.iMaxHP);
+							PriestCharacterProcess(pMember.iMemberID, true, pMember.iMaxHP, pMember.iHP);
 						}
 
-						if (pMemberBuffInfo.bHealth == false
-							&& bAutoHealthBuff
-							&& iSelectedHealthBuff != -1 
-							&& (e.iID != GetID() || (e.iID == GetID() && !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))))
+						if (bPartySwift && IsRogue() && pMember.iMemberID != GetID())
 						{
-							auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-								[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
-
-							if (it != vecAvailableSkills->end())
-							{
-								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-									std::chrono::system_clock::now().time_since_epoch()
-								);
-
-								std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-								bool bUse = true;
-
-								if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-								{
-									int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-									if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-										bUse = false;
-								}
-
-								if (GetMp() < it->iExhaustMSP)
-								{
-									bUse = false;
-								}
-
-								if (bUse)
-								{
-									WaitCondition(GetActionState() == PSA_SPELLMAGIC);
-									UseSkill(*it, e.iID);
-									pMemberBuffInfo.bHealth = true;
-								}
-							}
-						}
-
-						bool bIsNearby = (e.iID == GetID()) || (e.iID != GetID() && GetEntityBase(e.iID) > 0);
-
-						bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
-
-						int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
-
-						if (iSelectedDefenceBuff == -1)
-						{
-							iSelectedDefenceBuff = GetProperDefenceBuff();
-						}
-
-						if (pMemberBuffInfo.bAc == false 
-							&& bIsNearby 
-							&& bAutoDefenceBuff 
-							&& iSelectedDefenceBuff != -1
-							&& (e.iID != GetID() || (e.iID == GetID() && !IsBuffActive(BuffType::BUFF_TYPE_AC))))
-						{
-							auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-								[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
-
-							if (it != vecAvailableSkills->end())
-							{
-								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-									std::chrono::system_clock::now().time_since_epoch()
-								);
-
-								std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-								bool bUse = true;
-
-								if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-								{
-									int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-									if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-										bUse = false;
-								}
-
-								if (GetMp() < it->iExhaustMSP)
-								{
-									bUse = false;
-								}
-
-								if (bUse)
-								{
-									WaitCondition(GetActionState() == PSA_SPELLMAGIC);
-									UseSkill(*it, e.iID);
-									pMemberBuffInfo.bAc = true;
-								}
-							}
-						}
-
-						bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
-
-						int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
-
-						if (iSelectedMindBuff == -1)
-						{
-							iSelectedMindBuff = GetProperMindBuff();
-						}
-
-						if (pMemberBuffInfo.bResistance == false 
-							&& bIsNearby 
-							&& bAutoMindBuff 
-							&& iSelectedMindBuff != -1
-							&& (e.iID != GetID() || (e.iID == GetID() && !IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))))
-						{
-							auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-								[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
-
-							if (it != vecAvailableSkills->end())
-							{
-								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-									std::chrono::system_clock::now().time_since_epoch()
-								);
-
-								std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-								bool bUse = true;
-
-								if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-								{
-									int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-									if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-										bUse = false;
-								}
-
-								if (GetMp() < it->iExhaustMSP)
-								{
-									bUse = false;
-								}
-
-								if (bUse)
-								{
-									WaitCondition(GetActionState() == PSA_SPELLMAGIC);
-									UseSkill(*it, e.iID);
-									pMemberBuffInfo.bResistance = true;
-								}
-							}
-						}
-
-						Party pPartyMember;
-						if (GetPartyMember(e.iID, pPartyMember))
-						{
-							SetPartyMemberBuffInfo(e.iID, pMemberBuffInfo);
+							RogueCharacterProcess(pMember.iMemberID, true);
 						}
 					}
 				}
 			}
-			else
+
+			if ((!bPartyProtection || m_vecPartyMembers.size() == 0) && IsPriest())
 			{
-				if (IsPriest())
-				{
-					bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
-
-					int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
-
-					if (iSelectedHealthBuff == -1)
-					{
-						iSelectedHealthBuff = GetProperHealthBuff(GetMaxHp());
-					}
-
-					if (bAutoHealthBuff && iSelectedHealthBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
-					{
-						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-							[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
-
-						if (it != vecAvailableSkills->end())
-						{
-							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);
-
-							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-							bool bUse = true;
-
-							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-							{
-								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-									bUse = false;
-							}
-
-							if (GetMp() < it->iExhaustMSP)
-							{
-								bUse = false;
-							}
-
-							if (bUse)
-							{
-								UseSkill(*it, GetID());
-							}
-						}
-					}
-
-					bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
-
-					int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
-
-					if (iSelectedDefenceBuff == -1)
-					{
-						iSelectedDefenceBuff = GetProperDefenceBuff();
-					}
-
-					if (bAutoDefenceBuff && iSelectedDefenceBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_AC))
-					{
-						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-							[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
-
-						if (it != vecAvailableSkills->end())
-						{
-							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);
-
-							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-							bool bUse = true;
-
-							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-							{
-								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-									bUse = false;
-							}
-
-							if (GetMp() < it->iExhaustMSP)
-							{
-								bUse = false;
-							}
-
-							if (bUse)
-							{
-								UseSkill(*it, GetID());
-							}
-						}
-					}
-
-					bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
-
-					int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
-
-					if (iSelectedMindBuff == -1)
-					{
-						iSelectedMindBuff = GetProperMindBuff();
-					}
-
-					if (bAutoMindBuff && iSelectedMindBuff != -1 && !IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))
-					{
-						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-							[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
-
-						if (it != vecAvailableSkills->end())
-						{
-							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);
-
-							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-							bool bUse = true;
-
-							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-							{
-								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-									bUse = false;
-							}
-
-							if (GetMp() < it->iExhaustMSP)
-							{
-								bUse = false;
-							}
-
-							if (bUse)
-							{
-								UseSkill(*it, GetID());
-							}
-						}
-					}
-
-					bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
-					int iSelectedHeal = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
-
-					if (iSelectedHeal == -1)
-					{
-						iSelectedHeal = GetProperHeal();
-					}
-
-					int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
-
-					int iAutoHealValue = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
-					int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
-
-					if (bAutoHeal && iSelectedHeal != -1 && iHpProtectionPercent <= iAutoHealValue)
-					{
-						auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-							[iSelectedHeal](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHeal; });
-
-						if (it != vecAvailableSkills->end())
-						{
-							std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);
-
-							std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
-
-							bool bUse = true;
-
-							if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
-							{
-								int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
-
-								if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
-									bUse = false;
-							}
-
-							if (GetMp() < it->iExhaustMSP)
-							{
-								bUse = false;
-							}
-
-							if (bUse)
-							{
-								UseSkill(*it, GetID());
-							}
-						}
-					}
-				}
+				PriestCharacterProcess();
 			}
 		}
 		catch (const std::exception& e)
@@ -3490,6 +3936,516 @@ void ClientHandler::CharacterProcess()
 #ifdef DEBUG
 	printf("ClientHandler::CharacterProcess Stopped\n");
 #endif
+}
+
+void ClientHandler::TransformationProcess()
+{
+	std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+	if (!m_Bot->GetSkillTable(&pSkillTable))
+		return;
+
+	bool bAutoTransformation = GetUserConfiguration()->GetBool(skCryptDec("Transformation"), skCryptDec("Auto"), false);
+	int iTransformationItem = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Item"), 381001000);
+	int iTransformationSkill = GetUserConfiguration()->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 472020);
+
+	if (bAutoTransformation && iTransformationSkill > 0 && IsTransformationAvailable())
+	{
+		switch (iTransformationItem)
+		{
+		case 379090000:
+		{
+			auto pTransformationScroll = pSkillTable->find(470001);
+			auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+			if (pTransformationScroll != pSkillTable->end()
+				&& pTransformationSkill != pSkillTable->end())
+			{
+				if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
+					&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+				{
+					UseSkill(pTransformationScroll->second, GetID());
+					UseSkill(pTransformationSkill->second, GetID());
+				}
+			}
+		}
+		break;
+
+		case 379093000:
+		{
+			auto pTransformationScroll = pSkillTable->find(471001);
+			auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+			if (pTransformationScroll != pSkillTable->end()
+				&& pTransformationSkill != pSkillTable->end())
+			{
+				if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
+					&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+				{
+					UseSkill(pTransformationScroll->second, GetID());
+					UseSkill(pTransformationSkill->second, GetID());
+				}
+			}
+		}
+		break;
+
+		case 381001000:
+		{
+			auto pTransformationScroll = pSkillTable->find(472001);
+			auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+			if (pTransformationScroll != pSkillTable->end()
+				&& pTransformationSkill != pSkillTable->end())
+			{
+				if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
+					&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+				{
+					UseSkill(pTransformationScroll->second, GetID());
+					UseSkill(pTransformationSkill->second, GetID());
+				}
+			}
+		}
+		break;
+		}
+	}
+}
+
+void ClientHandler::RogueCharacterProcess(int32_t iTargetID, bool bIsPartyRequest)
+{
+	std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+	if (!GetAvailableSkill(&vecAvailableSkills))
+		return;
+
+	if (iTargetID == -1)
+		iTargetID = GetID();
+
+	auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+		[&](const TABLE_UPC_SKILL& a) { return a.iBaseId == 107010; });
+
+	if (it != vecAvailableSkills->end())
+	{
+		std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()
+		);
+
+		std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+		bool bUse = true;
+
+		if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+		{
+			int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+			if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+				bUse = false;
+		}
+
+		if (IsBlinking(iTargetID))
+		{
+			bUse = false;
+		}
+
+		if (GetMp() < it->iExhaustMSP)
+		{
+			bUse = false;
+		}
+
+		if (!bIsPartyRequest && IsBuffActive(BuffType::BUFF_TYPE_SPEED))
+		{
+			bUse = false;
+		}
+
+		if (bIsPartyRequest)
+		{
+			auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+			[&](const PartyMember& a)
+			{
+				return a.iMemberID == iTargetID;
+			});
+
+			if (pMember != m_vecPartyMembers.end())
+			{
+				if ((pMember->iSwiftBuffTime.count() + 600000) > msNow.count())
+					bUse = false;
+			}
+		}
+
+		if (bUse)
+		{
+#ifdef DEBUG
+			printf("Swift Buff Using Target -> %d\n", iTargetID);
+#endif
+
+			UseSkill(*it, iTargetID);	
+
+			if (bIsPartyRequest)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+					[&](const PartyMember& a)
+					{
+						return a.iMemberID == iTargetID;
+					});
+
+				if (pMember != m_vecPartyMembers.end())
+				{
+					pMember->iSwiftBuffTime = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+#ifdef DEBUG
+					printf("Swift Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iSwiftBuffTime.count());
+#endif
+				}
+			}
+		}
+	}
+}
+
+void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyRequest, uint16_t iMaxHp, uint16_t iHp)
+{
+	std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+	if (!GetAvailableSkill(&vecAvailableSkills))
+		return;
+
+	if (iTargetID == -1)
+		iTargetID = GetID();
+
+	if (iTargetID == GetID())
+	{
+		iMaxHp = GetMaxHp();
+		iHp = GetHp();
+	}
+
+	bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
+
+	int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
+
+	if (iSelectedHealthBuff == -1)
+	{
+		iSelectedHealthBuff = GetProperHealthBuff(iMaxHp);
+	}
+
+	if (bAutoHealthBuff && iSelectedHealthBuff != -1)
+	{
+		auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+			[iSelectedHealthBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHealthBuff; });
+
+		if (it != vecAvailableSkills->end())
+		{
+			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+			);
+
+			std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+			bool bUse = true;
+
+			if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+			{
+				int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+				if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+					bUse = false;
+			}
+
+			if (IsBlinking(iTargetID))
+			{
+				bUse = false;
+			}
+
+			if (GetMp() < it->iExhaustMSP)
+			{
+				bUse = false;
+			}
+
+			if (!bIsPartyRequest && IsBuffActive(BuffType::BUFF_TYPE_HP_MP))
+			{
+				bUse = false;
+			}
+
+			if (bIsPartyRequest)
+			{
+				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+					[&](const PartyMember& a)
+					{
+						return a.iMemberID == iTargetID;
+					});
+
+				if (pMember != m_vecPartyMembers.end())
+				{
+					if ((pMember->iHpBuffTime.count() + 600000) > msNow.count())
+						bUse = false;
+				}
+			}
+
+			if (bUse)
+			{
+#ifdef DEBUG
+				printf("HP Buff Using Target -> %d\n", iTargetID);
+#endif
+
+				UseSkill(*it, iTargetID);
+
+				if (bIsPartyRequest)
+				{
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iTargetID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iHpBuffTime = duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						);
+#ifdef DEBUG
+						printf("HP Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iHpBuffTime.count());
+#endif
+					}
+				}
+			}
+		}
+	}
+
+	bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
+
+	int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
+
+	if (iSelectedDefenceBuff == -1)
+	{
+		iSelectedDefenceBuff = GetProperDefenceBuff();
+	}
+
+	if (bAutoDefenceBuff && iSelectedDefenceBuff != -1)
+	{
+		auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+			[iSelectedDefenceBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedDefenceBuff; });
+
+		if (it != vecAvailableSkills->end())
+		{
+			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+			);
+
+			std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+			bool bUse = true;
+
+			if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+			{
+				int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+				if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+					bUse = false;
+			}
+
+			if (IsBlinking(iTargetID))
+			{
+				bUse = false;
+			}
+
+			if (GetMp() < it->iExhaustMSP)
+			{
+				bUse = false;
+			}
+
+			if (!bIsPartyRequest && IsBuffActive(BuffType::BUFF_TYPE_AC))
+			{
+				bUse = false;
+			}
+
+			if (bIsPartyRequest)
+			{
+				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+					[&](const PartyMember& a)
+					{
+						return a.iMemberID == iTargetID;
+					});
+
+				if (pMember != m_vecPartyMembers.end())
+				{
+					if ((pMember->iACBuffTime.count() + 600000) > msNow.count())
+						bUse = false;
+				}
+			}
+
+			if (bUse)
+			{
+#ifdef DEBUG
+				printf("AC Buff Using Target -> %d\n", iTargetID);
+#endif
+				UseSkill(*it, iTargetID);
+
+				if (bIsPartyRequest)
+				{
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iTargetID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iACBuffTime = duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						);
+#ifdef DEBUG
+						printf("AC Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iACBuffTime.count());
+#endif
+					}
+				}
+			}
+		}
+	}
+
+	bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+
+	int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
+
+	if (iSelectedMindBuff == -1)
+	{
+		iSelectedMindBuff = GetProperMindBuff();
+	}
+
+	if (bAutoMindBuff && iSelectedMindBuff != -1)
+	{
+		auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+			[iSelectedMindBuff](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedMindBuff; });
+
+		if (it != vecAvailableSkills->end())
+		{
+			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+			);
+
+			std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+			bool bUse = true;
+
+			if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+			{
+				int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+				if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+					bUse = false;
+			}
+
+			if (IsBlinking(iTargetID))
+			{
+				bUse = false;
+			}
+
+			if (GetMp() < it->iExhaustMSP)
+			{
+				bUse = false;
+			}
+
+			if (!bIsPartyRequest && IsBuffActive(BuffType::BUFF_TYPE_RESISTANCES))
+			{
+				bUse = false;
+			}
+
+			if (bIsPartyRequest)
+			{
+				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+					[&](const PartyMember& a)
+					{
+						return a.iMemberID == iTargetID;
+					});
+
+				if (pMember != m_vecPartyMembers.end())
+				{
+					if ((pMember->iMindBuffTime.count() + 600000) > msNow.count())
+						bUse = false;
+				}
+			}
+
+			if (bUse)
+			{
+#ifdef DEBUG
+				printf("Mind Buff Using Target -> %d\n", iTargetID);
+#endif
+				UseSkill(*it, iTargetID);
+
+				if (bIsPartyRequest)
+				{
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iTargetID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iMindBuffTime = duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						);
+#ifdef DEBUG
+						printf("Mind Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iMindBuffTime.count());
+#endif
+					}
+				}
+			}
+		}
+	}
+
+	bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
+	int iSelectedHeal = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
+
+	if (iSelectedHeal == -1)
+	{
+		iSelectedHeal = GetProperHeal();
+	}
+
+	int iAutoHealValue = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("AutoHealValue"), 75);
+	int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
+
+	if (bAutoHeal && iSelectedHeal != -1 && iHpProtectionPercent <= iAutoHealValue)
+	{
+		auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+			[iSelectedHeal](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSelectedHeal; });
+
+		if (it != vecAvailableSkills->end())
+		{
+			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+			);
+
+			std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+
+			bool bUse = true;
+
+			if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+			{
+				int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
+
+				if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+					bUse = false;
+			}
+
+			if (IsBlinking(iTargetID))
+			{
+				bUse = false;
+			}
+
+			if (GetMp() < it->iExhaustMSP)
+			{
+				bUse = false;
+			}
+
+			if (bUse)
+			{
+				UseSkill(*it, iTargetID);
+			}
+		}
+	}	
 }
 
 bool ClientHandler::HealthPotionProcess()
@@ -3673,262 +4629,293 @@ void ClientHandler::RouteProcess()
 
 			Route pRoute = m_vecRoute.front();
 
-			float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
-
 			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
-			if (fDistance > 3.0f)
-				SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
-			else
+			switch (pRoute.eStepType)
 			{
-				switch (pRoute.eStepType)
+			case RouteStepType::STEP_MOVE:
+			{
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+
+				if (fDistance > 3.0f)
 				{
-					case RouteStepType::STEP_MOVE:
-					{
-						m_vecRoute.erase(m_vecRoute.begin());
-					}
-					break;
-
-					case RouteStepType::STEP_TOWN:
-					{
-						SendTownPacket();
-						m_vecRoute.erase(m_vecRoute.begin());
-					}
-					break;
-
-					case RouteStepType::STEP_SUPPLY:
-					{
-						auto jSupplyList = m_Bot->GetSupplyList();
-
-						std::map<int32_t, SSupplyBuyList> mapSupplyBuyList;
-
-						bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
-						bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
-
-						if (bAutoSupply && jSupplyList.size() > 0)
-						{
-							std::vector<int32_t> vecExceptedSlotPos;
-
-							for (size_t i = 0; i < jSupplyList.size(); i++)
-							{
-								std::vector<int> vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
-
-								std::string szItemIdAttribute = skCryptDec("itemid");
-								std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
-								std::string szCountAttribute = skCryptDec("count");
-
-								int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
-								int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
-
-								bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iItemId) != vecSupplyList.end();
-
-								if (!bSelected)
-									continue;
-
-								auto tmpVecNpc = m_vecNpc;
-
-								auto pSort = [&](TNpc const& a, TNpc const& b)
-								{
-									return GetDistance(Vector3(a.fX, a.fZ, a.fY), GetPosition()) < GetDistance(Vector3(b.fX, b.fZ, b.fY), GetPosition());
-								};
-
-								std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
-
-								auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
-									[iSellingGroup](const TNpc& a) { return a.iSellingGroup == iSellingGroup; });
-
-								if (findedNpc != tmpVecNpc.end())
-								{
-									int32_t iFindedNpcId = findedNpc->iID;
-									Vector3 vec3FindedNpcPosition = Vector3(findedNpc->fX, 0.0f, findedNpc->fY);
-
-									std::vector<SShopItem> vecShopItemTable;
-									if (!m_Bot->GetShopItemTable(iSellingGroup, vecShopItemTable))
-										continue;
-
-									uint8_t iInventoryPosition = -1;
-									int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
-										skCryptDec("Supply"),
-										std::to_string(iItemId).c_str(),
-										jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
-
-									TInventory pInventoryItem = GetInventoryItem(iItemId);
-
-									if (pInventoryItem.iItemID != 0)
-									{
-										iInventoryPosition = (uint8_t)pInventoryItem.iPos;
-										iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
-									}
-									else
-									{
-										iInventoryPosition = (uint8_t)GetInventoryEmptySlot(vecExceptedSlotPos);
-									}
-
-									if (iInventoryPosition == -1 || iItemCount == 0)
-										continue;
-
-									auto findedShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
-										[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
-
-									if (findedShopItem != vecShopItemTable.end())
-									{
-										auto pSupplyBuyList = mapSupplyBuyList.find(iSellingGroup);
-
-										if (pSupplyBuyList == mapSupplyBuyList.end())
-										{
-											std::vector<SSItemBuy> m_vecItemBuy;
-											m_vecItemBuy.push_back(SSItemBuy(findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos));
-											mapSupplyBuyList.insert(std::make_pair(iSellingGroup, SSupplyBuyList(iFindedNpcId, vec3FindedNpcPosition, m_vecItemBuy)));
-										}
-										else
-										{
-											pSupplyBuyList->second.m_vecItemBuy.push_back(
-												SSItemBuy(findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos));
-										}
-
-										vecExceptedSlotPos.push_back(iInventoryPosition);
-									}
-								}
-							}
-
-							for (auto& e : mapSupplyBuyList)
-							{
-								while (
-									m_vecRoute.size() > 0 
-									&& GetDistance(Vector3(GetX(), 0.0f, GetY()), e.second.m_vec3NpcPosition) > 3.0f)
-								{
-									std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-									if (GetActionState() == PSA_SPELLMAGIC)
-										continue;
-
-									SetMovePosition(e.second.m_vec3NpcPosition);
-								}
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-								SendNpcEvent(e.second.m_iNpcId);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-								SendItemTradeBuy(e.first, e.second.m_iNpcId, e.second.m_vecItemBuy);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-								SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-
-								if (bAutoRepair && e.first == 255000)
-								{
-									std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-
-									for (uint8_t i = 0; i < SLOT_MAX; i++)
-									{
-										switch (i)
-										{
-											case 1:
-											case 4:
-											case 6:
-											case 8:
-											case 10:
-											case 12:
-											case 13:
-											{
-												TInventory pInventory = GetInventoryItemSlot(i);
-
-												if (pInventory.iItemID == 0)
-													continue;
-
-												if (pInventory.iDurability > 1000)
-													continue;
-
-												SendItemRepair(1, (uint8_t)pInventory.iPos, e.second.m_iNpcId, pInventory.iItemID);
-												std::this_thread::sleep_for(std::chrono::milliseconds(500));
-											}
-											break;
-										}
-									}
-								}
-							}
-						}
-
-						if (bAutoRepair && (jSupplyList.size() == 0 || mapSupplyBuyList.size() == 0))
-						{
-							auto tmpVecNpc = m_vecNpc;
-
-							auto pSort = [&](TNpc const& a, TNpc const& b)
-							{
-								return GetDistance(Vector3(a.fX, a.fZ, a.fY), GetPosition()) < GetDistance(Vector3(b.fX, b.fZ, b.fY), GetPosition());
-							};
-
-							std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
-
-							auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
-								[](const TNpc& a) { return a.iSellingGroup == 255000; });
-
-							if (findedNpc != tmpVecNpc.end())
-							{
-								int32_t iFindedNpcId = findedNpc->iID;
-								Vector3 vec3FindedNpcPosition = Vector3(findedNpc->fX, 0.0f, findedNpc->fY);
-
-								while (
-									m_vecRoute.size() > 0 
-									&& GetDistance(Vector3(GetX(), 0.0f, GetY()), vec3FindedNpcPosition) > 3.0f)
-								{
-									std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-									if (GetActionState() == PSA_SPELLMAGIC)
-										continue;
-
-									SetMovePosition(vec3FindedNpcPosition);
-								}
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-								SendNpcEvent(iFindedNpcId);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-
-								for (uint8_t i = 0; i < SLOT_MAX; i++)
-								{
-									switch (i)
-									{
-										case 1:
-										case 4:
-										case 6:
-										case 8:
-										case 10:
-										case 12:
-										case 13:
-										{
-											TInventory pInventory = GetInventoryItemSlot(i);
-
-											if (pInventory.iItemID == 0)
-												continue;
-
-											if (pInventory.iDurability > 1000)
-												continue;
-
-											SendItemRepair(1, (uint8_t)pInventory.iPos, iFindedNpcId, pInventory.iItemID);
-											std::this_thread::sleep_for(std::chrono::milliseconds(500));
-										}
-										break;
-									}
-								}
-							}
-						}
-
-						m_msLastSupplyTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-						if(m_vecRoute.size() > 0)
-							m_vecRoute.erase(m_vecRoute.begin());
-					}
-					break;
-
-					case RouteStepType::STEP_INN:
-					{
-						if (m_vecRoute.size() > 0)
-							m_vecRoute.erase(m_vecRoute.begin());
-					}
-					break;
+					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+					continue;
 				}
 			}
+			break;
+
+			case RouteStepType::STEP_TOWN:
+			{
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+
+				if (fDistance > 50.0f)
+				{
+					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+					continue;
+				}
+
+				SendTownPacket();
+			}
+			break;
+
+			case RouteStepType::STEP_SUPPLY:
+			{
+				auto jSupplyList = m_Bot->GetSupplyList();
+
+				std::map<int32_t, SSupplyBuyList> mapSupplyBuyList;
+
+				bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+				bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+
+				if (bAutoSupply && jSupplyList.size() > 0)
+				{
+					std::vector<int32_t> vecExceptedSlotPos;
+
+					for (size_t i = 0; i < jSupplyList.size(); i++)
+					{
+						std::vector<int> vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+
+						std::string szItemIdAttribute = skCryptDec("itemid");
+						std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+						std::string szCountAttribute = skCryptDec("count");
+
+						int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
+						int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
+
+						bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iItemId) != vecSupplyList.end();
+
+						if (!bSelected)
+							continue;
+
+						auto &tmpVecNpc = m_vecNpc;
+
+						Vector3 v3CurrentPosition = GetPosition();
+
+						auto pSort = [&](TNpc const& a, TNpc const& b)
+						{
+							auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+							auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+
+							if (fADistance != fBDistance)
+							{
+								return fADistance < fBDistance;
+							}
+
+							return false;
+						};
+
+						std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
+
+						auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+							[iSellingGroup](const TNpc& a) { return a.iSellingGroup == iSellingGroup; });
+
+						if (findedNpc != tmpVecNpc.end())
+						{
+							int32_t iFindedNpcId = findedNpc->iID;
+							Vector3 vec3FindedNpcPosition = Vector3(findedNpc->fX, 0.0f, findedNpc->fY);
+
+							std::vector<SShopItem> vecShopItemTable;
+							if (!m_Bot->GetShopItemTable(iSellingGroup, vecShopItemTable))
+								continue;
+
+							uint8_t iInventoryPosition = -1;
+							int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
+								skCryptDec("Supply"),
+								std::to_string(iItemId).c_str(),
+								jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
+
+							TInventory pInventoryItem = GetInventoryItem(iItemId);
+
+							if (pInventoryItem.iItemID != 0)
+							{
+								iInventoryPosition = (uint8_t)pInventoryItem.iPos;
+								iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
+							}
+							else
+							{
+								iInventoryPosition = (uint8_t)GetInventoryEmptySlot(vecExceptedSlotPos);
+							}
+
+							if (iInventoryPosition == -1 || iItemCount == 0)
+								continue;
+
+							auto findedShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
+								[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
+
+							if (findedShopItem != vecShopItemTable.end())
+							{
+								auto pSupplyBuyList = mapSupplyBuyList.find(iSellingGroup);
+
+								if (pSupplyBuyList == mapSupplyBuyList.end())
+								{
+									std::vector<SSItemBuy> m_vecItemBuy;
+									m_vecItemBuy.push_back(SSItemBuy(findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos));
+									mapSupplyBuyList.insert(std::make_pair(iSellingGroup, SSupplyBuyList(iFindedNpcId, vec3FindedNpcPosition, m_vecItemBuy)));
+								}
+								else
+								{
+									pSupplyBuyList->second.m_vecItemBuy.push_back(
+										SSItemBuy(findedShopItem->m_iItemId, (iInventoryPosition - 14), iItemCount, findedShopItem->m_iPage, findedShopItem->m_iPos));
+								}
+
+								vecExceptedSlotPos.push_back(iInventoryPosition);
+							}
+						}
+					}
+
+					for (auto& e : mapSupplyBuyList)
+					{
+						while (
+							m_vecRoute.size() > 0
+							&& GetDistance(Vector3(GetX(), 0.0f, GetY()), e.second.m_vec3NpcPosition) > 3.0f)
+						{
+							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+							if (GetActionState() == PSA_SPELLMAGIC)
+								continue;
+
+							SetMovePosition(e.second.m_vec3NpcPosition);
+						}
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+						SendNpcEvent(e.second.m_iNpcId);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+						SendItemTradeBuy(e.first, e.second.m_iNpcId, e.second.m_vecItemBuy);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+
+						if (bAutoRepair && e.first == 255000)
+						{
+							std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+							for (uint8_t i = 0; i < SLOT_MAX; i++)
+							{
+								switch (i)
+								{
+								case 1:
+								case 4:
+								case 6:
+								case 8:
+								case 10:
+								case 12:
+								case 13:
+								{
+									TInventory pInventory = GetInventoryItemSlot(i);
+
+									if (pInventory.iItemID == 0)
+										continue;
+
+									if (pInventory.iDurability > 1000)
+										continue;
+
+									SendItemRepair(1, (uint8_t)pInventory.iPos, e.second.m_iNpcId, pInventory.iItemID);
+									std::this_thread::sleep_for(std::chrono::milliseconds(500));
+								}
+								break;
+								}
+							}
+						}
+					}
+				}
+
+				if (bAutoRepair && (jSupplyList.size() == 0 || mapSupplyBuyList.size() == 0))
+				{
+					auto &tmpVecNpc = m_vecNpc;
+
+					Vector3 v3CurrentPosition = GetPosition();
+
+					auto pSort = [&](TNpc const& a, TNpc const& b)
+					{
+						auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+						auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+
+						if (fADistance != fBDistance)
+						{
+							return fADistance < fBDistance;
+						}
+
+						return false;
+					};
+
+					std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
+
+					auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+						[](const TNpc& a) { return a.iSellingGroup == 255000; });
+
+					if (findedNpc != tmpVecNpc.end())
+					{
+						int32_t iFindedNpcId = findedNpc->iID;
+						Vector3 vec3FindedNpcPosition = Vector3(findedNpc->fX, 0.0f, findedNpc->fY);
+
+						while (
+							m_vecRoute.size() > 0
+							&& GetDistance(Vector3(GetX(), 0.0f, GetY()), vec3FindedNpcPosition) > 3.0f)
+						{
+							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+							if (GetActionState() == PSA_SPELLMAGIC)
+								continue;
+
+							SetMovePosition(vec3FindedNpcPosition);
+						}
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+						SendNpcEvent(iFindedNpcId);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+						for (uint8_t i = 0; i < SLOT_MAX; i++)
+						{
+							switch (i)
+							{
+								case 1:
+								case 4:
+								case 6:
+								case 8:
+								case 10:
+								case 12:
+								case 13:
+								{
+									TInventory pInventory = GetInventoryItemSlot(i);
+
+									if (pInventory.iItemID == 0)
+										continue;
+
+									if (pInventory.iDurability > 1000)
+										continue;
+
+									SendItemRepair(1, (uint8_t)pInventory.iPos, iFindedNpcId, pInventory.iItemID);
+									std::this_thread::sleep_for(std::chrono::milliseconds(500));
+								}
+								break;
+							}
+						}
+					}
+				}
+
+				m_msLastSupplyTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+			}
+			break;
+
+			case RouteStepType::STEP_INN:
+			{
+				//TODO: Inn hostes
+			}
+			break;
+
+			case RouteStepType::STEP_GENIE:
+			{
+				//TODO: Check genie status and start
+			}
+			break;
+			}
+
+			if (m_vecRoute.size() > 0)
+				m_vecRoute.erase(m_vecRoute.begin());
 		}
 		catch (const std::exception& e)
 		{

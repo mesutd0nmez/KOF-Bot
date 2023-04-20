@@ -22,6 +22,15 @@ struct Vector3
 	float m_fX;
 	float m_fZ;
 	float m_fY;
+
+	Vector3 GetEndPoint(const Vector3& endPoint, const float distance)
+	{
+		Vector3 v(endPoint.m_fX - m_fX, endPoint.m_fZ - m_fZ, endPoint.m_fY - m_fY);
+		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fZ * v.m_fZ + v.m_fY * v.m_fY);
+		Vector3 u(v.m_fX / norm, v.m_fZ / norm, v.m_fY / norm);
+		Vector3 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fZ - distance * u.m_fZ, endPoint.m_fY - distance * u.m_fY);
+		return newEndPoint;
+	}
 };
 
 struct SShopItem
@@ -558,13 +567,27 @@ typedef struct __Party
 	int32_t				iCure;
 } Party;
 
-typedef struct __PartyBuffInfo
+typedef struct __PartyMemberBuffInfo
 {
 	int32_t				iMemberID;
-	int16_t				iOriginalMaxHP;
-	int16_t				iCurrentMaxHP;
-	bool				bHealth;
-	bool				bAc;
-	bool				bResistance;
 	std::chrono::milliseconds iBuffTime;
-} PartyBuffInfo;
+} PartyMemberBuffInfo;
+
+typedef struct __PartyMember
+{
+	uint8_t iIndex;
+	int32_t iMemberID;
+	std::string szName;
+	uint16_t iHP;
+	uint16_t iMaxHP;
+	uint16_t iMP;
+	uint16_t iMaxMP;
+	uint8_t iLevel;
+	uint16_t iClass;
+	uint16_t iNation;
+
+	std::chrono::milliseconds iHpBuffTime;
+	std::chrono::milliseconds iACBuffTime;
+	std::chrono::milliseconds iMindBuffTime;
+	std::chrono::milliseconds iSwiftBuffTime;
+} PartyMember;

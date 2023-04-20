@@ -82,20 +82,24 @@ public:
 	}
 	ByteBuffer& operator<<(char* str) { *this << (const char*)str; return *this; }
 
-	ByteBuffer& operator>>(std::string& value)
+	ByteBuffer& operator>>(std::string& dest)
 	{
+		dest.clear();
+
 		uint16_t len;
-		value.clear();
+
 		if (m_doubleByte)
 			len = read<uint16_t>();
 		else
 			len = read<uint8_t>();
 
-		if (_rpos + len <= size())
+		if (len > 0 && _rpos + len <= size())
 		{
-			for (uint16_t i = 0; i < len; i++)
-				value.push_back(read<char>());
+			dest.resize(len);
+			dest.assign(len, '\0');
+			read(&dest[0], len);
 		}
+
 		return *this;
 	}
 
@@ -132,16 +136,33 @@ public:
 
 	void readString(std::string& dest)
 	{
-		readString(dest, m_doubleByte);
+		dest.clear();
+
+		uint16_t len;
+
+		if (m_doubleByte)
+			len = read<uint16_t>();
+		else
+			len = read<uint8_t>();
+
+		if (len > 0 && _rpos + len <= size())
+		{
+			dest.resize(len);
+			dest.assign(len, '\0');
+			read(&dest[0], len);
+		}
 	}
 
 	void readString(std::string& dest, size_t len)
 	{
 		dest.clear();
-		dest.assign(len, '\0');
 
-		if (_rpos + len <= size())
+		if (len > 0 && _rpos + len <= size())
+		{
+			dest.resize(len);
+			dest.assign(len, '\0');
 			read(&dest[0], len);
+		}
 	}
 
 	uint8_t* contents() { return &_storage[0]; }

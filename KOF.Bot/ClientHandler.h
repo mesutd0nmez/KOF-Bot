@@ -25,6 +25,7 @@ public:
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
+	TPlayer InitializePlayer(Packet& pkt);
 
 private:
 	virtual void OnReady();
@@ -45,7 +46,10 @@ private:
 	std::function<void(BYTE*, DWORD)> onClientRecvProcess;
 	std::function<void(BYTE*, DWORD)> onClientSendProcess;
 
+	HANDLE m_hMailSlotRecv;
 	std::string m_szMailSlotRecvName;
+
+	HANDLE m_hMailSlotSend;
 	std::string m_szMailSlotSendName;
 
 	LPVOID m_RecvHookAddress;
@@ -128,6 +132,10 @@ private:
 	void CharacterProcess();
 
 	void GodModeProcess();
+
+	void TransformationProcess();
+	void RogueCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false);
+	void PriestCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false, uint16_t iMaxHp = 0, uint16_t iHp = 0);
 
 	bool HealthPotionProcess();
 	bool ManaPotionProcess();

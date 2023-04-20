@@ -142,11 +142,14 @@ void Service::HandlePacket(Packet& pkt)
                     if (m_iId == -1) return;
 
                     std::string szConfiguration;
-
-                    pkt >> szConfiguration;
+                    pkt.readString(szConfiguration);
 
                     m_iniUserConfiguration = new Ini();
-                    m_iniUserConfiguration->Load(szConfiguration);
+
+                    if (szConfiguration.size() > 0)
+                    {
+                        m_iniUserConfiguration->Load(szConfiguration);
+                    }                
 
                     OnConfigurationLoaded();
                 }

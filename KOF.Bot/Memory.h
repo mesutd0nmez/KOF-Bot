@@ -9,9 +9,6 @@
 
 class Memory
 {
-protected:
-    inline static std::mutex m_mutexExecutionCode;
-
 public:
     inline static BYTE ReadByte(HANDLE hProcess, DWORD dwAddress)
     {
@@ -99,8 +96,6 @@ public:
         if (!pAddress)
             return false;
 
-        std::lock_guard<std::mutex> lock(m_mutexExecutionCode);
-
         SIZE_T bytesWritten = 0;
 
         if (!WriteProcessMemory(hProcess, pAddress, byCode, bySize, &bytesWritten) || bytesWritten != bySize)
@@ -126,8 +121,6 @@ public:
 
     inline static bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
     {
-        std::lock_guard<std::mutex> lock(m_mutexExecutionCode);
-
         HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
 
         if (hThread != nullptr)

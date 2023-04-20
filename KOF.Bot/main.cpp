@@ -28,7 +28,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 #endif
 
-#ifdef DEBUG_AUTO_LOGIN
+#ifdef SET_DEBUG_CLIENT_INFORMATION
     std::string szClientPath = DEVELOPMENT_PATH;
     std::string szClientExe = DEVELOPMENT_EXE;
     PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;

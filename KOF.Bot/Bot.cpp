@@ -146,15 +146,15 @@ void Bot::Process()
 	else
 	{
 		if (m_ClientHandler)
+		{
 			m_ClientHandler->Process();
+		}
 
 		if (m_bPipeWorking == false)
 		{
 			if (ConnectPipeServer())
 			{
 				printf("Bot: Connected Pipe server\n");
-
-				m_bPipeWorking = true;
 
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
 
@@ -166,6 +166,8 @@ void Bot::Process()
 				}
 
 				SendPipeServer(pkt);
+
+				m_bPipeWorking = true;
 			}
 		}
 	}
@@ -247,8 +249,6 @@ void Bot::InitializeStaticData()
 #ifdef DEBUG
 	printf("InitializeStaticData: Started\n");
 #endif
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 	std::string szPlatformPrefix = "us";
 
@@ -535,9 +535,29 @@ void Bot::OnLoaded()
 		printf("Bot: Knight Online process suspended, bypass started\n");
 #endif
 
-		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
-		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
-		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE40000, 0x130000);
+		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS1")) > 0)
+		{
+			Remap::PatchSection(
+				injectedProcessInfo.hProcess, 
+				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")), 
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")));
+		}
+
+		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
+		{
+			Remap::PatchSection(
+				injectedProcessInfo.hProcess,
+				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")));
+		}
+		
+		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
+		{
+			Remap::PatchSection(
+				injectedProcessInfo.hProcess,
+				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")));
+		}
 
 		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
 
@@ -576,7 +596,7 @@ void Bot::OnLoaded()
 
 	SendInjectionRequest(injectedProcessInfo.dwProcessId);
 
-	////Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
+	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
