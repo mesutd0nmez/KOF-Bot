@@ -121,6 +121,7 @@ private:
 	bool m_bConfigurationLoaded;
 
 private:
+	void BasicAttackProcess();
 	void AttackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();
@@ -162,10 +163,12 @@ private:
 
 private:
 	std::chrono::milliseconds m_msLastSupplyTime;
-	std::chrono::milliseconds m_msLastPotionUseTime;
 
 private:
 	bool SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
+
+protected:
+	std::chrono::milliseconds m_msLastSelectedTargetTime;
 };
 
 

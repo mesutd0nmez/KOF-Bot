@@ -27,34 +27,27 @@ public:
 	int32_t GetClass(DWORD iBase = 0);
 	uint64_t GetExp(DWORD iBase = 0);
 	uint64_t GetMaxExp(DWORD iBase = 0);
-
 	uint8_t GetMoveState(DWORD iBase = 0);
 	uint8_t GetActionState(DWORD iBase = 0);
-
-	int32_t GetClientSelectedTarget();
-	uint32_t GetClientSelectedTargetBase();
-
 	float GetRadius(DWORD iBase = 0);
 	float GetScale(DWORD iBase = 0);
-
+	bool IsAttackable(DWORD iBase);
 	bool IsDisconnect();
-
 	bool IsDeath(DWORD iBase = 0);
-
 	float GetX(DWORD iBase = 0);
 	float GetZ(DWORD iBase = 0);
 	float GetY(DWORD iBase = 0);
-
 	float GetGoX();
 	float GetGoY();
 	float GetGoZ();
-
 	uint8_t GetAuthority(DWORD iBase = 0);
 	void SetAuthority(uint8_t iAuthority);
 
 	Vector3 GetPosition();
 	Vector3 GetTargetPosition();
+
 	int32_t GetTarget();
+	uint32_t GetTargetBase();
 
 	DWORD GetEntityBase(int32_t iTargetId);
 
@@ -108,16 +101,25 @@ protected:
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
+	std::recursive_mutex m_mutexNpc;
 	std::vector<TNpc> m_vecNpc;
+
+	std::recursive_mutex m_mutexPlayer;
 	std::vector<TPlayer> m_vecPlayer;
 
 protected:
+	std::recursive_mutex m_mutexLootList;
 	std::vector<TLoot> m_vecLootList;
 	bool m_bIsMovingToLoot;
 
 protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
+
+protected:
+	bool m_bIsZoneChanging;
+	bool IsZoneChanging() { return m_bIsZoneChanging; }
+	void SetZoneChange(bool bValue) { m_bIsZoneChanging = bValue; }
 
 public:
 	void StopMove();
@@ -144,7 +146,7 @@ protected:
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 protected:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bAttacking = false, bool bBasicAttack = false);
+	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bAttacking = false, bool bBasicAttack = false);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -202,6 +204,10 @@ public:
 public:
 	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 
+public:
+	void StartGenie();
+	void StopGenie();
+
 protected:
 	BYTE ReadByte(DWORD dwAddress);
 	DWORD Read4Byte(DWORD dwAddress);
@@ -230,6 +236,7 @@ public:
 	void UpdateSkillSuccessRate(bool bDisableCasting);
 
 protected:
+	std::recursive_mutex m_mutexPartyMembers;
 	std::vector<PartyMember> m_vecPartyMembers;
 
 protected:
@@ -237,4 +244,8 @@ protected:
 
 protected:
 	std::vector<int32_t> m_vecRegionUserList;
+
+protected:
+	float m_fAttackDelta;
+	float m_fAttackTimeRecent;
 };

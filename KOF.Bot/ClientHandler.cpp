@@ -49,7 +49,7 @@ void ClientHandler::Clear()
 	m_vecRoute.clear();
 
 	m_msLastSupplyTime = std::chrono::milliseconds(0);
-	m_msLastPotionUseTime = std::chrono::milliseconds(0);
+	m_msLastSelectedTargetTime = std::chrono::milliseconds(0);
 }
 
 void ClientHandler::Initialize()
@@ -69,6 +69,7 @@ void ClientHandler::StartHandler()
 
 	m_bWorking = true;
 
+	new std::thread([this]() { BasicAttackProcess(); });
 	new std::thread([this]() { AttackProcess(); });
 	new std::thread([this]() { SearchTargetProcess(); });
 	new std::thread([this]() { MoveToTargetProcess(); });
@@ -114,6 +115,20 @@ void ClientHandler::Process()
 			StopHandler();
 		}
 	}
+
+	//if (GetAsyncKeyState(VK_TAB) & 1)
+	//{
+	//	std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
+	//	if (m_Bot->GetSkillTable(&pSkillTable))
+	//	{
+	//		auto pSkillData = pSkillTable->find(490820);
+
+	//		if (pSkillData != pSkillTable->end())
+	//		{
+	//			SendStartSkillMagicAtTargetPacket(pSkillData->second, GetID(), Vector3(542.0f, -20.0f, 374.0f));
+	//		}
+	//	}
+	//}
 
 	if (m_bMailSlotWorking)
 	{
@@ -932,6 +947,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
 
+			m_PlayerMySelf.bBlinking = true;
+
 #ifdef DEBUG
 			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
 #endif
@@ -1096,21 +1113,23 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		{
 			int16_t iNpcCount = pkt.read<int16_t>();
 
-			if (iNpcCount <= 0)
-				return;
-
-			for (int16_t i = 0; i < iNpcCount; i++)
+			if (iNpcCount > 0)
 			{
-				auto pNpc = InitializeNpc(pkt);
+				for (int16_t i = 0; i < iNpcCount; i++)
+				{
+					auto pNpc = InitializeNpc(pkt);
 
-				int32_t iNpcID = pNpc.iID;
-				auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
-					[&](const TNpc& a) { return a.iID == iNpcID; });
+					int32_t iNpcID = pNpc.iID;
 
-				if (it == m_vecNpc.end())
-					m_vecNpc.push_back(pNpc);
-				else
-					*it = pNpc;
+					std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
+					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
+						[&](const TNpc& a) { return a.iID == iNpcID; });
+
+					if (it == m_vecNpc.end())
+						m_vecNpc.push_back(pNpc);
+					else
+						*it = pNpc;
+				}
 			}
 
 #ifdef DEBUG
@@ -1129,6 +1148,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					auto pNpc = InitializeNpc(pkt);
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
 					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[pNpc](const TNpc& a) { return a.iID == pNpc.iID; });
 
@@ -1149,6 +1169,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iNpcID = pkt.read<int32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
 					m_vecNpc.erase(
 						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
 							[&](const TNpc& a) { return a.iID == iNpcID; }),
@@ -1175,49 +1196,35 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		{
 			int16_t iNpcCount = pkt.read<int16_t>();
 
-			if (iNpcCount <= 0)
-				return;
-
-			std::vector<int32_t> vecRegionNpcList;
-
-			for (int16_t i = 0; i < iNpcCount; i++)
+			if (iNpcCount > 0)
 			{
-				int32_t iNpcID = pkt.read<int32_t>();
+				std::vector<int32_t> vecRegionNpcList;
 
-				vecRegionNpcList.push_back(iNpcID);
-			}
-
-			auto& tmpVecNpc = m_vecNpc;
-
-			for (const auto& pNpc : tmpVecNpc)
-			{
-				if (std::find(vecRegionNpcList.begin(), vecRegionNpcList.end(), pNpc.iID) == vecRegionNpcList.end())
+				for (int16_t i = 0; i < iNpcCount; i++)
 				{
-					/*vecRegionNpcList.erase(
-						std::remove_if(vecRegionNpcList.begin(), vecRegionNpcList.end(),
-							[&](const int32_t& a) { return a == pNpc.iID; }),
-						vecRegionNpcList.end());*/
+					int32_t iNpcID = pkt.read<int32_t>();
 
-					m_vecNpc.erase(
-						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
-							[&](const TNpc& a) { return a.iID == pNpc.iID; }),
-						m_vecNpc.end());
+					vecRegionNpcList.push_back(iNpcID);
 				}
-				else
+
+				std::vector<TNpc> tmpVecNpc = m_vecNpc;
+
+				for (const auto& pNpc : tmpVecNpc)
 				{
-					/*if (pNpc.eState == PSA_DYING || pNpc.eState == PSA_DEATH)
-						continue;
-
-					m_vecNpc.erase(
-						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
-							[&](const TNpc& a) { return a.iID == pNpc.iID; }),
-						m_vecNpc.end());*/
+					if (std::find(vecRegionNpcList.begin(), vecRegionNpcList.end(), pNpc.iID) == vecRegionNpcList.end())
+					{
+						std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
+						m_vecNpc.erase(
+							std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
+								[&](const TNpc& a) { return a.iID == pNpc.iID; }),
+							m_vecNpc.end());
+					}
 				}
-			}
 
 #ifdef DEBUG
-			printf("RecvProcess::WIZ_NPC_REGION: Npc region change completed! Region list size %d, current npc list %d\n", vecRegionNpcList.size(), m_vecNpc.size());
+				printf("RecvProcess::WIZ_NPC_REGION: Npc region change completed! Region list size %d, current npc list %d\n", vecRegionNpcList.size(), m_vecNpc.size());
 #endif
+			}
 		}
 		break;
 
@@ -1225,22 +1232,24 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		{
 			int16_t iUserCount = pkt.read<int16_t>();
 
-			if (iUserCount <= 0)
-				return;
-
-			for (int16_t i = 0; i < iUserCount; i++)
+			if (iUserCount > 0)
 			{
-				uint8_t iUnknown0 = pkt.read<uint8_t>();
+				for (int16_t i = 0; i < iUserCount; i++)
+				{
+					uint8_t iUnknown0 = pkt.read<uint8_t>();
 
-				auto pUser = InitializePlayer(pkt);
+					auto pUser = InitializePlayer(pkt);
 
-				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-					[&](const TPlayer& a) { return a.iID == pUser.iID; });
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[&](const TPlayer& a) { return a.iID == pUser.iID; });
 
-				if (it == m_vecPlayer.end())
-					m_vecPlayer.push_back(pUser);
-				else
-					*it = pUser;
+					if (it == m_vecPlayer.end())
+						m_vecPlayer.push_back(pUser);
+					else
+						*it = pUser;
+				}
+
 			}
 
 #ifdef DEBUG
@@ -1262,6 +1271,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				auto pPlayer = InitializePlayer(pkt);
 
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 					[&](const TPlayer& a) { return a.iID == pPlayer.iID; });
 
@@ -1280,6 +1290,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				int32_t iPlayerID = pkt.read<int32_t>();
 
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 				m_vecPlayer.erase(
 					std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 						[&](const TPlayer& a) { return a.iID == iPlayerID; }),
@@ -1340,29 +1351,18 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				break;
 
 				case 2:
-				{
-					auto& tmpVecPlayer = m_vecPlayer;
+				{			
+					std::vector<TPlayer> tmpVecPlayer = m_vecPlayer;
 
 					for (const auto& pPlayer : tmpVecPlayer)
 					{
 						if (std::find(m_vecRegionUserList.begin(), m_vecRegionUserList.end(), pPlayer.iID) == m_vecRegionUserList.end())
 						{
-							/*m_vecRegionUserList.erase(
-								std::remove_if(m_vecRegionUserList.begin(), m_vecRegionUserList.end(),
-									[&](const int32_t& a) { return a == pPlayer.iID; }),
-								m_vecRegionUserList.end());*/
-
+							std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 							m_vecPlayer.erase(
 								std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[&](const TPlayer& a) { return a.iID == pPlayer.iID; }),
 								m_vecPlayer.end());
-						}
-						else
-						{
-							/*m_vecPlayer.erase(
-								std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-									[&](const TPlayer& a) { return a.iID == pPlayer.iID; }),
-								m_vecPlayer.end());*/
 						}
 					}
 
@@ -1401,6 +1401,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				if (iID >= 5000)
 				{
+					std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
 					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[&](const TNpc& a) { return a.iID == iID; });
 
@@ -1415,6 +1416,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				}
 				else
 				{
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 						[&](const TPlayer& a) { return a.iID == iID; });
 
@@ -1468,6 +1470,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					if (iTargetID >= 5000)
 					{
+						std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
 						auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 							[&](const TNpc& a) { return a.iID == iTargetID; });
 
@@ -1481,6 +1484,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					}
 					else
 					{
+						std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 						auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 							[&](const TPlayer& a) { return a.iID == iTargetID; });
 
@@ -1522,7 +1526,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				m_PlayerMySelf.iHPMax = iTargetHPMax;
 				m_PlayerMySelf.iHP = iTargetHPCur;
 
-				if (m_PlayerMySelf.iHPMax > 0 && m_PlayerMySelf.iHP <= 0)
+				if (/*m_PlayerMySelf.iHPMax > 0 && */m_PlayerMySelf.iHP <= 0)
 					m_PlayerMySelf.eState = PSA_DEATH;
 
 #ifdef DEBUG
@@ -1534,6 +1538,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				if (iID >= 5000)
 				{
+					std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
 					auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 						[&](const TNpc& a) { return a.iID == iID; });
 
@@ -1542,7 +1547,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						it->iHPMax = iTargetHPMax;
 						it->iHP = iTargetHPCur;
 
-						if (it->iHPMax > 0 && it->iHP <= 0)
+						if (/*it->iHPMax > 0 && */it->iHP <= 0)
 							it->eState = PSA_DEATH;
 
 #ifdef DEBUG
@@ -1552,6 +1557,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				}
 				else
 				{
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 						[iID](const TPlayer& a) { return a.iID == iID; });
 
@@ -1595,6 +1601,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			}
 			else
 			{
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 					[&](const TPlayer& a) { return a.iID == iID; });
 
@@ -1627,6 +1634,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			uint16_t iSpeed = pkt.read<uint16_t>();
 
+			std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
 			auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 				[&](const TNpc& a) { return a.iID == iID; });
 
@@ -1666,6 +1674,82 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					uint32_t iSkillID = pkt.read<uint32_t>();
 					int32_t iSourceID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
+
+					if (iSourceID == GetID())
+					{
+						Client::SetSkillUseTime(iSkillID, duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						));
+
+						if (m_vecPartyMembers.size() > 0 && (IsPriest() || IsRogue()))
+						{
+							std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+							auto pPartyMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+								[&](const PartyMember& a)
+								{
+									return a.iMemberID == iTargetID;
+								});
+
+							if (pPartyMember != m_vecPartyMembers.end())
+							{
+								std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+								if (GetAvailableSkill(&vecAvailableSkills))
+								{
+									auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+										[&](const TABLE_UPC_SKILL& a) { return a.iID == iSkillID; });
+
+									if (it != vecAvailableSkills->end())
+									{
+										switch (it->iBaseId)
+										{
+											case 111654: case 112675: case 112670: case 111657:
+											case 111655: case 111642: case 111633: case 111624:
+											case 111615: case 111606:
+											{
+												pPartyMember->iHpBuffTime = duration_cast<std::chrono::milliseconds>(
+													std::chrono::system_clock::now().time_since_epoch()
+												);
+
+												pPartyMember->iHpBuffAttemptCount = 0;
+											}
+											break;
+
+											case 112674: case 111660: case 111651: case 111639:
+											case 111630: case 111621: case 111612: case 111603:
+											{
+												pPartyMember->iACBuffTime = duration_cast<std::chrono::milliseconds>(
+													std::chrono::system_clock::now().time_since_epoch()
+												);
+
+												pPartyMember->iACBuffAttemptCount = 0;
+											}
+											break;
+
+											case 111645: case 111636: case 111627: case 111609:
+											{
+												pPartyMember->iMindBuffTime = duration_cast<std::chrono::milliseconds>(
+													std::chrono::system_clock::now().time_since_epoch()
+												);
+
+												pPartyMember->iMindBuffAttemptCount = 0;
+											}
+											break;
+
+											case 107010:
+											{
+												pPartyMember->iSwiftBuffTime = duration_cast<std::chrono::milliseconds>(
+													std::chrono::system_clock::now().time_since_epoch()
+												);
+
+												pPartyMember->iSwiftBuffAttemptCount = 0;
+											}
+											break;
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 				break;
 
@@ -1683,13 +1767,117 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					if (iData[3] == SKILLMAGIC_FAIL_CASTING 
 						|| iData[3] == SKILLMAGIC_FAIL_NOEFFECT
 						|| iData[3] == SKILLMAGIC_FAIL_ATTACKZERO
-						|| iData[3] == SKILLMAGIC_FAIL_UNKNOWN
 						|| iData[3] == SKILLMAGIC_FAIL_UNKNOWN)
 					{
 #ifdef DEBUG
-						printf("RecvProcess::WIZ_MAGIC_PROCESS: %d - Skill failed %d\n", iSkillID, iData[3]);
+						printf("RecvProcess::WIZ_MAGIC_PROCESS: %d - %d - Skill failed %d\n", iSourceID, iSkillID, iData[3]);
 #endif
-						Client::SetSkillUseTime(iSkillID, (std::chrono::milliseconds)0);
+						if (iSourceID == GetID())
+						{
+							Client::SetSkillUseTime(iSkillID, (std::chrono::milliseconds)0);
+
+							if (m_vecPartyMembers.size() > 0 && (IsPriest() || IsRogue()))
+							{
+								std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+								auto pPartyMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+									[&](const PartyMember& a)
+									{
+										return a.iMemberID == iTargetID;
+									});
+
+								if (pPartyMember != m_vecPartyMembers.end())
+								{
+									std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+									if (GetAvailableSkill(&vecAvailableSkills))
+									{
+										auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+											[&](const TABLE_UPC_SKILL& a) { return a.iID == iSkillID; });
+
+										if (it != vecAvailableSkills->end())
+										{
+											switch (it->iBaseId)
+											{
+												case 111654: case 112675: case 112670: case 111657:
+												case 111655: case 111642: case 111633: case 111624:
+												case 111615: case 111606: 
+												{
+													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
+													{
+														pPartyMember->iHpBuffTime = (std::chrono::milliseconds)0;
+														pPartyMember->iHpBuffAttemptCount = 0;
+													}
+													else
+													{
+														if (pPartyMember->iHpBuffAttemptCount < 2)
+														{
+															pPartyMember->iHpBuffTime = (std::chrono::milliseconds)0;
+															pPartyMember->iHpBuffAttemptCount++;
+														}
+													}
+												}
+												break;
+												
+												case 112674: case 111660: case 111651: case 111639: 
+												case 111630: case 111621: case 111612: case 111603: 
+												{
+													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
+													{
+														pPartyMember->iACBuffTime = (std::chrono::milliseconds)0;
+														pPartyMember->iACBuffAttemptCount = 0;
+													}
+													else
+													{
+														if (pPartyMember->iACBuffAttemptCount < 2)
+														{
+															pPartyMember->iACBuffTime = (std::chrono::milliseconds)0;
+															pPartyMember->iACBuffAttemptCount++;
+														}
+													}
+												}
+												break;
+												
+												case 111645: case 111636: case 111627: case 111609: 
+												{
+													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
+													{
+														pPartyMember->iMindBuffTime = (std::chrono::milliseconds)0;
+														pPartyMember->iMindBuffAttemptCount = 0;
+													}
+													else
+													{
+														if (pPartyMember->iMindBuffAttemptCount < 2)
+														{
+															pPartyMember->iMindBuffTime = (std::chrono::milliseconds)0;
+															pPartyMember->iMindBuffAttemptCount++;
+														}
+													}
+												}
+												break;
+												
+												case 107010:
+												{
+													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
+													{
+														pPartyMember->iSwiftBuffTime = (std::chrono::milliseconds)0;
+														pPartyMember->iSwiftBuffAttemptCount = 0;
+													}
+													else
+													{
+														if (pPartyMember->iSwiftBuffAttemptCount < 2)
+														{
+															pPartyMember->iSwiftBuffTime = (std::chrono::milliseconds)0;
+															pPartyMember->iSwiftBuffAttemptCount++;
+														}
+													}
+												}
+												break;
+											}
+										}
+									}
+								}
+							}
+						}
+						
 					}
 				}
 				break;
@@ -1735,6 +1923,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							}
 							else
 							{
+								std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[&](const TPlayer& a) { return a.iID == iID; });
 
@@ -1762,6 +1951,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							}
 							else
 							{
+								std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[&](const TPlayer& a) { return a.iID == iID; });
 
@@ -1789,6 +1979,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							}
 							else
 							{		
+								std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
 								auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[&](const TPlayer& a) { return a.iID == iID; });
 
@@ -1911,8 +2102,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			tLoot.msDropTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 			tLoot.iRequestedOpen = false;
 
+			std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
-				[tLoot](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
+				[&](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
 
 			if (pLoot == m_vecLootList.end())
 				m_vecLootList.push_back(tLoot);
@@ -1934,8 +2126,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			uint32_t iBundleID = pkt.read<uint32_t>();
 			uint8_t iResult = pkt.read<uint8_t>();
 
+			std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
-				[iBundleID](const TLoot a) { return a.iBundleID == iBundleID; });
+				[&](const TLoot a) { return a.iBundleID == iBundleID; });
 
 			if (pLoot != m_vecLootList.end())
 			{
@@ -2005,7 +2198,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				m_vecLootList.erase(
 					std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-						[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+						[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
 					m_vecLootList.end());
 			}
 		}
@@ -2021,9 +2214,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+							[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
 
 #ifdef DEBUG
@@ -2047,9 +2241,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					uint32_t iGold = pkt.read<uint32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+							[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
 
 #ifdef DEBUG
@@ -2062,9 +2257,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 					m_vecLootList.erase(
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-							[iBundleID](const TLoot& a) { return a.iBundleID == iBundleID; }),
+							[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
 
 #ifdef DEBUG
@@ -2108,6 +2304,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					std::string szName;
 					pkt.readString(szName);
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					m_vecPartyMembers.clear();
 				}
 				break;
@@ -2158,6 +2355,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					uint8_t iUnknown3 = pkt.read<uint8_t>();
 					int8_t iUnknown4 = pkt.read<int8_t>();
+
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 
 					if (pPartyMember.iIndex == 1 && m_vecPartyMembers.size() == 0)
 					{
@@ -2220,6 +2419,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iMemberID = pkt.read<int32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					m_vecPartyMembers.erase(
 						std::remove_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 							[&](const PartyMember& a) { return a.iMemberID == iMemberID; }),
@@ -2229,6 +2429,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				case PartyUpdateType::PARTY_UPDATE_DISMISSED:
 				{
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					m_vecPartyMembers.clear();
 				}
 				break;
@@ -2237,6 +2438,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iMemberID = pkt.read<int32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 						[&](const PartyMember& a)
 						{
@@ -2257,6 +2459,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iMemberID = pkt.read<int32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 						[&](const PartyMember& a)
 						{
@@ -2274,6 +2477,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iMemberID = pkt.read<int32_t>();
 
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 						[&](const PartyMember& a)
 						{
@@ -2309,10 +2513,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				break;
 				case ZoneChangeOpcode::ZoneChangeLoaded:
 				{
+					SetZoneChange(false);
 				}
 				break;
 				case ZoneChangeOpcode::ZoneChangeTeleport:
 				{
+					SetZoneChange(true);
+
 					uint8_t iCity = (uint8_t)pkt.read<int16_t>();
 
 					if (m_PlayerMySelf.iCity != iCity)
@@ -2322,12 +2529,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						m_mapSkillUseTime.clear();
 
 						m_bIsMovingToLoot = false;
+
+						std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 						m_vecLootList.clear();
 
 						m_vecRoute.clear();
 
 						m_msLastSupplyTime = std::chrono::milliseconds(0);
-						m_msLastPotionUseTime = std::chrono::milliseconds(0);
 					}
 
 					m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
@@ -2338,7 +2546,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(m_PlayerMySelf.iCity)); });
 
+					std::lock_guard<std::recursive_mutex> lockNpc(m_mutexNpc);
 					m_vecNpc.clear();
+
+					std::lock_guard<std::recursive_mutex> lockPlayer(m_mutexPlayer);
 					m_vecPlayer.clear();
 
 #ifdef DEBUG
@@ -2354,12 +2565,19 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					m_mapSkillUseTime.clear();
 
 					m_bIsMovingToLoot = false;
+
+					std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 					m_vecLootList.clear();
 
 					m_vecRoute.clear();
 
 					m_msLastSupplyTime = std::chrono::milliseconds(0);
-					m_msLastPotionUseTime = std::chrono::milliseconds(0);
+
+					std::lock_guard<std::recursive_mutex> lockNpc(m_mutexNpc);
+					m_vecNpc.clear();
+
+					std::lock_guard<std::recursive_mutex> lockPlayer(m_mutexPlayer);
+					m_vecPlayer.clear();
 				}
 				break;
 			}
@@ -2373,6 +2591,12 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			m_PlayerMySelf.fX = (pkt.read<uint16_t>() / 10.0f);
 			m_PlayerMySelf.fY = (pkt.read<uint16_t>() / 10.0f);
 			m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
+
+			std::lock_guard<std::recursive_mutex> lockNpc(m_mutexNpc);
+			m_vecNpc.clear();
+
+			std::lock_guard<std::recursive_mutex> lockPlayer(m_mutexPlayer);
+			m_vecPlayer.clear();
 		}
 		break;	
 
@@ -2603,6 +2827,7 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 			printf("SendProcess::WIZ_HOME\n");
 #endif
+			std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
 			m_vecLootList.clear();
 		}
 		break;
@@ -2905,45 +3130,55 @@ void ClientHandler::LoadSkillData()
 	if (!m_Bot->GetSkillTable(&pSkillTable))
 		return;
 
+	bool bEnableSpecialFeatures = false;
+
+#ifdef SPECIAL_FEATURES
+	bEnableSpecialFeatures = true;
+#endif
+
 	for (const auto& [key, value] : *pSkillTable)
 	{
-		if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(GetClass())))
-			continue;
-
-		if (value.iTarget != SkillTargetType::TARGET_SELF 
-			&& value.iTarget != SkillTargetType::TARGET_PARTY 
-			&& value.iTarget != SkillTargetType::TARGET_PARTY_ALL 
-			&& value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME 
-			&& value.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
-			&& value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY 
-			&& value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
-			continue;
-
-		if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
-			continue;
-
-		switch (value.iNeedSkill % 10)
+		if ((bEnableSpecialFeatures && value.iID != 490803) || !bEnableSpecialFeatures)
 		{
-			case 0:
-				if (value.iNeedLevel > GetLevel())
+			if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(GetClass())))
+				continue;
+
+			if (value.iTarget != SkillTargetType::TARGET_SELF 
+				&& value.iTarget != SkillTargetType::TARGET_PARTY 
+				&& value.iTarget != SkillTargetType::TARGET_PARTY_ALL 
+				&& value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME 
+				&& value.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
+				&& value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY 
+				&& value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+				continue;
+
+		
+				if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
 					continue;
-				break;
-			case 5:
-				if (value.iNeedLevel > GetSkillPoint(0))
-					continue;
-				break;
-			case 6:
-				if (value.iNeedLevel > GetSkillPoint(1))
-					continue;
-				break;
-			case 7:
-				if (value.iNeedLevel > GetSkillPoint(2))
-					continue;
-				break;
-			case 8:
-				if (value.iNeedLevel > GetSkillPoint(3))
-					continue;
-				break;
+
+				switch (value.iNeedSkill % 10)
+				{
+				case 0:
+					if (value.iNeedLevel > GetLevel())
+						continue;
+					break;
+				case 5:
+					if (value.iNeedLevel > GetSkillPoint(0))
+						continue;
+					break;
+				case 6:
+					if (value.iNeedLevel > GetSkillPoint(1))
+						continue;
+					break;
+				case 7:
+					if (value.iNeedLevel > GetSkillPoint(2))
+						continue;
+					break;
+				case 8:
+					if (value.iNeedLevel > GetSkillPoint(3))
+						continue;
+					break;
+				}
 		}
 
 		m_vecAvailableSkill.push_back(value);
@@ -2987,33 +3222,26 @@ void ClientHandler::MoveToTargetProcess()
 			if(!bMoveToTarget)
 				continue;
 
-			Vector3 v3TargetPosition = GetTargetPosition();
-
-			DWORD iTargetBase = GetClientSelectedTargetBase();
+			DWORD iTargetBase = GetTargetBase();
 
 			if (iTargetBase == 0)
 				continue;
-			else
+
+			if (!IsAttackable(iTargetBase))
 			{
-				if (!IsEnemy(iTargetBase))
-					continue;
+				continue;
+			}
 
-				DWORD iHp = GetHp(iTargetBase);
-				DWORD iMaxHp = GetMaxHp(iTargetBase);
-				DWORD iState = GetActionState(iTargetBase);
+			float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
+			float fMySelfRadius = GetRadius() * GetScale();
 
-				if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
-					continue;
+			Vector3 v3TargetPosition = GetTargetPosition();
 
-				float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
-				float fMySelfRadius = GetRadius() * GetScale();
-
-				if (GetDistance(v3TargetPosition) > fTargetRadius + fMySelfRadius)
+			if (GetDistance(v3TargetPosition) > fTargetRadius + fMySelfRadius)
+			{
+				if (GetActionState() != PSA_SPELLMAGIC)
 				{
-					if (GetActionState() != PSA_SPELLMAGIC)
-					{
-						SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
-					}
+					SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
 				}
 			}
 		}
@@ -3032,6 +3260,147 @@ void ClientHandler::MoveToTargetProcess()
 #endif
 }
 
+void ClientHandler::BasicAttackProcess()
+{
+#ifdef DEBUG
+	printf("ClientHandler::BasicAttackProcess Started\n");
+#endif
+
+	while (m_bWorking)
+	{
+		try
+		{
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
+
+			if (IsZoneChanging())
+				continue;
+
+			if (GetTarget() == -1)
+				continue;
+
+			if (IsMovingToLoot())
+				continue;
+
+			if (IsBlinking())
+				continue;
+
+			if (IsRouting())
+				continue;
+
+			if (IsDeath())
+				continue;
+
+			std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+			if (!m_Bot->GetItemTable(&pItemTable))
+				continue;
+
+			if (GetActionState() == PSA_SPELLMAGIC)
+				continue;
+
+			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+
+			if (!bAttackStatus)
+				continue;
+
+			DWORD iTargetBase = GetTargetBase();
+
+			if (iTargetBase == 0)
+				continue;
+
+			if (!IsAttackable(iTargetBase))
+				continue;
+				
+			Vector3 v3TargetPosition = GetTargetPosition();
+
+			auto iLeftHandWeapon = GetInventoryItemSlot(6);
+			auto iRightHandWeapon = GetInventoryItemSlot(8);
+
+			float fEffectiveAttackRange = 10.0f;
+			float fBasicAttackIntervalTable = 1.0f;
+
+			if (iRightHandWeapon.iItemID != 0)
+			{
+				uint32_t iRightHandWeaponBaseID = iRightHandWeapon.iItemID / 1000 * 1000;
+				auto pRightHandWeaponItemData = pItemTable->find(iRightHandWeaponBaseID);
+
+				if (pRightHandWeaponItemData != pItemTable->end())
+				{
+					fEffectiveAttackRange = (float)pRightHandWeaponItemData->second.siAttackRange;
+				}
+			}
+
+			if (iLeftHandWeapon.iItemID != 0)
+			{
+				uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon.iItemID / 1000 * 1000;
+
+				auto pLeftHandWeaponItemData = pItemTable->find(iLeftHandWeaponBaseID);
+
+				if (pLeftHandWeaponItemData != pItemTable->end())
+				{
+					fEffectiveAttackRange = (float)pLeftHandWeaponItemData->second.siAttackRange;
+
+					std::map<uint32_t, __TABLE_ITEM_EXTENSION>* pItemExtensionTable;
+					if (m_Bot->GetItemExtensionTable(pLeftHandWeaponItemData->second.byExtIndex, &pItemExtensionTable))
+					{
+						auto pLeftHandWeaponItemExtensionData = pItemExtensionTable->find(iLeftHandWeapon.iItemID % 1000);
+
+						if (pLeftHandWeaponItemExtensionData != pItemExtensionTable->end())
+						{
+							fBasicAttackIntervalTable = (pLeftHandWeaponItemData->second.siAttackInterval / 100.0f)
+								* (pLeftHandWeaponItemExtensionData->second.iAttackIntervalPercentage / 100.0f);
+						}
+					}
+				}
+			}
+
+			float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
+			float fMySelfRadius = GetRadius() * GetScale();
+			float fDistance = GetDistance(v3TargetPosition);
+
+			if (GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
+			{
+				float fTime = Bot::TimeGet();
+				float fAttackInterval = fBasicAttackIntervalTable;
+
+				if (m_fAttackDelta > 0)
+				{
+					fAttackInterval /= m_fAttackDelta;
+				}
+
+				if (fTime > m_fAttackTimeRecent + fAttackInterval
+					&& GetActionState() != PSA_SPELLMAGIC)
+				{
+					bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+					bool bBasicAttackWithPacket = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), false);
+
+					if (!bBasicAttack && bBasicAttackWithPacket)
+					{
+						float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
+						SendBasicAttackPacket(GetTarget(), fBasicAttackIntervalTable, fDistanceExceptRadius);
+					}
+
+					if (!bBasicAttackWithPacket && bBasicAttack)
+						BasicAttack();
+
+					m_fAttackTimeRecent = fTime;
+				}
+			}
+		}
+		catch (const std::exception& e)
+		{
+#ifdef DEBUG
+			printf("BasicAttackProcess:Exception: %s\n", e.what());
+#else
+			UNREFERENCED_PARAMETER(e);
+#endif
+		}
+	}
+
+#ifdef DEBUG
+	printf("ClientHandler::BasicAttackProcess Stopped\n");
+#endif
+}
+
 void ClientHandler::AttackProcess()
 {
 #ifdef DEBUG
@@ -3042,7 +3411,10 @@ void ClientHandler::AttackProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
+
+			if (IsZoneChanging())
+				continue;
 
 			if (GetTarget() == -1)
 				continue;
@@ -3079,88 +3451,19 @@ void ClientHandler::AttackProcess()
 			if (!bAttackStatus)
 				continue;
 
-			auto iLeftHandWeapon = GetInventoryItemSlot(6);
-			auto iRightHandWeapon = GetInventoryItemSlot(8);
+			DWORD iTargetBase = GetTargetBase();
 
-			float fEffectiveAttackRange = 10.0f;
+			if (iTargetBase == 0)
+				continue;
 
-			if (iRightHandWeapon.iItemID != 0)
+			if (!IsAttackable(iTargetBase))
 			{
-				uint32_t iRightHandWeaponBaseID = iRightHandWeapon.iItemID / 1000 * 1000;
-				auto pRightHandWeaponItemData = pItemTable->find(iRightHandWeaponBaseID);
-
-				if (pRightHandWeaponItemData != pItemTable->end())
-				{
-					fEffectiveAttackRange = (float)pRightHandWeaponItemData->second.siAttackRange;
-				}
-			}
-
-			if (iLeftHandWeapon.iItemID != 0)
-			{
-				uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon.iItemID / 1000 * 1000;
-
-				auto pLeftHandWeaponItemData = pItemTable->find(iLeftHandWeaponBaseID);
-
-				if (pLeftHandWeaponItemData != pItemTable->end())
-				{
-					fEffectiveAttackRange = (float)pLeftHandWeaponItemData->second.siAttackRange;
-				}
+				continue;
 			}
 
 			std::vector<int> vecAttackSkillList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
 			
-			if (vecAttackSkillList.size() == 0)
-			{
-				DWORD iTargetBase = GetClientSelectedTargetBase();
-
-				if (iTargetBase == 0)
-					continue;
-
-				if (!IsEnemy(iTargetBase))
-					continue;
-
-				DWORD iHp = GetHp(iTargetBase);
-				DWORD iMaxHp = GetMaxHp(iTargetBase);
-				DWORD iState = GetActionState(iTargetBase);
-
-				if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
-					continue;
-
-				Vector3 v3TargetPosition = GetTargetPosition();
-
-				bool bAttackRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
-				int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
-
-				if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
-					continue;
-
-				bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-
-				float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
-				float fMySelfRadius = GetRadius() * GetScale();
-
-				if (bBasicAttack 
-					&& GetActionState() != PSA_SPELLMAGIC
-					&& GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
-				{
-					BasicAttack();
-				}
-
-				bool bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", false);
-
-				if (bAttackSpeed)
-				{
-					int iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
-
-					if (iAttackSpeedValue > 0)
-						std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
-					else
-						std::this_thread::sleep_for(std::chrono::milliseconds(1));
-				}
-				else
-					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-			} 
-			else
+			if (vecAttackSkillList.size() > 0)
 			{
 				bool bUseHighLevelSkillFirst = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("UseHighLevelSkillsFirst"), true);
 
@@ -3183,18 +3486,47 @@ void ClientHandler::AttackProcess()
 					std::sort(vecAttackSkillList.begin(), vecAttackSkillList.end(), pSort);
 				}
 
+				auto iLeftHandWeapon = GetInventoryItemSlot(6);
+				auto iRightHandWeapon = GetInventoryItemSlot(8);
+
+				float fEffectiveAttackRange = 10.0f;
+
+				if (iRightHandWeapon.iItemID != 0)
+				{
+					uint32_t iRightHandWeaponBaseID = iRightHandWeapon.iItemID / 1000 * 1000;
+					auto pRightHandWeaponItemData = pItemTable->find(iRightHandWeaponBaseID);
+
+					if (pRightHandWeaponItemData != pItemTable->end())
+					{
+						fEffectiveAttackRange = (float)pRightHandWeaponItemData->second.siAttackRange;
+					}
+				}
+
+				if (iLeftHandWeapon.iItemID != 0)
+				{
+					uint32_t iLeftHandWeaponBaseID = iLeftHandWeapon.iItemID / 1000 * 1000;
+
+					auto pLeftHandWeaponItemData = pItemTable->find(iLeftHandWeaponBaseID);
+
+					if (pLeftHandWeaponItemData != pItemTable->end())
+					{
+						fEffectiveAttackRange = (float)pLeftHandWeaponItemData->second.siAttackRange;
+					}
+				}
+
 				for (const auto& x : vecAttackSkillList)
 				{
-					DWORD iTargetBase = GetClientSelectedTargetBase();
+					auto pSkillData = pSkillTable->find(x);
+
+					if (pSkillData == pSkillTable->end())
+						continue;
+
+					DWORD iTargetBase = GetTargetBase();
 
 					if (iTargetBase == 0)
 						break;
 
-					DWORD iHp = GetHp(iTargetBase);
-					DWORD iMaxHp = GetMaxHp(iTargetBase);
-					DWORD iState = GetActionState(iTargetBase);
-
-					if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
+					if (!IsAttackable(iTargetBase))
 						break;
 
 					Vector3 v3TargetPosition = GetTargetPosition();
@@ -3205,24 +3537,17 @@ void ClientHandler::AttackProcess()
 					if (bAttackRangeLimit && GetDistance(v3TargetPosition) > (float)iAttackRangeLimitValue)
 						break;
 
-					if (!IsEnemy(iTargetBase))
-						break;
-
-					auto pSkillData = pSkillTable->find(x);
-
-					if (pSkillData == pSkillTable->end())
-						continue;
-
 					if (pSkillData->second.iReCastTime != 0 && GetActionState() == PSA_SPELLMAGIC)
 						continue;
 
-					if (pSkillData->second.iValidDist > 0 && GetDistance(v3TargetPosition) > (float)pSkillData->second.iValidDist)
+					if (pSkillData->second.iValidDist > 0 
+						&& GetDistance(v3TargetPosition) > (float)pSkillData->second.iValidDist)
 						continue;
 
 					float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
 					float fMySelfRadius = GetRadius() * GetScale();
 
-					if (pSkillData->second.iValidDist == 0 
+					if (pSkillData->second.iValidDist == 0
 						&& GetDistance(v3TargetPosition) > (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
 						continue;
 
@@ -3247,42 +3572,31 @@ void ClientHandler::AttackProcess()
 
 					std::chrono::milliseconds msLastSkillUseItem = GetSkillUseTime(pSkillData->second.iID);
 
-					bool bUseBasicAttack = false;
-
-					bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-
-					if (bBasicAttack && GetDistance(v3TargetPosition) <= (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
-					{
-						bUseBasicAttack = true;
-					}
-
 					if (pSkillData->second.iCooldown > 0 && msLastSkillUseItem.count() > 0)
 					{
 						int64_t iSkillCooldownTime = static_cast<int64_t>(pSkillData->second.iCooldown) * 100;
 
 						if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
 						{
-							if (bUseBasicAttack)
-							{
-								BasicAttack();
-							}
-
 							continue;
 						}
 					}
 
-					if (GetMp() < pSkillData->second.iExhaustMSP 
+					if (GetMp() < pSkillData->second.iExhaustMSP
 						|| (iNeedItem != 0 && iExistItemCount < iNeedItemCount))
 					{
-						if (bUseBasicAttack)
-						{
-							BasicAttack();
-						}
-
 						continue;
 					}
 
-					UseSkill(pSkillData->second, GetTarget(), 0, true, bUseBasicAttack);
+					UseSkill(pSkillData->second, GetTarget(), 0, true, false);
+
+					/*bool bRRCombo = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RRCombo"), true);
+
+					if (bRRCombo)
+					{
+						BasicAttack();
+						BasicAttack();
+					}*/
 
 					bool bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", false);
 
@@ -3292,13 +3606,11 @@ void ClientHandler::AttackProcess()
 
 						if (iAttackSpeedValue > 0)
 							std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
-						else
-							std::this_thread::sleep_for(std::chrono::milliseconds(1));
 					}
 					else
 						std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 				}
-			}
+			} 
 		}
 		catch (const std::exception& e)
 		{
@@ -3325,7 +3637,22 @@ void ClientHandler::SearchTargetProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			bool bSearchTargetSpeed = GetUserConfiguration()->GetBool("Attack", "SearchTargetSpeed", false);
+
+			if (bSearchTargetSpeed)
+			{
+				int iSearchTargetSpeedValue = GetUserConfiguration()->GetInt("Attack", "SearchTargetSpeedValue", 100);
+
+				if (iSearchTargetSpeedValue > 0)
+					std::this_thread::sleep_for(std::chrono::milliseconds(iSearchTargetSpeedValue));
+				else
+					std::this_thread::sleep_for(std::chrono::microseconds(100));
+			}
+			else
+				std::this_thread::sleep_for(std::chrono::microseconds(100));
+
+			if (IsZoneChanging())
+				continue;
 
 			if (IsBlinking())
 				continue;
@@ -3341,24 +3668,15 @@ void ClientHandler::SearchTargetProcess()
 
 			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
-
-			bool bSearchTargetSpeed = GetUserConfiguration()->GetBool("Attack", "SearchTargetSpeed", false);
-
-			if (bSearchTargetSpeed)
-			{
-				int iSearchTargetSpeedValue = GetUserConfiguration()->GetInt("Attack", "SearchTargetSpeedValue", 100);
-
-				if (iSearchTargetSpeedValue > 0)
-					std::this_thread::sleep_for(std::chrono::milliseconds(iSearchTargetSpeedValue));
-				else
-					std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			}
-			else
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			
 			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
 
 			if (!bAttackStatus)
+				continue;
+
+			bool bTargetSelectedWaitItDieForNew = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("TargetSelectedWaitItDieForNew"), true);
+
+			if (bTargetSelectedWaitItDieForNew && GetTarget() != -1)
 				continue;
 
 			bool bAutoTarget = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
@@ -3369,8 +3687,8 @@ void ClientHandler::SearchTargetProcess()
 			
 			if (bAutoTarget)
 			{
-				auto &tmpVecNpc = m_vecNpc;
-				std::copy_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+				std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
+				std::copy_if(m_vecNpc.begin(), m_vecNpc.end(),
 					std::back_inserter(vecFilteredTarget),
 					[&](const TNpc& c)
 					{
@@ -3386,8 +3704,8 @@ void ClientHandler::SearchTargetProcess()
 			{
 				std::vector<int> vecSelectedNpcList = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
 
-				auto &tmpVecNpc = m_vecNpc;
-				std::copy_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+				std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
+				std::copy_if(m_vecNpc.begin(), m_vecNpc.end(),
 					std::back_inserter(vecFilteredTarget),
 					[&](const TNpc& c)
 					{
@@ -3422,29 +3740,53 @@ void ClientHandler::SearchTargetProcess()
 
 				auto &pSelectedTarget = vecFilteredTarget.front();
 
-				if (pSelectedTarget.iID != GetClientSelectedTarget())
+				if (pSelectedTarget.iID != GetTarget())
 				{
-					DWORD iTargetBase = GetEntityBase(pSelectedTarget.iID);
+					DWORD iNewTargetBase = GetEntityBase(pSelectedTarget.iID);
 
-					if (iTargetBase != 0)
+					if (iNewTargetBase == 0)
+						continue;
+
+					DWORD iNewTargetHp = GetHp(iNewTargetBase);
+					DWORD iNewTargetMaxHp = GetMaxHp(iNewTargetBase);
+					DWORD iNewTargetState = GetActionState(iNewTargetBase);
+
+					if ((iNewTargetState == PSA_DYING || iNewTargetState == PSA_DEATH) || (iNewTargetMaxHp != 0 && iNewTargetHp == 0))
+						continue;
+
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					DWORD iOldTargetBase = GetEntityBase(GetTarget());
+
+					if (iOldTargetBase != 0)
 					{
-						SetTarget(iTargetBase);
+						DWORD iOldTargetHp = GetHp(iOldTargetBase);
 
-						bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+						if (iOldTargetHp > 0 
+							&& (m_msLastSelectedTargetTime.count() + 500) >= msNow.count())
+							continue;
+					}
 
-						if (bMoveToTarget)
+					m_msLastSelectedTargetTime = msNow;
+
+					SetTarget(iNewTargetBase);
+
+					bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+
+					if (bMoveToTarget)
+					{
+						float fTargetRadius = GetRadius(iNewTargetBase) * GetScale(iNewTargetBase);
+						float fMySelfRadius = GetRadius() * GetScale();
+
+						auto v3TargetPosition = GetTargetPosition();
+
+						if (GetDistance(v3TargetPosition) > (fTargetRadius + fMySelfRadius))
 						{
-							float fTargetRadius = GetRadius(iTargetBase) * GetScale(iTargetBase);
-							float fMySelfRadius = GetRadius() * GetScale();
-
-							auto v3TargetPosition = GetTargetPosition();
-
-							if (GetDistance(v3TargetPosition) > (fTargetRadius + fMySelfRadius))
+							if (GetActionState() != PSA_SPELLMAGIC)
 							{
-								if (GetActionState() != PSA_SPELLMAGIC)
-								{
-									SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
-								}
+								SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
 							}
 						}
 					}
@@ -3478,10 +3820,13 @@ void ClientHandler::AutoLootProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-			if (IsBlinking())
+			if (m_vecLootList.size() == 0)
 				continue;
 
-			if (m_vecLootList.size() == 0)
+			if (IsZoneChanging())
+				continue;
+
+			if (IsBlinking())
 				continue;
 
 			if (IsRouting())
@@ -3501,9 +3846,10 @@ void ClientHandler::AutoLootProcess()
 					std::chrono::system_clock::now().time_since_epoch()
 				);
 
-				auto &vecLootList = m_vecLootList;
 				std::vector<TLoot> vecFilteredLoot;
-				std::copy_if(vecLootList.begin(), vecLootList.end(),
+
+				std::lock_guard<std::recursive_mutex> lock(m_mutexLootList);
+				std::copy_if(m_vecLootList.begin(), m_vecLootList.end(),
 					std::back_inserter(vecFilteredLoot),
 					[&](const TLoot& c)
 					{
@@ -3618,6 +3964,9 @@ void ClientHandler::MinorProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+			if (IsZoneChanging())
+				continue;
+
 			if (IsBlinking())
 				continue;
 
@@ -3683,6 +4032,9 @@ void ClientHandler::PotionProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+			if (IsZoneChanging())
+				continue;
+
 			if (IsBlinking())
 				continue;
 
@@ -3700,17 +4052,10 @@ void ClientHandler::PotionProcess()
 					int32_t iHpProtectionPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
 					int32_t iHpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HpValue"), 50);
 
-					/*std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch()
-					);*/
-
-					if (iHpProtectionPercent <= iHpProtectionValue /*&& (m_msLastPotionUseTime.count() + 2000) <= msNow.count()*/)
+					if (iHpProtectionPercent <= iHpProtectionValue)
 					{
 						if (HealthPotionProcess())
 						{
-							/*m_msLastPotionUseTime = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);*/
 						}
 					}
 				}
@@ -3727,18 +4072,10 @@ void ClientHandler::PotionProcess()
 					int32_t iMpProtectionPercent = (int32_t)std::ceil((iMp * 100) / iMaxMp);
 					int32_t iMpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MpValue"), 50);
 
-					/*std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch()
-					);*/
-
-					if (iMpProtectionPercent <= iMpProtectionValue /*&& (m_msLastPotionUseTime.count() + 2000) <= msNow.count()*/)
+					if (iMpProtectionPercent <= iMpProtectionValue)
 					{
-
 						if (ManaPotionProcess())
 						{
-							/*m_msLastPotionUseTime = duration_cast<std::chrono::milliseconds>(
-								std::chrono::system_clock::now().time_since_epoch()
-							);*/
 						}
 					}
 				}
@@ -3771,6 +4108,9 @@ void ClientHandler::CharacterProcess()
 		try
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(800));
+
+			if (IsZoneChanging())
+				continue;
 
 			if (IsBlinking())
 				continue;
@@ -3828,6 +4168,9 @@ void ClientHandler::CharacterProcess()
 
 					for (const auto& x : vecCharacterSkillList)
 					{
+						if (GetActionState() == PSA_SPELLMAGIC)
+							continue;
+
 						auto pSkillData = pSkillTable->find(x);
 
 						if (pSkillData != pSkillTable->end())
@@ -3875,7 +4218,15 @@ void ClientHandler::CharacterProcess()
 
 								if (bUse)
 								{
-									UseSkill(pSkillData->second, GetID());
+									if (pSkillData->second.iID == 490803)
+									{
+										SendStartSkillMagicAtTargetPacket(pSkillData->second, GetID(), Vector3(0.0f, 0.0f, 0.0f));
+									}
+									else
+									{
+										UseSkill(pSkillData->second, GetID());
+									}
+									
 								}
 							}
 						}
@@ -3892,6 +4243,7 @@ void ClientHandler::CharacterProcess()
 				if (IsPriest() || IsRogue())
 				{
 					std::vector<PartyMember> tmpVecPartyMembers;
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 					std::copy(m_vecPartyMembers.begin(), m_vecPartyMembers.end(), std::back_inserter(tmpVecPartyMembers));
 
 					auto pSort = [](PartyMember const& a, PartyMember const& b)
@@ -4027,15 +4379,68 @@ void ClientHandler::RogueCharacterProcess(int32_t iTargetID, bool bIsPartyReques
 			std::chrono::system_clock::now().time_since_epoch()
 		);
 
-		std::chrono::milliseconds msLastSkillUseItem = Client::GetSkillUseTime(it->iID);
+		std::chrono::milliseconds msLastSkillUseTime = Client::GetSkillUseTime(it->iID);
 
 		bool bUse = true;
 
-		if (it->iCooldown > 0 && msLastSkillUseItem.count() > 0)
+		if (!bIsPartyRequest && IsBuffActive(BuffType::BUFF_TYPE_SPEED))
+		{
+			bUse = false;
+		}
+
+		if (bIsPartyRequest)
+		{
+			std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+			auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+
+			[&](const PartyMember& a)
+			{
+				return a.iMemberID == iTargetID;
+			});
+
+			if (pMember != m_vecPartyMembers.end())
+			{
+				if ((pMember->iSwiftBuffTime.count() + 607000) > msNow.count())
+					bUse = false;
+			}
+
+			DWORD iPlayerBase = GetEntityBase(iTargetID);
+
+			if (iPlayerBase == 0)
+				bUse = false;
+			else
+			{
+				auto iPlayerPosition = Vector3(
+					ReadFloat(iPlayerBase + GetAddress("KO_OFF_X")),
+					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
+					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
+
+				if (GetDistance(iPlayerPosition) > 50.0f)
+				{
+					bUse = false;
+				}
+				else
+				{
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[&](const TPlayer& a) { return a.iID == iTargetID; });
+
+					if (it != m_vecPlayer.end())
+					{
+						if (it->iMoveSpeed == 45)
+						{
+							bUse = true;
+						}
+					}
+				}
+			}			
+		}
+
+		if (it->iCooldown > 0 && msLastSkillUseTime.count() > 0)
 		{
 			int64_t iSkillCooldownTime = static_cast<int64_t>(it->iCooldown) * 100;
 
-			if ((msLastSkillUseItem.count() + iSkillCooldownTime) > msNow.count())
+			if ((msLastSkillUseTime.count() + iSkillCooldownTime) > msNow.count())
 				bUse = false;
 		}
 
@@ -4049,52 +4454,35 @@ void ClientHandler::RogueCharacterProcess(int32_t iTargetID, bool bIsPartyReques
 			bUse = false;
 		}
 
-		if (!bIsPartyRequest && IsBuffActive(BuffType::BUFF_TYPE_SPEED))
-		{
-			bUse = false;
-		}
-
-		if (bIsPartyRequest)
-		{
-			auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
-			[&](const PartyMember& a)
-			{
-				return a.iMemberID == iTargetID;
-			});
-
-			if (pMember != m_vecPartyMembers.end())
-			{
-				if ((pMember->iSwiftBuffTime.count() + 600000) > msNow.count())
-					bUse = false;
-			}
-		}
-
 		if (bUse)
 		{
 #ifdef DEBUG
 			printf("Swift Buff Using Target -> %d\n", iTargetID);
 #endif
-
-			UseSkill(*it, iTargetID);	
-
-			if (bIsPartyRequest)
+			if (UseSkill(*it, iTargetID))
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
-					[&](const PartyMember& a)
-					{
-						return a.iMemberID == iTargetID;
-					});
-
-				if (pMember != m_vecPartyMembers.end())
+				if (bIsPartyRequest)
 				{
-					pMember->iSwiftBuffTime = duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch()
-					);
+					WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+
+					std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+					std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+						[&](const PartyMember& a)
+						{
+							return a.iMemberID == iTargetID;
+						});
+
+					if (pMember != m_vecPartyMembers.end())
+					{
+						pMember->iSwiftBuffTime = duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						);
 #ifdef DEBUG
-					printf("Swift Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iSwiftBuffTime.count());
+						printf("Swift Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iSwiftBuffTime.count());
 #endif
+					}
 				}
 			}
 		}
@@ -4165,6 +4553,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 			if (bIsPartyRequest)
 			{
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 					[&](const PartyMember& a)
 					{
@@ -4173,8 +4562,25 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 				if (pMember != m_vecPartyMembers.end())
 				{
-					if ((pMember->iHpBuffTime.count() + 600000) > msNow.count())
+					if ((pMember->iHpBuffTime.count() + 607000) > msNow.count())
 						bUse = false;
+				}
+
+				DWORD iPlayerBase = GetEntityBase(iTargetID);
+
+				if (iPlayerBase == 0)
+					bUse = false;
+				else
+				{
+					auto iPlayerPosition = Vector3(
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_X")),
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
+
+					if (GetDistance(iPlayerPosition) > 50.0f)
+					{
+						bUse = false;
+					}
 				}
 			}
 
@@ -4183,27 +4589,30 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 #ifdef DEBUG
 				printf("HP Buff Using Target -> %d\n", iTargetID);
 #endif
-
-				UseSkill(*it, iTargetID);
-
-				if (bIsPartyRequest)
+				if (UseSkill(*it, iTargetID))
 				{
-					std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
-						[&](const PartyMember& a)
-						{
-							return a.iMemberID == iTargetID;
-						});
-
-					if (pMember != m_vecPartyMembers.end())
+					if (bIsPartyRequest)
 					{
-						pMember->iHpBuffTime = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+						std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+						auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+							[&](const PartyMember& a)
+							{
+								return a.iMemberID == iTargetID;
+							});
+
+						if (pMember != m_vecPartyMembers.end())
+						{
+							pMember->iHpBuffTime = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
 #ifdef DEBUG
-						printf("HP Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iHpBuffTime.count());
+							printf("HP Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iHpBuffTime.count());
 #endif
+						}
 					}
 				}
 			}
@@ -4259,6 +4668,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 			if (bIsPartyRequest)
 			{
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 					[&](const PartyMember& a)
 					{
@@ -4267,8 +4677,25 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 				if (pMember != m_vecPartyMembers.end())
 				{
-					if ((pMember->iACBuffTime.count() + 600000) > msNow.count())
+					if ((pMember->iACBuffTime.count() + 607000) > msNow.count())
 						bUse = false;
+				}
+
+				DWORD iPlayerBase = GetEntityBase(iTargetID);
+
+				if (iPlayerBase == 0)
+					bUse = false;
+				else
+				{
+					auto iPlayerPosition = Vector3(
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_X")),
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
+
+					if (GetDistance(iPlayerPosition) > 50.0f)
+					{
+						bUse = false;
+					}
 				}
 			}
 
@@ -4277,28 +4704,32 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 #ifdef DEBUG
 				printf("AC Buff Using Target -> %d\n", iTargetID);
 #endif
-				UseSkill(*it, iTargetID);
-
-				if (bIsPartyRequest)
+				if (UseSkill(*it, iTargetID))
 				{
-					std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
-						[&](const PartyMember& a)
-						{
-							return a.iMemberID == iTargetID;
-						});
-
-					if (pMember != m_vecPartyMembers.end())
+					if (bIsPartyRequest)
 					{
-						pMember->iACBuffTime = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+						std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+						auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+							[&](const PartyMember& a)
+							{
+								return a.iMemberID == iTargetID;
+							});
+
+						if (pMember != m_vecPartyMembers.end())
+						{
+							pMember->iACBuffTime = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
 #ifdef DEBUG
-						printf("AC Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iACBuffTime.count());
+							printf("AC Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iACBuffTime.count());
 #endif
+						}
 					}
-				}
+				}			
 			}
 		}
 	}
@@ -4352,6 +4783,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 			if (bIsPartyRequest)
 			{
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
 				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
 					[&](const PartyMember& a)
 					{
@@ -4360,8 +4792,25 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 				if (pMember != m_vecPartyMembers.end())
 				{
-					if ((pMember->iMindBuffTime.count() + 600000) > msNow.count())
+					if ((pMember->iMindBuffTime.count() + 607000) > msNow.count())
 						bUse = false;
+				}
+
+				DWORD iPlayerBase = GetEntityBase(iTargetID);
+
+				if (iPlayerBase == 0)
+					bUse = false;
+				else
+				{
+					auto iPlayerPosition = Vector3(
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_X")),
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
+						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
+
+					if (GetDistance(iPlayerPosition) > 50.0f)
+					{
+						bUse = false;
+					}
 				}
 			}
 
@@ -4370,26 +4819,30 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 #ifdef DEBUG
 				printf("Mind Buff Using Target -> %d\n", iTargetID);
 #endif
-				UseSkill(*it, iTargetID);
-
-				if (bIsPartyRequest)
+				if (UseSkill(*it, iTargetID))
 				{
-					std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-					auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
-						[&](const PartyMember& a)
-						{
-							return a.iMemberID == iTargetID;
-						});
-
-					if (pMember != m_vecPartyMembers.end())
+					if (bIsPartyRequest)
 					{
-						pMember->iMindBuffTime = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
+						WaitCondition(GetActionState() == PSA_SPELLMAGIC);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+						std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+						auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+							[&](const PartyMember& a)
+							{
+								return a.iMemberID == iTargetID;
+							});
+
+						if (pMember != m_vecPartyMembers.end())
+						{
+							pMember->iMindBuffTime = duration_cast<std::chrono::milliseconds>(
+								std::chrono::system_clock::now().time_since_epoch()
+							);
 #ifdef DEBUG
-						printf("Mind Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iMindBuffTime.count());
+							printf("Mind Buff Using Target -> %d - Time: %lld\n", iTargetID, pMember->iMindBuffTime.count());
 #endif
+						}
 					}
 				}
 			}
@@ -4438,6 +4891,23 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 			if (GetMp() < it->iExhaustMSP)
 			{
 				bUse = false;
+			}
+
+			DWORD iPlayerBase = GetEntityBase(iTargetID);
+
+			if (iPlayerBase == 0)
+				bUse = false;
+			else
+			{
+				auto iPlayerPosition = Vector3(
+					ReadFloat(iPlayerBase + GetAddress("KO_OFF_X")),
+					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
+					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
+
+				if (GetDistance(iPlayerPosition) > 50.0f)
+				{
+					bUse = false;
+				}
 			}
 
 			if (bUse)
@@ -4537,6 +5007,9 @@ void ClientHandler::GodModeProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
+			if (IsZoneChanging())
+				continue;
+
 			if (IsBlinking())
 				continue;
 
@@ -4618,6 +5091,9 @@ void ClientHandler::RouteProcess()
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+			if (IsZoneChanging())
+				continue;
+
 			if (IsBlinking())
 				continue;
 
@@ -4689,7 +5165,7 @@ void ClientHandler::RouteProcess()
 						if (!bSelected)
 							continue;
 
-						auto &tmpVecNpc = m_vecNpc;
+						std::vector<TNpc> tmpVecNpc = m_vecNpc;
 
 						Vector3 v3CurrentPosition = GetPosition();
 
@@ -4824,7 +5300,7 @@ void ClientHandler::RouteProcess()
 
 				if (bAutoRepair && (jSupplyList.size() == 0 || mapSupplyBuyList.size() == 0))
 				{
-					auto &tmpVecNpc = m_vecNpc;
+					std::vector<TNpc> tmpVecNpc = m_vecNpc;
 
 					Vector3 v3CurrentPosition = GetPosition();
 
@@ -4909,7 +5385,7 @@ void ClientHandler::RouteProcess()
 
 			case RouteStepType::STEP_GENIE:
 			{
-				//TODO: Check genie status and start
+				StartGenie();
 			}
 			break;
 			}
@@ -4943,6 +5419,9 @@ void ClientHandler::SupplyProcess()
 		try
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+			if (IsZoneChanging())
+				continue;
 
 			if (IsBlinking())
 				continue;

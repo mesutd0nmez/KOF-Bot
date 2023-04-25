@@ -32,6 +32,7 @@ void Service::Clear()
 void Service::Initialize()
 {
     std::string szIniPath = skCryptDec(".\\data\\KOF.ini");
+
     m_iniAppConfiguration = new Ini();
     m_iniAppConfiguration->Load(szIniPath.c_str());
 

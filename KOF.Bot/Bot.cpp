@@ -17,6 +17,12 @@ Bot::Bot()
 	m_pTbl_Skill_Extension2 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
+
+	for (size_t i = 0; i < 45; i++)
+	{
+		m_pTbl_Item_Extension[i] = nullptr;
+	}
+
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
 	m_pTbl_ItemSell = nullptr;
@@ -65,6 +71,12 @@ Bot::~Bot()
 	m_pTbl_Skill_Extension2 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
+
+	for (size_t i = 0; i < 45; i++)
+	{
+		m_pTbl_Item_Extension[i] = nullptr;
+	}
+
 	m_pTbl_Npc = nullptr;
 	m_pTbl_Mob = nullptr;
 	m_pTbl_ItemSell = nullptr;
@@ -137,7 +149,7 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 
 void Bot::Process()
 {
-	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	std::this_thread::sleep_for(std::chrono::microseconds(100));
 
 	if (IsServiceClosed())
 	{
@@ -145,6 +157,7 @@ void Bot::Process()
 	}
 	else
 	{
+
 		if (m_ClientHandler)
 		{
 			m_ClientHandler->Process();
@@ -321,6 +334,16 @@ void Bot::InitializeStaticData()
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
 #endif
+
+	for (size_t i = 0; i < 45; i++)
+	{
+		m_pTbl_Item_Extension[i] = new Table<__TABLE_ITEM_EXTENSION>();
+		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\item_ext_%d_%s.tbl"), m_szClientPath.c_str(), i, szPlatformPrefix.c_str());
+		m_pTbl_Item_Extension[i]->Load(szPath);
+#ifdef DEBUG
+		printf("InitializeStaticData: Loaded item extension %d, size %d\n", i, m_pTbl_Item_Extension[i]->GetDataSize());
+#endif
+	}
 
 	m_pTbl_Npc = new Table<__TABLE_NPC>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\npc_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
@@ -596,7 +619,7 @@ void Bot::OnLoaded()
 
 	SendInjectionRequest(injectedProcessInfo.dwProcessId);
 
-	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
+	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Release\\Pipeline.dll");
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
@@ -688,6 +711,14 @@ bool Bot::GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut)
 		return false;
 
 	return m_pTbl_Item->GetData(mapDataOut);
+}
+
+bool Bot::GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE_ITEM_EXTENSION>** mapDataOut)
+{
+	if (m_pTbl_Item_Extension[iExtensionID] == nullptr)
+		return false;
+
+	return m_pTbl_Item_Extension[iExtensionID]->GetData(mapDataOut);
 }
 
 bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
@@ -997,4 +1028,34 @@ void Bot::SendPipeServer(Packet pkt)
 			0,
 			NULL);
 	}
+}
+
+float Bot::TimeGet()
+{
+	static bool bInit = false;
+	static bool bUseHWTimer = FALSE;
+	static LARGE_INTEGER nTime, nFrequency;
+
+	if (bInit == false)
+	{
+		if (TRUE == ::QueryPerformanceCounter(&nTime))
+		{
+			::QueryPerformanceFrequency(&nFrequency);
+			bUseHWTimer = TRUE;
+		}
+		else
+		{
+			bUseHWTimer = FALSE;
+		}
+
+		bInit = true;
+	}
+
+	if (bUseHWTimer)
+	{
+		::QueryPerformanceCounter(&nTime);
+		return (float)((double)(nTime.QuadPart) / (double)nFrequency.QuadPart);
+	}
+
+	return (float)timeGetTime();
 }

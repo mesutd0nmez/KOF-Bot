@@ -485,6 +485,66 @@ typedef struct __TABLE_ITEM
 	uint8_t				byUnknown3;
 } TABLE_ITEM;
 
+typedef struct __TABLE_ITEM_EXTENSION
+{
+	uint32_t			iExtensionID;
+	std::string			szHeader;
+	uint32_t			iBaseID;
+	std::string			szDescription;
+	uint32_t			iEffectID;
+	uint32_t			iDxtID;
+	uint32_t			iIconID;
+	uint8_t				iItemType;
+	int16_t				iDamage;
+	int16_t				iAttackIntervalPercentage;
+	int16_t				iHitRate;
+	int16_t				iEvasionRate;
+	int16_t				iMaxDurability;
+	int16_t				iPriceMultiply;
+	int16_t				iDefense;
+	int16_t				iDaggerDefense;
+	int16_t				iSwordDefense;
+	int16_t				iClubDefense;
+	int16_t				iAxeDefense;
+	int16_t				iSpearDefense;
+	int16_t				iArrowDefense;
+	int16_t				iJamadarDefense;
+	uint8_t				iFireDamage;
+	uint8_t				iGlacierDamage;
+	uint8_t				iLightningDamage;
+	uint8_t				iPoisonDamage;
+	uint8_t				iHPRecovery;
+	uint8_t				iMPDamage;
+	uint8_t				iMPRecovery;
+	uint8_t				iRepelPhysDamage;
+	uint8_t				iSoulBind;
+	int16_t				iStrB;
+	int16_t				iHpB;
+	int16_t				iDexB;
+	int16_t				iIntB;
+	int16_t				iMpB;
+	int16_t				iBonusHealth;
+	int16_t				iBonusMP;
+	int16_t				iFireResist;
+	int16_t				iIceResist;
+	int16_t				iLightningResist;
+	int16_t				iMagicResist;
+	int16_t				iPoisonResist;
+	int16_t				iCurseResist;
+	uint32_t			iEffectID1;
+	uint32_t			iEffectID2;
+	int16_t				iReqLevel;
+	int16_t				iReqRank;
+	int16_t				iReqTitle;
+	int16_t				iReqStr;
+	int16_t				iReqHp;
+	int16_t				iReqDex;
+	int16_t				iReqInt;
+	int16_t				iReqMP;
+	uint8_t				iUnknown2;
+	int16_t				iUnknown3;
+} TABLE_ITEM_EXTENSION;
+
 typedef struct  __TABLE_NPC
 {
 	uint32_t			iID;
@@ -587,7 +647,14 @@ typedef struct __PartyMember
 	uint16_t iNation;
 
 	std::chrono::milliseconds iHpBuffTime;
+	uint8_t iHpBuffAttemptCount;
+
 	std::chrono::milliseconds iACBuffTime;
+	uint8_t iACBuffAttemptCount;
+
 	std::chrono::milliseconds iMindBuffTime;
+	uint8_t iMindBuffAttemptCount;
+
 	std::chrono::milliseconds iSwiftBuffTime;
+	uint8_t iSwiftBuffAttemptCount;
 } PartyMember;

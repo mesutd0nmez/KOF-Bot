@@ -39,6 +39,9 @@ void Client::Clear()
 	m_bLunarWarDressUp = false;
 
 	m_vecRegionUserList.clear();
+
+	m_fAttackDelta = 1.0f;
+	m_fAttackTimeRecent = Bot::TimeGet();
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -208,6 +211,32 @@ float Client::GetScale(DWORD iBase)
 	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE")));
 }
 
+bool Client::IsAttackable(DWORD iBase)
+{
+	DWORD iTargetID = GetID(iBase);
+	DWORD iNation = GetNation(iBase);
+
+	if (iTargetID >= 5000)
+	{
+		if (iNation != 0 || iNation == GetNation())
+			return false;
+	}
+	else
+	{
+		if (iNation == GetNation())
+			return false;
+	}
+
+	DWORD iHp = GetHp(iBase);
+	DWORD iMaxHp = GetMaxHp(iBase);
+	DWORD iState = GetActionState(iBase);
+
+	if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
+		return false;
+
+	return true;
+}
+
 bool Client::IsDisconnect()
 {
 	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_PKT"))) + GetAddress(skCryptDec("KO_OFF_DISCONNECT"))) == 0;
@@ -273,14 +302,9 @@ bool Client::IsDeath(DWORD iBase)
 	return GetHp(iBase) <= 0;
 }
 
-int32_t Client::GetClientSelectedTarget()
+uint32_t Client::GetTargetBase()
 {
-	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOB")));
-}
-
-uint32_t Client::GetClientSelectedTargetBase()
-{
-	return GetEntityBase(GetClientSelectedTarget());
+	return GetEntityBase(GetTarget());
 }
 
 bool Client::IsRogue(int32_t eClass)
@@ -369,7 +393,7 @@ bool Client::IsPriest(int32_t eClass)
 
 uint32_t Client::GetProperHealthBuff(int MaxHp)
 {
-	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp * 100) / 100.0f);
+	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60.0f);
 
 	if (GetSkillPoint(1) >= 78)
 	{
@@ -496,6 +520,9 @@ DWORD Client::GetEntityBase(int32_t iTargetId)
 {
 	if(iTargetId == -1)
 		return 0;
+
+	if (iTargetId == GetID())
+		return Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
 
 	BYTE byCode[] =
 	{
@@ -664,6 +691,17 @@ bool Client::IsBlinking(int32_t iTargetID)
 	if (iTargetID == -1 || iTargetID == GetID())
 	{
 		return m_PlayerMySelf.bBlinking;
+	}
+	else
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
+		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+			[&](const TPlayer& a) { return a.iID == iTargetID; });
+
+		if (it != m_vecPlayer.end())
+		{
+			return it->bBlinking;
+		}
 	}
 
 	return false;
@@ -1501,12 +1539,12 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 	}
 }
 
-void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority, bool iAttacking, bool bBasicAttack)
+bool Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority, bool iAttacking, bool bBasicAttack)
 {
 	if (pSkillData.iReCastTime != 0)
 	{
 		if (GetActionState() == PSA_SPELLMAGIC)
-			return;
+			return false;
 	}
 
 	Packet pkt = Packet(PIPE_USE_SKILL);
@@ -1515,12 +1553,11 @@ void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPr
 
 	m_Bot->SendPipeServer(pkt);
 
-	if (pSkillData.iReCastTime != 0)
-		std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
-
 	SetSkillUseTime(pSkillData.iID,
 		duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
 	);
+
+	return true;
 }
 
 void Client::SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
@@ -1722,12 +1759,14 @@ void Client::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDi
 {
 	Packet pkt = Packet(WIZ_ATTACK);
 
+	fInterval += 0.1f;
+
 	pkt
 		<< uint8_t(1) << uint8_t(1)
 		<< iTargetID
-		<< uint16_t(fInterval)
-		<< uint16_t(fDistance)
-		<< uint8_t(0) << uint8_t(1);
+		<< uint16_t((int)(fInterval * 100))
+		<< uint16_t((int)(fDistance * 10))
+		<< uint8_t(0) << uint8_t(0);
 
 	SendPacket(pkt);
 }
@@ -2301,6 +2340,30 @@ void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage,
 		<< uint8_t(iCurrentPosition)
 		<< uint8_t(iTargetPosition)
 		<< uint32_t(iCount);
+
+	SendPacket(pkt);
+}
+
+void Client::StartGenie()
+{
+	Packet pkt = Packet(WIZ_GENIE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint8_t(4)
+		<< uint16_t(1)
+		<< uint16_t(111);
+
+	SendPacket(pkt);
+}
+
+void Client::StopGenie()
+{
+	Packet pkt = Packet(WIZ_GENIE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint8_t(5);
 
 	SendPacket(pkt);
 }
