@@ -121,8 +121,8 @@ private:
 	bool m_bConfigurationLoaded;
 
 private:
-	void BasicAttackProcess();
 	void AttackProcess();
+	void SpeedHackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();
 
@@ -131,8 +131,6 @@ private:
 	void MinorProcess();
 	void PotionProcess();
 	void CharacterProcess();
-
-	void GodModeProcess();
 
 	void TransformationProcess();
 	void RogueCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false);

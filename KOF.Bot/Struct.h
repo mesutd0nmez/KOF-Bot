@@ -556,7 +556,7 @@ typedef struct  __TABLE_NPC
 	uint32_t			iUnknown2;
 } TABLE_NPCS;
 
-typedef struct  __TABLE_MOB_USKO
+typedef struct  __TABLE_MOB_US
 {
 	uint32_t			iID;
 	std::string			szText;
@@ -564,16 +564,16 @@ typedef struct  __TABLE_MOB_USKO
 	uint8_t				iUnknown1;
 	uint8_t				iUnknown2;
 	int32_t				iUnknown3;
-} TABLE_MOBS_USKO;
+} TABLE_MOBS_US;
 
-typedef struct  __TABLE_MOB_CNKO
+typedef struct  __TABLE_MOB_CN
 {
 	uint32_t			iID;
 	std::string			szText;
 	uint32_t			iProtoID;
 	uint8_t				iUnknown1;
 	uint8_t				iUnknown2;
-} TABLE_MOBS_CNKO;
+} TABLE_MOBS_CN;
 
 typedef struct  __TABLE_ITEM_SELL
 {

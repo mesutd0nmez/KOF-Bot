@@ -477,3 +477,20 @@ enum SubPacketState
 	N3_SP_STATE_CHANGE_ACTION = 0x04,			// 1 - 인사, 11 - 도발
 	N3_SP_STATE_CHANGE_VISIBLE = 0x05
 };		// 투명 0 ~ 255
+
+enum ChatMode 
+{
+	N3_CHAT_NORMAL = 1,
+	N3_CHAT_PRIVATE,
+	N3_CHAT_PARTY,
+	N3_CHAT_FORCE,
+	N3_CHAT_SHOUT,
+	N3_CHAT_CLAN,
+	N3_CHAT_PUBLIC,
+	N3_CHAT_WAR,
+	N3_CHAT_TITLE,						//맨윗줄에 갈 공지
+	N3_CHAT_TITLE_DELETE,				//맨윗줄에 있는 공지 삭제
+	N3_CHAT_CONTINUE,					//지속 공지
+	N3_CHAT_CONTINUE_DELETE,			//지속 공지 삭제
+	N3_CHAT_UNKNOWN = 0xffffffff
+};

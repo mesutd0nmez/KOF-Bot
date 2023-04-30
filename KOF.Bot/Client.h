@@ -30,7 +30,10 @@ public:
 	uint8_t GetMoveState(DWORD iBase = 0);
 	uint8_t GetActionState(DWORD iBase = 0);
 	float GetRadius(DWORD iBase = 0);
-	float GetScale(DWORD iBase = 0);
+	void SetScale(DWORD iBase, float fX, float fZ, float fY);
+	float GetScaleX(DWORD iBase = 0);
+	float GetScaleZ(DWORD iBase = 0);
+	float GetScaleY(DWORD iBase = 0);
 	bool IsAttackable(DWORD iBase);
 	bool IsDisconnect();
 	bool IsDeath(DWORD iBase = 0);
@@ -44,6 +47,7 @@ public:
 	void SetAuthority(uint8_t iAuthority);
 
 	Vector3 GetPosition();
+	Vector3 GetMovePosition();
 	Vector3 GetTargetPosition();
 
 	int32_t GetTarget();
@@ -98,6 +102,8 @@ protected:
 
 protected:
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
+
+	std::recursive_mutex m_mutexAvailableSkill;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
@@ -195,6 +201,7 @@ protected:
 protected:
 	bool IsNeedRepair();
 	bool IsNeedSupply();
+	bool IsNeedSell();
 
 public:
 	int32_t GetPartyMemberCount();
@@ -205,8 +212,9 @@ public:
 	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 
 public:
-	void StartGenie();
-	void StopGenie();
+	void SendUseGeniePotion(uint32_t iItemID);
+	void SendStartGenie();
+	void SendStopGenie();
 
 protected:
 	BYTE ReadByte(DWORD dwAddress);
@@ -248,4 +256,11 @@ protected:
 protected:
 	float m_fAttackDelta;
 	float m_fAttackTimeRecent;
+
+protected:
+	Vector3 MoveTowards(Vector3 v3Current, Vector3 v3Target, float fMaxDistanceDelta);
+
+public:
+	void SendPartyCreate(std::string szName);
+	void SendPartyInsert(std::string szName);
 };

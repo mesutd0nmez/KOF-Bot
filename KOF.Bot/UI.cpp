@@ -211,7 +211,8 @@ void UI::Render(Bot* pBot)
         g_iLastFrameTime = iCurrentTime;
 
         // Handle loss of D3D9 device
-        if (result == D3DERR_DEVICELOST && g_pd3dDevice->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
+        if (result == D3DERR_DEVICELOST 
+            && g_pd3dDevice->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
             ResetDevice();
     }
 

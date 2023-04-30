@@ -203,17 +203,47 @@ float Client::GetRadius(DWORD iBase)
 	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_RADIUS")));
 }
 
-float Client::GetScale(DWORD iBase)
+void Client::SetScale(DWORD iBase, float fX, float fZ, float fY)
 {
 	if (iBase == 0)
 		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
 
-	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE")));
+	WriteFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_X")), fX);
+	WriteFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Z")), fZ);
+	WriteFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Y")), fY);
+}
+
+float Client::GetScaleX(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_X")));
+}
+
+float Client::GetScaleZ(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Z")));
+}
+
+float Client::GetScaleY(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Y")));
 }
 
 bool Client::IsAttackable(DWORD iBase)
 {
 	DWORD iTargetID = GetID(iBase);
+
+	if (iTargetID == -1)
+		return false;
+
 	DWORD iNation = GetNation(iBase);
 
 	if (iTargetID >= 5000)
@@ -514,6 +544,11 @@ void Client::SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillU
 Vector3 Client::GetPosition()
 {
 	return Vector3(GetX(), GetZ(), GetY());
+}
+
+Vector3 Client::GetMovePosition()
+{
+	return Vector3(GetGoX(), GetGoZ(), GetGoY());
 }
 
 DWORD Client::GetEntityBase(int32_t iTargetId)
@@ -920,7 +955,7 @@ int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
 		float distance = GetDistance(pos);
 		//bool enemy = IsEnemy(Base);
 		bool enemy = true;
-		float radius = GetRadius(Base) * GetScale(Base);
+		float radius = GetRadius(Base) * GetScaleZ(Base);
 
 		vecOutMobList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy, radius));
 	};
@@ -993,7 +1028,7 @@ int Client::SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList)
 		float distance = GetDistance(pos);
 		//bool enemy = IsEnemy(Base);
 		bool enemy = true;
-		float radius = GetRadius(Base) * GetScale(Base);
+		float radius = GetRadius(Base) * GetScaleZ(Base);
 
 		vecOutPlayerList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy, radius));
 	};
@@ -1708,14 +1743,14 @@ void Client::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition,
 	Packet pkt = Packet(WIZ_MOVE);
 
 	pkt
-		<< uint16_t(vecStartPosition.m_fX * 10.0f)
-		<< uint16_t(vecStartPosition.m_fY * 10.0f)
-		<< int16_t(vecStartPosition.m_fZ * 10.0f)
+		<< uint16_t(vecStartPosition.m_fX)
+		<< uint16_t(vecStartPosition.m_fY)
+		<< int16_t(vecStartPosition.m_fZ)
 		<< iMoveSpeed
 		<< iMoveType
-		<< uint16_t(vecTargetPosition.m_fX * 10.0f)
-		<< uint16_t(vecTargetPosition.m_fY * 10.0f)
-		<< int16_t(vecTargetPosition.m_fZ * 10.0f);
+		<< uint16_t(vecTargetPosition.m_fX)
+		<< uint16_t(vecTargetPosition.m_fY)
+		<< int16_t(vecTargetPosition.m_fZ);
 
 	SendPacket(pkt);
 }
@@ -2084,7 +2119,7 @@ bool Client::IsNeedSupply()
 
 			if (pInventoryItem.iItemID != 0)
 			{
-				if (pInventoryItem.iCount <= 3 && pInventoryItem.iCount < iSupplyItemCount)
+				if (pInventoryItem.iCount <= 5 && pInventoryItem.iCount < iSupplyItemCount)
 					return true;
 			}
 		}
@@ -2092,6 +2127,30 @@ bool Client::IsNeedSupply()
 
 	return false;
 }
+
+bool Client::IsNeedSell()
+{
+	bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
+
+	if (bAutoSellSlotRange)
+	{
+		int iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), 1);
+		int iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), 18);
+
+		for (int i = iAutoSellSlotRangeStart; i <= iAutoSellSlotRangeEnd; i++)
+		{
+			int iPosition = 14 + (i - 1);
+
+			TInventory pInventory = GetInventoryItemSlot((uint8_t)iPosition);
+
+			if (pInventory.iItemID == 0)
+				return false;
+		}
+	}
+
+	return true;
+}
+
 
 uint8_t Client::GetRepresentZone(uint8_t iZone)
 {
@@ -2314,6 +2373,7 @@ bool Client::GetPartyMember(int32_t iID, Party& pPartyMember)
 
 void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutexAvailableSkill);
 	for (auto& e : m_vecAvailableSkill)
 	{
 		DWORD iSkillBase = GetSkillBase(e.iID);
@@ -2344,20 +2404,30 @@ void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage,
 	SendPacket(pkt);
 }
 
-void Client::StartGenie()
+void Client::SendUseGeniePotion(uint32_t iItemID)
 {
 	Packet pkt = Packet(WIZ_GENIE);
 
 	pkt
 		<< uint8_t(1)
-		<< uint8_t(4)
-		<< uint16_t(1)
-		<< uint16_t(111);
+		<< uint8_t(1)
+		<< uint32_t(iItemID);
 
 	SendPacket(pkt);
 }
 
-void Client::StopGenie()
+void Client::SendStartGenie()
+{
+	Packet pkt = Packet(WIZ_GENIE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint8_t(4);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStopGenie()
 {
 	Packet pkt = Packet(WIZ_GENIE);
 
@@ -2366,6 +2436,50 @@ void Client::StopGenie()
 		<< uint8_t(5);
 
 	SendPacket(pkt);
+}
+
+void Client::SendPartyCreate(std::string szName)
+{
+	Packet pkt = Packet(WIZ_PARTY);
+
+	pkt
+		<< uint8_t(1)
+		<< szName
+		<< uint8_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendPartyInsert(std::string szName)
+{
+	Packet pkt = Packet(WIZ_PARTY);
+
+	pkt
+		<< uint8_t(3)
+		<< szName
+		<< uint8_t(0);
+
+	SendPacket(pkt);
+}
+
+Vector3 Client::MoveTowards(Vector3 current, Vector3 target, float maxDistanceDelta)
+{
+	float toVector_x = (target.m_fX - current.m_fX);
+	float toVector_y = (target.m_fY - current.m_fY);
+	float toVector_z = (target.m_fZ - current.m_fZ);
+
+	float sqdist = (toVector_x * toVector_x) + (toVector_y * toVector_y) + (toVector_z * toVector_z);
+
+	if ((sqdist == 0) || ((maxDistanceDelta >= 0) && (sqdist <= (maxDistanceDelta * maxDistanceDelta))))
+		return target;
+
+	float dist = sqrt(sqdist);
+
+	float X = round(current.m_fX + ((toVector_x / dist) * maxDistanceDelta * 10.0f));
+	float Y = round(current.m_fY + ((toVector_y / dist) * maxDistanceDelta * 10.0f));
+	float Z = round(current.m_fZ + ((toVector_z / dist) * maxDistanceDelta * 10.0f));
+
+	return Vector3(X, Z, Y);
 }
 
 BYTE Client::ReadByte(DWORD dwAddress)

@@ -24,7 +24,8 @@ Bot::Bot()
 	}
 
 	m_pTbl_Npc = nullptr;
-	m_pTbl_Mob = nullptr;
+	m_pTbl_Mob_US = nullptr;
+	m_pTbl_Mob_CN = nullptr;
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
@@ -78,7 +79,8 @@ Bot::~Bot()
 	}
 
 	m_pTbl_Npc = nullptr;
-	m_pTbl_Mob = nullptr;
+	m_pTbl_Mob_US = nullptr;
+	m_pTbl_Mob_CN = nullptr;
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
@@ -149,7 +151,7 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 
 void Bot::Process()
 {
-	std::this_thread::sleep_for(std::chrono::microseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 	if (IsServiceClosed())
 	{
@@ -242,8 +244,11 @@ void Bot::Release()
 	if (m_pTbl_Npc)
 		m_pTbl_Npc->Release();
 
-	if (m_pTbl_Mob)
-		m_pTbl_Mob->Release();
+	if (m_pTbl_Mob_US)
+		m_pTbl_Mob_US->Release();
+
+	if (m_pTbl_Mob_CN)
+		m_pTbl_Mob_CN->Release();
 
 	if (m_pTbl_ItemSell)
 		m_pTbl_ItemSell->Release();
@@ -269,7 +274,7 @@ void Bot::InitializeStaticData()
 	{
 		case PlatformType::CNKO:
 		{
-			szPlatformPrefix = "us";
+			szPlatformPrefix = "nc";
 		}
 		break;
 
@@ -294,37 +299,6 @@ void Bot::InitializeStaticData()
 
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
-#endif
-
-	TABLE_UPC_SKILL pGodMode;
-	memset(&pGodMode, 0, sizeof(pGodMode));
-
-	pGodMode.iID = 500344;
-	pGodMode.szName = skCryptDec("God Mode");
-	pGodMode.szEngName = skCryptDec("God Mode");
-	pGodMode.iSelfAnimID1 = -1;
-	pGodMode.iSelfFX1 = 2401;
-	pGodMode.iSelfPart1 = -1;
-	pGodMode.iTarget = 9;
-	pGodMode.iCooldown = 10;
-	pGodMode.dw1stTableType = 4;
-	pGodMode.dw2ndTableType = 0;
-	pGodMode.iBaseId = 490006;
-
-	m_pTbl_Skill->Insert(pGodMode.iID, pGodMode);
-
-	TABLE_UPC_SKILL_EXTENSION4 pGodModeExtension4;
-	memset(&pGodModeExtension4, 0, sizeof(pGodModeExtension4));
-
-	pGodModeExtension4.iID = pGodMode.iID;
-	pGodModeExtension4.iBuffType = 1;
-	pGodModeExtension4.iAreaRadius = 0;
-	pGodModeExtension4.iBuffDuration = 3600;
-
-	m_pTbl_Skill_Extension4->Insert(pGodModeExtension4.iID, pGodModeExtension4);
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded custom skills\n");
 #endif
 
 	m_pTbl_Item = new Table<__TABLE_ITEM>();
@@ -353,13 +327,26 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
-	m_pTbl_Mob = new Table<__TABLE_MOB_USKO>();
-	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
-	m_pTbl_Mob->Load(szPath);
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		m_pTbl_Mob_US = new Table<__TABLE_MOB_US>();
+		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+		m_pTbl_Mob_US->Load(szPath);
 
 #ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
+		printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob_US->GetDataSize());
 #endif
+	}
+	else if (m_ePlatformType == PlatformType::CNKO)
+	{
+		m_pTbl_Mob_CN = new Table<__TABLE_MOB_CN>();
+		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+		m_pTbl_Mob_CN->Load(szPath);
+
+#ifdef DEBUG
+		printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob_CN->GetDataSize());
+#endif
+	}
 
 	m_pTbl_ItemSell = new Table<__TABLE_ITEM_SELL>();
 	m_pTbl_ItemSell->Load(m_szClientPath + skCryptDec("\\Data\\itemsell_table.tbl"));
@@ -729,12 +716,20 @@ bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
 	return m_pTbl_Npc->GetData(mapDataOut);
 }
 
-bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_USKO>** mapDataOut)
+bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_US>** mapDataOut)
 {
-	if (m_pTbl_Mob == nullptr)
+	if (m_pTbl_Mob_US == nullptr)
 		return false;
 
-	return m_pTbl_Mob->GetData(mapDataOut);
+	return m_pTbl_Mob_US->GetData(mapDataOut);
+}
+
+bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_CN>** mapDataOut)
+{
+	if (m_pTbl_Mob_CN == nullptr)
+		return false;
+
+	return m_pTbl_Mob_CN->GetData(mapDataOut);
 }
 
 bool Bot::GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut)
