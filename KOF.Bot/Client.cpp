@@ -31,6 +31,17 @@ void Client::Clear()
 	m_bIsMovingToLoot = false;
 
 	m_vecOrigDeathEffectFunction.clear();
+
+	m_msLastBasicAttackTime = std::chrono::milliseconds(0);
+
+	m_vecPartyMembers.clear();
+
+	m_bLunarWarDressUp = false;
+
+	m_vecRegionUserList.clear();
+
+	m_fAttackDelta = 1.0f;
+	m_fAttackTimeRecent = Bot::TimeGet();
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -184,6 +195,78 @@ uint8_t Client::GetActionState(DWORD iBase)
 	return ReadByte(iBase + GetAddress(skCryptDec("KO_OFF_ACTION_STATE")));
 }
 
+float Client::GetRadius(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_RADIUS")));
+}
+
+void Client::SetScale(DWORD iBase, float fX, float fZ, float fY)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	WriteFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_X")), fX);
+	WriteFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Z")), fZ);
+	WriteFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Y")), fY);
+}
+
+float Client::GetScaleX(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_X")));
+}
+
+float Client::GetScaleZ(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Z")));
+}
+
+float Client::GetScaleY(DWORD iBase)
+{
+	if (iBase == 0)
+		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+
+	return ReadFloat(iBase + GetAddress(skCryptDec("KO_OFF_SCALE_Y")));
+}
+
+bool Client::IsAttackable(DWORD iBase)
+{
+	DWORD iTargetID = GetID(iBase);
+
+	if (iTargetID == -1)
+		return false;
+
+	DWORD iNation = GetNation(iBase);
+
+	if (iTargetID >= 5000)
+	{
+		if (iNation != 0 || iNation == GetNation())
+			return false;
+	}
+	else
+	{
+		if (iNation == GetNation())
+			return false;
+	}
+
+	DWORD iHp = GetHp(iBase);
+	DWORD iMaxHp = GetMaxHp(iBase);
+	DWORD iState = GetActionState(iBase);
+
+	if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
+		return false;
+
+	return true;
+}
+
 bool Client::IsDisconnect()
 {
 	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_PKT"))) + GetAddress(skCryptDec("KO_OFF_DISCONNECT"))) == 0;
@@ -249,14 +332,9 @@ bool Client::IsDeath(DWORD iBase)
 	return GetHp(iBase) <= 0;
 }
 
-int32_t Client::GetClientSelectedTarget()
+uint32_t Client::GetTargetBase()
 {
-	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOB")));
-}
-
-uint32_t Client::GetClientSelectedTargetBase()
-{
-	return GetEntityBase(GetClientSelectedTarget());
+	return GetEntityBase(GetTarget());
 }
 
 bool Client::IsRogue(int32_t eClass)
@@ -345,7 +423,7 @@ bool Client::IsPriest(int32_t eClass)
 
 uint32_t Client::GetProperHealthBuff(int MaxHp)
 {
-	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp * 100) / 100.0f);
+	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60.0f);
 
 	if (GetSkillPoint(1) >= 78)
 	{
@@ -468,10 +546,18 @@ Vector3 Client::GetPosition()
 	return Vector3(GetX(), GetZ(), GetY());
 }
 
+Vector3 Client::GetMovePosition()
+{
+	return Vector3(GetGoX(), GetGoZ(), GetGoY());
+}
+
 DWORD Client::GetEntityBase(int32_t iTargetId)
 {
 	if(iTargetId == -1)
 		return 0;
+
+	if (iTargetId == GetID())
+		return Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
 
 	BYTE byCode[] =
 	{
@@ -635,12 +721,25 @@ bool Client::IsSkillActive(int32_t iSkillID)
 	return false;
 };
 
-bool Client::IsBlinking(DWORD iBase)
+bool Client::IsBlinking(int32_t iTargetID)
 {
-	if (iBase == 0)
-		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
+	if (iTargetID == -1 || iTargetID == GetID())
+	{
+		return m_PlayerMySelf.bBlinking;
+	}
+	else
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
+		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+			[&](const TPlayer& a) { return a.iID == iTargetID; });
 
-	return Read4Byte(iBase + GetAddress(skCryptDec("KO_OFF_BLINKING"))) > 0;
+		if (it != m_vecPlayer.end())
+		{
+			return it->bBlinking;
+		}
+	}
+
+	return false;
 };
 
 float Client::GetDistance(Vector3 v3Position)
@@ -854,9 +953,11 @@ int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
 		DWORD nation = GetNation(Base);
 		Vector3 pos = Vector3(GetX(Base), GetZ(Base), GetY(Base));
 		float distance = GetDistance(pos);
-		bool enemy = IsEnemy(Base);
+		//bool enemy = IsEnemy(Base);
+		bool enemy = true;
+		float radius = GetRadius(Base) * GetScaleZ(Base);
 
-		vecOutMobList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy));
+		vecOutMobList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy, radius));
 	};
 
 	while (Esi != Ebp 
@@ -925,9 +1026,11 @@ int Client::SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList)
 		DWORD nation = GetNation(Base);
 		Vector3 pos = Vector3(GetX(Base), GetZ(Base), GetY(Base));
 		float distance = GetDistance(pos);
-		bool enemy = IsEnemy(Base);
+		//bool enemy = IsEnemy(Base);
+		bool enemy = true;
+		float radius = GetRadius(Base) * GetScaleZ(Base);
 
-		vecOutPlayerList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy));
+		vecOutPlayerList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy, radius));
 	};
 
 	while (Esi != Ebp 
@@ -980,9 +1083,6 @@ int Client::SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList)
 
 bool Client::IsEnemy(DWORD iBase)
 {
-	return true;
-
-
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
 	if (!hProcess)
@@ -1084,11 +1184,35 @@ void Client::BasicAttack()
 	if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp == 0))
 		return;
 
+	std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()
+	);
+
+	bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+	bool bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", false);
+	int iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
+
+	if (bAttackSpeed)
+	{
+		if (iAttackSpeedValue == 0)
+			iAttackSpeedValue = 1;
+	}
+	else
+		iAttackSpeedValue = 1000;
+
+	if (m_msLastBasicAttackTime > std::chrono::milliseconds(0) 
+		&& (msCurrentTime - m_msLastBasicAttackTime) < std::chrono::milliseconds(iAttackSpeedValue))
+		return;
+
 	Packet pkt = Packet(PIPE_BASIC_ATTACK);
 
 	pkt << uint8_t(1);
 
 	m_Bot->SendPipeServer(pkt);
+
+	m_msLastBasicAttackTime = duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()
+	);
 }
 
 DWORD Client::GetSkillBase(uint32_t iSkillID)
@@ -1171,7 +1295,7 @@ void Client::StopMove()
 	CloseHandle(hProcess);
 }
 
-void Client::PushPhase(DWORD dwAddress)
+void Client::PushPhase(DWORD iAddress)
 {
 	BYTE byCode[] =
 	{
@@ -1183,10 +1307,10 @@ void Client::PushPhase(DWORD dwAddress)
 		0x83,0xC4,0x04,
 		0xB0,0x01,
 		0x61,
-		0xC2,0x04,0x0
+		0xC2,0x04,0x0,
 	};
 
-	CopyBytes(byCode + 10, dwAddress);
+	CopyBytes(byCode + 10, iAddress);
 
 	DWORD dwPushPhase = GetAddress(skCryptDec("KO_PTR_PUSH_PHASE"));
 	CopyBytes(byCode + 15, dwPushPhase);
@@ -1197,16 +1321,10 @@ void Client::PushPhase(DWORD dwAddress)
 		return;
 
 	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	CloseHandle(hProcess);
 }
 
-void Client::ConnectLoginServer(std::string szAccountId, std::string szPassword, bool bDisconnect)
+void Client::WriteLoginInformation(std::string szAccountId, std::string szPassword)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-	if (!hProcess)
-		return;
-
 	DWORD dwCGameProcIntroLogin = Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO")));
 	DWORD dwCUILoginIntro = Read4Byte(dwCGameProcIntroLogin + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO")));
 
@@ -1217,70 +1335,13 @@ void Client::ConnectLoginServer(std::string szAccountId, std::string szPassword,
 	Write4Byte(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH")), szAccountId.size());
 	WriteString(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT")), szPassword.c_str());
 	Write4Byte(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH")), szPassword.size());
+}
 
-	if (bDisconnect)
-	{
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x61,
-			0xC3,
-		};
-
-		DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
-		CopyBytes(byCode + 3, dwPtrIntro);
-		CopyBytes(byCode + 16, dwPtrIntro);
-		CopyBytes(byCode + 29, dwPtrIntro);
-
-		DWORD dwPtrDisconnect = GetAddress(skCryptDec("KO_PTR_LOGIN_DC_REQUEST"));
-		CopyBytes(byCode + 8, dwPtrDisconnect);
-
-		DWORD dwPtrLoginRequest1 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST1"));
-		CopyBytes(byCode + 21, dwPtrLoginRequest1);
-
-		DWORD dwPtrLoginRequest2 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST2"));
-		CopyBytes(byCode + 34, dwPtrLoginRequest2);
-
-		ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	}
-	else
-	{
-		BYTE byCode[] =
-		{
-			0x60,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x8B,0x0D,0x0,0x0,0x0,0x0,
-			0xBF,0,0,0,0,
-			0xFF,0xD7,
-			0x61,
-			0xC3,
-		};
-
-		DWORD dwPtrIntro = GetAddress(skCryptDec("KO_PTR_INTRO"));
-		CopyBytes(byCode + 3, dwPtrIntro);
-		CopyBytes(byCode + 16, dwPtrIntro);
-
-		DWORD dwPtrLoginRequest1 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST1"));
-		CopyBytes(byCode + 8, dwPtrLoginRequest1);
-
-		DWORD dwPtrLoginRequest2 = GetAddress(skCryptDec("KO_PTR_LOGIN_REQUEST2"));
-		CopyBytes(byCode + 21, dwPtrLoginRequest2);
-
-		ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	}
-
-	CloseHandle(hProcess);
+void Client::ConnectLoginServer(bool bDisconnect)
+{
+	Packet pkt = Packet(PIPE_LOGIN);
+	pkt << uint8_t(1) << uint8_t(bDisconnect);
+	m_Bot->SendPipeServer(pkt);
 }
 
 void Client::ConnectGameServer(BYTE byServerId)
@@ -1317,110 +1378,38 @@ void Client::ConnectGameServer(BYTE byServerId)
 
 void Client::SelectCharacterSkip()
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+	Packet pkt = Packet(PIPE_SELECT_CHARACTER_SKIP);
 
-	if (!hProcess)
-		return;
+	pkt << uint8_t(1);
 
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
-
-	DWORD dwPtrCharacterSelectSkip = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_SKIP"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectSkip);
-
-	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	CloseHandle(hProcess);
+	m_Bot->SendPipeServer(pkt);
 }
 
 void Client::SelectCharacterLeft()
 {
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
+	Packet pkt = Packet(PIPE_SELECT_CHARACTER_LEFT);
 
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+	pkt << uint8_t(1);
 
-	DWORD dwPtrCharacterSelectLeft = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_LEFT"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectLeft);
-
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-	if (!hProcess)
-		return;
-
-	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	CloseHandle(hProcess);
+	m_Bot->SendPipeServer(pkt);
 }
 
 void Client::SelectCharacterRight()
 {
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
+	Packet pkt = Packet(PIPE_SELECT_CHARACTER_RIGHT);
 
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+	pkt << uint8_t(1);
 
-	DWORD dwPtrCharacterSelectRight = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_RIGHT"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectRight);
-
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-	if (!hProcess)
-		return;
-
-	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	CloseHandle(hProcess);
+	m_Bot->SendPipeServer(pkt);
 }
 
-void Client::SelectCharacter(BYTE byCharacterIndex)
+void Client::SelectCharacter()
 {
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
+	Packet pkt = Packet(PIPE_SELECT_CHARACTER_ENTER);
 
-	DWORD dwPtrCharacterSelect = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT"));
-	CopyBytes(byCode + 3, dwPtrCharacterSelect);
+	pkt << uint8_t(1);
 
-	DWORD dwPtrCharacterSelectEnter = GetAddress(skCryptDec("KO_PTR_CHARACTER_SELECT_ENTER"));
-	CopyBytes(byCode + 8, dwPtrCharacterSelectEnter);
-
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
-
-	if (!hProcess)
-		return;
-
-	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
-	CloseHandle(hProcess);
+	m_Bot->SendPipeServer(pkt);
 }
 
 void Client::SendPacket(Packet vecBuffer)
@@ -1469,7 +1458,7 @@ void Client::SendPacket(Packet vecBuffer)
 	CloseHandle(hProcess);
 }
 
-void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking)
+void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 {
 	Vector3 v3MyPosition = GetPosition();
 	Vector3 v3TargetPosition = GetTargetPosition();
@@ -1576,31 +1565,34 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 		}
 
 		if (pSkillData.iFlyingFX != 0)
-			SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
+			SendStartFlyingAtTargetPacket(pSkillData, -1, v3TargetPosition);
 
 		SendStartSkillMagicAtPosPacket(pSkillData, v3TargetPosition);
+		SendStartMagicAtTarget(pSkillData, -1, v3TargetPosition);
 	}
 	break;
 	}
 }
 
-void Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority)
+bool Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority, bool iAttacking, bool bBasicAttack)
 {
 	if (pSkillData.iReCastTime != 0)
 	{
 		if (GetActionState() == PSA_SPELLMAGIC)
-			return;
+			return false;
 	}
 
 	Packet pkt = Packet(PIPE_USE_SKILL);
 
-	pkt << iTargetID << pSkillData.iID << iPriority;
+	pkt << iTargetID << pSkillData.iID << iPriority << uint8_t(iAttacking) << uint8_t(bBasicAttack);
 
 	m_Bot->SendPipeServer(pkt);
 
 	SetSkillUseTime(pSkillData.iID,
 		duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
 	);
+
+	return true;
 }
 
 void Client::SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
@@ -1636,7 +1628,8 @@ void Client::SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector
 		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
 		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
 		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
-		<< int16_t(pSkillData.iReCastTime);
+		<< int16_t(pSkillData.iReCastTime)
+		<< uint32_t(0);
 
 	SendPacket(pkt);
 }
@@ -1705,7 +1698,8 @@ void Client::SendStartSkillMagicAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 
 		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
 		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
 		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
-		<< uint32_t(0) << uint32_t(0) << uint32_t(0);
+		<< uint32_t(0) << uint32_t(0) << uint32_t(0)
+		<< uint32_t(0) << uint32_t(0) << int16_t(0);
 
 	SendPacket(pkt);
 }
@@ -1724,7 +1718,7 @@ void Client::SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t iTargetI
 		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
 		<< int32_t(-101)
 		<< arrowIndex
-		<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
+		<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
 
 	SendPacket(pkt);
 }
@@ -1749,14 +1743,14 @@ void Client::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition,
 	Packet pkt = Packet(WIZ_MOVE);
 
 	pkt
-		<< uint16_t(vecStartPosition.m_fX * 10.0f)
-		<< uint16_t(vecStartPosition.m_fY * 10.0f)
-		<< int16_t(vecStartPosition.m_fZ * 10.0f)
+		<< uint16_t(vecStartPosition.m_fX)
+		<< uint16_t(vecStartPosition.m_fY)
+		<< int16_t(vecStartPosition.m_fZ)
 		<< iMoveSpeed
 		<< iMoveType
-		<< uint16_t(vecTargetPosition.m_fX * 10.0f)
-		<< uint16_t(vecTargetPosition.m_fY * 10.0f)
-		<< int16_t(vecTargetPosition.m_fZ * 10.0f);
+		<< uint16_t(vecTargetPosition.m_fX)
+		<< uint16_t(vecTargetPosition.m_fY)
+		<< int16_t(vecTargetPosition.m_fZ);
 
 	SendPacket(pkt);
 }
@@ -1800,12 +1794,14 @@ void Client::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDi
 {
 	Packet pkt = Packet(WIZ_ATTACK);
 
+	fInterval += 0.1f;
+
 	pkt
 		<< uint8_t(1) << uint8_t(1)
 		<< iTargetID
-		<< uint16_t(fInterval)
-		<< uint16_t(fDistance)
-		<< uint8_t(0) << uint8_t(1);
+		<< uint16_t((int)(fInterval * 100))
+		<< uint16_t((int)(fDistance * 10))
+		<< uint8_t(0) << uint8_t(0);
 
 	SendPacket(pkt);
 }
@@ -2123,7 +2119,7 @@ bool Client::IsNeedSupply()
 
 			if (pInventoryItem.iItemID != 0)
 			{
-				if (pInventoryItem.iCount <= 3 && pInventoryItem.iCount < iSupplyItemCount)
+				if (pInventoryItem.iCount <= 5 && pInventoryItem.iCount < iSupplyItemCount)
 					return true;
 			}
 		}
@@ -2131,6 +2127,30 @@ bool Client::IsNeedSupply()
 
 	return false;
 }
+
+bool Client::IsNeedSell()
+{
+	bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
+
+	if (bAutoSellSlotRange)
+	{
+		int iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), 1);
+		int iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), 18);
+
+		for (int i = iAutoSellSlotRangeStart; i <= iAutoSellSlotRangeEnd; i++)
+		{
+			int iPosition = 14 + (i - 1);
+
+			TInventory pInventory = GetInventoryItemSlot((uint8_t)iPosition);
+
+			if (pInventory.iItemID == 0)
+				return false;
+		}
+	}
+
+	return true;
+}
+
 
 uint8_t Client::GetRepresentZone(uint8_t iZone)
 {
@@ -2184,7 +2204,9 @@ uint8_t Client::GetRepresentZone(uint8_t iZone)
 
 bool Client::IsTransformationAvailableZone()
 {
-	switch (GetZone())
+	uint8_t iZoneID = GetRepresentZone(GetZone());
+
+	switch (iZoneID)
 	{
 		case ZONE_DELOS:
 		case ZONE_BIFROST:
@@ -2273,6 +2295,7 @@ int32_t Client::GetPartyMemberCount()
 bool Client::GetPartyList(std::vector<Party>& vecParty)
 {
 	return false;
+
 	int32_t iBase = Read4Byte(Read4Byte(Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_PARTY_BASE")) + GetAddress("KO_OFF_PARTY_LIST")));
 	int32_t iPartyMemberCount = GetPartyMemberCount();
 
@@ -2348,27 +2371,115 @@ bool Client::GetPartyMember(int32_t iID, Party& pPartyMember)
 	return false;
 }
 
-bool Client::GetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo & pPartyBuffInfo)
+void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 {
-	auto it = m_mapPartyBuffInfo.find(iMemberID);
-
-	if (it != m_mapPartyBuffInfo.end())
+	std::lock_guard<std::recursive_mutex> lock(m_mutexAvailableSkill);
+	for (auto& e : m_vecAvailableSkill)
 	{
-		pPartyBuffInfo = it->second;
-		return true;
-	}
+		DWORD iSkillBase = GetSkillBase(e.iID);
 
-	return false;
+		if (iSkillBase == 0 || Read4Byte(iSkillBase + 0xA8) == 0)
+			continue;
+
+		if (bDisableCasting)
+			Write4Byte(iSkillBase + 0xA8, 100);
+		else
+			Write4Byte(iSkillBase + 0xA8, e.iPercentSuccess);
+	}
 }
 
-void Client::SetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo pPartyBuffInfo)
+void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount)
 {
-	auto it = m_mapPartyBuffInfo.find(iMemberID);
+	Packet pkt = Packet(WIZ_WAREHOUSE);
 
-	if (it == m_mapPartyBuffInfo.end())
-		m_mapPartyBuffInfo.insert(std::pair(iMemberID, pPartyBuffInfo));
-	else
-		it->second = pPartyBuffInfo;
+	pkt 
+		<< uint8_t(3)
+		<< int32_t(iNpcID)
+		<< uint32_t(iItemID)
+		<< uint8_t(iPage)
+		<< uint8_t(iCurrentPosition)
+		<< uint8_t(iTargetPosition)
+		<< uint32_t(iCount);
+
+	SendPacket(pkt);
+}
+
+void Client::SendUseGeniePotion(uint32_t iItemID)
+{
+	Packet pkt = Packet(WIZ_GENIE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint8_t(1)
+		<< uint32_t(iItemID);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStartGenie()
+{
+	Packet pkt = Packet(WIZ_GENIE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint8_t(4);
+
+	SendPacket(pkt);
+}
+
+void Client::SendStopGenie()
+{
+	Packet pkt = Packet(WIZ_GENIE);
+
+	pkt
+		<< uint8_t(1)
+		<< uint8_t(5);
+
+	SendPacket(pkt);
+}
+
+void Client::SendPartyCreate(std::string szName)
+{
+	Packet pkt = Packet(WIZ_PARTY);
+
+	pkt
+		<< uint8_t(1)
+		<< szName
+		<< uint8_t(0);
+
+	SendPacket(pkt);
+}
+
+void Client::SendPartyInsert(std::string szName)
+{
+	Packet pkt = Packet(WIZ_PARTY);
+
+	pkt
+		<< uint8_t(3)
+		<< szName
+		<< uint8_t(0);
+
+	SendPacket(pkt);
+}
+
+Vector3 Client::MoveTowards(Vector3 current, Vector3 target, float maxDistanceDelta)
+{
+	float toVector_x = (target.m_fX - current.m_fX);
+	float toVector_y = (target.m_fY - current.m_fY);
+	float toVector_z = (target.m_fZ - current.m_fZ);
+
+	float sqdist = (toVector_x * toVector_x) + (toVector_y * toVector_y) + (toVector_z * toVector_z);
+
+	if ((sqdist == 0) || ((maxDistanceDelta >= 0) && (sqdist <= (maxDistanceDelta * maxDistanceDelta))))
+		return target;
+
+	float dist = sqrt(sqdist);
+
+	float X = round(current.m_fX + ((toVector_x / dist) * maxDistanceDelta * 10.0f));
+	float Y = round(current.m_fY + ((toVector_y / dist) * maxDistanceDelta * 10.0f));
+	float Z = round(current.m_fZ + ((toVector_z / dist) * maxDistanceDelta * 10.0f));
+
+	return Vector3(X, Z, Y);
 }
 
 BYTE Client::ReadByte(DWORD dwAddress)

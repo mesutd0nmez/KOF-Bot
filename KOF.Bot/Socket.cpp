@@ -70,7 +70,7 @@ void Socket::Send(Packet& pkt, bool bCompress)
 
     Packet encryptionPkt = Packet();
 
-    if (bCompress)
+    if (bCompress && pkt.size() > 256)
     {
         encryptionPkt
             << uint8_t(1) //compression enabled
@@ -170,16 +170,16 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
         uint32_t iPacketCompressedLength = *(uint32_t*)&vecDecryptedPacket[5];
 
         //iFlag(uint8_t) + iPacketLength(uint32_t) + iPacketCompressedLength(uint32_t)
-        uint32_t iCalculatedPacketLength = iPacketCompressedLength
-            + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
-
-        if (iDecryptedPacketLength != iCalculatedPacketLength)
-        {
-#ifdef DEBUG
-            printf("Invalid packet size: Flag(%d), iDecryptedPacketLength(%d) != iCalculatedPacketLength(%d)\n", iFlag, iDecryptedPacketLength, iCalculatedPacketLength);
-#endif
-            return;
-        }
+//        uint32_t iCalculatedPacketLength = iPacketCompressedLength
+//            + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
+//
+//        if (iDecryptedPacketLength != iCalculatedPacketLength)
+//        {
+//#ifdef DEBUG
+//            printf("Invalid packet size: Flag(%d), iDecryptedPacketLength(%d) != iCalculatedPacketLength(%d)\n", iFlag, iDecryptedPacketLength, iCalculatedPacketLength);
+//#endif
+//            return;
+//        }
 
         iPacket = new uint8_t[iPacketLength];
 
@@ -194,16 +194,16 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
     else
     {
         //iFlag(uint8_t) + iPacketLength(uint32_t)
-        uint32_t iCalculatedPacketLength = iPacketLength
-            + sizeof(uint8_t) + sizeof(uint32_t);
-
-        if (iDecryptedPacketLength != iCalculatedPacketLength)
-        {
-#ifdef DEBUG
-            printf("Invalid packet size: Flag(%d), iDecryptedPacketLength(%d) != iCalculatedPacketLength(%d)\n", iFlag, iDecryptedPacketLength, iCalculatedPacketLength);
-#endif
-            return;
-        }
+//        uint32_t iCalculatedPacketLength = iPacketLength
+//            + sizeof(uint8_t) + sizeof(uint32_t);
+//
+//        if (iDecryptedPacketLength != iCalculatedPacketLength)
+//        {
+//#ifdef DEBUG
+//            printf("Invalid packet size: Flag(%d), iDecryptedPacketLength(%d) != iCalculatedPacketLength(%d)\n", iFlag, iDecryptedPacketLength, iCalculatedPacketLength);
+//#endif
+//            return;
+//        }
 
         iPacket = new uint8_t[iPacketLength];
         iPacket = (uint8_t*)&vecDecryptedPacket[5];

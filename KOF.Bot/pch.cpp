@@ -225,9 +225,9 @@ void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff)
 
 	bool bGenerateErrorLog = false;
 
-#ifdef DEBUG
-	bGenerateErrorLog = true;
-#endif
+//#ifdef DEBUG
+//	bGenerateErrorLog = true;
+//#endif
 
 	MEMORY_INJECTIONDATA pData =
 	{
@@ -235,7 +235,7 @@ void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff)
 		vecBuff.size(),
 		iTargetProcess,
 		INJECTION_MODE::IM_ManualMap,
-		LAUNCH_METHOD::LM_NtCreateThreadEx,
+		LAUNCH_METHOD::LM_QueueUserAPC,
 		MM_DEFAULT,
 		0,
 		NULL,

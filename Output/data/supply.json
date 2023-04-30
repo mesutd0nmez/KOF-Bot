@@ -1,0 +1,86 @@
+[
+   {
+      "sellinggroup":253000,
+      "itemid":389010000,
+      "name":"Holy water",
+      "count":25
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389011000,
+      "name":"Water of life",
+      "count":25
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389012000,
+      "name":"Water of love",
+      "count":25
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389013000,
+      "name":"Water of grace",
+      "count":25
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389014000,
+      "name":"Water of favors",
+      "count":25
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389016000,
+      "name":"Potion of Spirit",
+      "count":50
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389017000,
+      "name":"Potion of Intelligence",
+      "count":50
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389018000,
+      "name":"Potion of Sagacity",
+      "count":50
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389019000,
+      "name":"Potion of Wisdom",
+      "count":50
+   },
+   {
+      "sellinggroup":253000,
+      "itemid":389020000,
+      "name":"Potion of Soul",
+      "count":50
+   },
+   {
+      "sellinggroup":255000,
+      "itemid":391010000,
+      "name":"Arrow",
+      "count":9998
+   },
+   {
+      "sellinggroup":255000,
+      "itemid":370004000,
+      "name":"Blood Of Wolf",
+      "count":25
+   },
+   {
+      "sellinggroup":255000,
+      "itemid":379091000,
+      "name":"Transformation Gem",
+      "count":50
+   },
+   {
+      "sellinggroup":255000,
+      "itemid":389026000,
+      "name":"Prayer of god's power",
+      "count":25
+   }
+]

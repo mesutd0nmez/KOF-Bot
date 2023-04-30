@@ -22,6 +22,15 @@ struct Vector3
 	float m_fX;
 	float m_fZ;
 	float m_fY;
+
+	Vector3 GetEndPoint(const Vector3& endPoint, const float distance)
+	{
+		Vector3 v(endPoint.m_fX - m_fX, endPoint.m_fZ - m_fZ, endPoint.m_fY - m_fY);
+		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fZ * v.m_fZ + v.m_fY * v.m_fY);
+		Vector3 u(v.m_fX / norm, v.m_fZ / norm, v.m_fY / norm);
+		Vector3 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fZ - distance * u.m_fZ, endPoint.m_fY - distance * u.m_fY);
+		return newEndPoint;
+	}
 };
 
 struct SShopItem
@@ -71,10 +80,10 @@ struct SNpcData
 
 struct EntityInfo
 {
-	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, float fDistance, bool bEnemy) :
+	EntityInfo(int32_t iBase, int32_t iId, int32_t iProtoId, int32_t iMaxHP, int32_t iHP, int32_t iState, int32_t iNation, Vector3 v3Position, float fDistance, bool bEnemy, float fRadius) :
 		m_iBase(iBase), m_iId(iId), m_iProtoId(iProtoId), m_iMaxHP(iMaxHP), 
 		m_iHP(iHP), m_iState(iState), m_iNation(iNation), m_v3Position(v3Position), 
-		m_fDistance(fDistance), m_bEnemy(bEnemy) {};
+		m_fDistance(fDistance), m_bEnemy(bEnemy), m_fRadius(fRadius) {};
 
 	int32_t m_iBase;
 	int32_t m_iId;
@@ -86,6 +95,7 @@ struct EntityInfo
 	Vector3 m_v3Position;
 	float m_fDistance;
 	bool m_bEnemy;
+	float m_fRadius;
 };
 
 typedef struct SInventory
@@ -261,9 +271,9 @@ typedef struct __TABLE_UPC_SKILL
 	int32_t				iReCastTime;		//22
 	int32_t				iCooldown;			//23
 	float				fUnknown1;			//24
-	uint8_t				byPercentSuccess;	//25
-	float				fUnknown2;			//26
-	int32_t				iUnknown3;			//27
+	uint8_t				iUnknown2;			//25
+	float				fUnknown3;			//26
+	int32_t				iPercentSuccess;	//27
 	uint32_t			dw1stTableType;		//28
 	uint32_t			dw2ndTableType;		//29
 	int32_t				iValidDist;			//30
@@ -475,6 +485,66 @@ typedef struct __TABLE_ITEM
 	uint8_t				byUnknown3;
 } TABLE_ITEM;
 
+typedef struct __TABLE_ITEM_EXTENSION
+{
+	uint32_t			iExtensionID;
+	std::string			szHeader;
+	uint32_t			iBaseID;
+	std::string			szDescription;
+	uint32_t			iEffectID;
+	uint32_t			iDxtID;
+	uint32_t			iIconID;
+	uint8_t				iItemType;
+	int16_t				iDamage;
+	int16_t				iAttackIntervalPercentage;
+	int16_t				iHitRate;
+	int16_t				iEvasionRate;
+	int16_t				iMaxDurability;
+	int16_t				iPriceMultiply;
+	int16_t				iDefense;
+	int16_t				iDaggerDefense;
+	int16_t				iSwordDefense;
+	int16_t				iClubDefense;
+	int16_t				iAxeDefense;
+	int16_t				iSpearDefense;
+	int16_t				iArrowDefense;
+	int16_t				iJamadarDefense;
+	uint8_t				iFireDamage;
+	uint8_t				iGlacierDamage;
+	uint8_t				iLightningDamage;
+	uint8_t				iPoisonDamage;
+	uint8_t				iHPRecovery;
+	uint8_t				iMPDamage;
+	uint8_t				iMPRecovery;
+	uint8_t				iRepelPhysDamage;
+	uint8_t				iSoulBind;
+	int16_t				iStrB;
+	int16_t				iHpB;
+	int16_t				iDexB;
+	int16_t				iIntB;
+	int16_t				iMpB;
+	int16_t				iBonusHealth;
+	int16_t				iBonusMP;
+	int16_t				iFireResist;
+	int16_t				iIceResist;
+	int16_t				iLightningResist;
+	int16_t				iMagicResist;
+	int16_t				iPoisonResist;
+	int16_t				iCurseResist;
+	uint32_t			iEffectID1;
+	uint32_t			iEffectID2;
+	int16_t				iReqLevel;
+	int16_t				iReqRank;
+	int16_t				iReqTitle;
+	int16_t				iReqStr;
+	int16_t				iReqHp;
+	int16_t				iReqDex;
+	int16_t				iReqInt;
+	int16_t				iReqMP;
+	uint8_t				iUnknown2;
+	int16_t				iUnknown3;
+} TABLE_ITEM_EXTENSION;
+
 typedef struct  __TABLE_NPC
 {
 	uint32_t			iID;
@@ -486,7 +556,7 @@ typedef struct  __TABLE_NPC
 	uint32_t			iUnknown2;
 } TABLE_NPCS;
 
-typedef struct  __TABLE_MOB_USKO
+typedef struct  __TABLE_MOB_US
 {
 	uint32_t			iID;
 	std::string			szText;
@@ -494,16 +564,16 @@ typedef struct  __TABLE_MOB_USKO
 	uint8_t				iUnknown1;
 	uint8_t				iUnknown2;
 	int32_t				iUnknown3;
-} TABLE_MOBS_USKO;
+} TABLE_MOBS_US;
 
-typedef struct  __TABLE_MOB_CNKO
+typedef struct  __TABLE_MOB_CN
 {
 	uint32_t			iID;
 	std::string			szText;
 	uint32_t			iProtoID;
 	uint8_t				iUnknown1;
 	uint8_t				iUnknown2;
-} TABLE_MOBS_CNKO;
+} TABLE_MOBS_CN;
 
 typedef struct  __TABLE_ITEM_SELL
 {
@@ -557,13 +627,34 @@ typedef struct __Party
 	int32_t				iCure;
 } Party;
 
-typedef struct __PartyBuffInfo
+typedef struct __PartyMemberBuffInfo
 {
 	int32_t				iMemberID;
-	int16_t				iOriginalMaxHP;
-	int16_t				iCurrentMaxHP;
-	bool				bHealth;
-	bool				bAc;
-	bool				bResistance;
 	std::chrono::milliseconds iBuffTime;
-} PartyBuffInfo;
+} PartyMemberBuffInfo;
+
+typedef struct __PartyMember
+{
+	uint8_t iIndex;
+	int32_t iMemberID;
+	std::string szName;
+	uint16_t iHP;
+	uint16_t iMaxHP;
+	uint16_t iMP;
+	uint16_t iMaxMP;
+	uint8_t iLevel;
+	uint16_t iClass;
+	uint16_t iNation;
+
+	std::chrono::milliseconds iHpBuffTime;
+	uint8_t iHpBuffAttemptCount;
+
+	std::chrono::milliseconds iACBuffTime;
+	uint8_t iACBuffAttemptCount;
+
+	std::chrono::milliseconds iMindBuffTime;
+	uint8_t iMindBuffAttemptCount;
+
+	std::chrono::milliseconds iSwiftBuffTime;
+	uint8_t iSwiftBuffAttemptCount;
+} PartyMember;

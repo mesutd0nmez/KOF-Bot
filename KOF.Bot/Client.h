@@ -27,31 +27,31 @@ public:
 	int32_t GetClass(DWORD iBase = 0);
 	uint64_t GetExp(DWORD iBase = 0);
 	uint64_t GetMaxExp(DWORD iBase = 0);
-
 	uint8_t GetMoveState(DWORD iBase = 0);
 	uint8_t GetActionState(DWORD iBase = 0);
-
-	int32_t GetClientSelectedTarget();
-	uint32_t GetClientSelectedTargetBase();
-
+	float GetRadius(DWORD iBase = 0);
+	void SetScale(DWORD iBase, float fX, float fZ, float fY);
+	float GetScaleX(DWORD iBase = 0);
+	float GetScaleZ(DWORD iBase = 0);
+	float GetScaleY(DWORD iBase = 0);
+	bool IsAttackable(DWORD iBase);
 	bool IsDisconnect();
-
 	bool IsDeath(DWORD iBase = 0);
-
 	float GetX(DWORD iBase = 0);
 	float GetZ(DWORD iBase = 0);
 	float GetY(DWORD iBase = 0);
-
 	float GetGoX();
 	float GetGoY();
 	float GetGoZ();
-
 	uint8_t GetAuthority(DWORD iBase = 0);
 	void SetAuthority(uint8_t iAuthority);
 
 	Vector3 GetPosition();
+	Vector3 GetMovePosition();
 	Vector3 GetTargetPosition();
+
 	int32_t GetTarget();
+	uint32_t GetTargetBase();
 
 	DWORD GetEntityBase(int32_t iTargetId);
 
@@ -71,7 +71,7 @@ public:
 	bool IsBuffActive(int32_t iBuffType);
 	bool IsSkillActive(int32_t iSkillID);
 
-	bool IsBlinking(DWORD iBase = 0);
+	bool IsBlinking(int32_t iTargetID = -1);
 
 	float GetDistance(Vector3 v3Position);
 	float GetDistance(Vector3 v3SourcePosition, Vector3 v3TargetPosition);
@@ -99,17 +99,22 @@ protected:
 protected:
 	Bot* m_Bot;
 	TPlayer m_PlayerMySelf;
-	
-	std::vector<TNpc> m_vecNpc;
 
 protected:
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
+
+	std::recursive_mutex m_mutexAvailableSkill;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
-	std::recursive_mutex m_mutexLootList;
+	std::recursive_mutex m_mutexNpc;
+	std::vector<TNpc> m_vecNpc;
+
+	std::recursive_mutex m_mutexPlayer;
+	std::vector<TPlayer> m_vecPlayer;
 
 protected:
+	std::recursive_mutex m_mutexLootList;
 	std::vector<TLoot> m_vecLootList;
 	bool m_bIsMovingToLoot;
 
@@ -117,8 +122,15 @@ protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
 
+protected:
+	bool m_bIsZoneChanging;
+	bool IsZoneChanging() { return m_bIsZoneChanging; }
+	void SetZoneChange(bool bValue) { m_bIsZoneChanging = bValue; }
+
 public:
 	void StopMove();
+
+	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 
 protected:
 	bool IsEnemy(DWORD iBase);
@@ -126,23 +138,21 @@ protected:
 	void BasicAttack();
 
 	void PushPhase(DWORD dwAddress);
-	void ConnectLoginServer(std::string szAccountId, std::string szPassword, bool bDisconnect = false);
+	void WriteLoginInformation(std::string szAccountId, std::string szPassword);
+	void ConnectLoginServer(bool bDisconnect = false);
 	void ConnectGameServer(BYTE byServerId);
 
 	void SelectCharacterSkip();
 	void SelectCharacterLeft();
 	void SelectCharacterRight();
-	void SelectCharacter(BYTE byCharacterIndex);
+	void SelectCharacter();
 
 	void SendPacket(Packet byBuffer);
-
-
-	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool iAttacking);
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 protected:
-	void UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0);
+	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bAttacking = false, bool bBasicAttack = false);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -157,11 +167,11 @@ public:
 	void SendTownPacket();
 	void SetMovePosition(Vector3 v3MovePosition);
 
-protected:
-	
-	void SetPosition(Vector3 v3Position);
-	void SendShoppingMall(ShoppingMallType eType);
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
+	void SendShoppingMall(ShoppingMallType eType);
+protected:
+	void SetPosition(Vector3 v3Position);
+
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
 	void SetTarget(uint32_t iTargetBase);
 	bool UseItem(uint32_t iItemID);
@@ -191,6 +201,7 @@ protected:
 protected:
 	bool IsNeedRepair();
 	bool IsNeedSupply();
+	bool IsNeedSell();
 
 public:
 	int32_t GetPartyMemberCount();
@@ -198,11 +209,12 @@ public:
 	bool GetPartyMember(int32_t iID, Party& pPartyMember);
 
 public:
-	bool GetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo& pPartyBuffInfo);
-	void SetPartyMemberBuffInfo(int32_t iMemberID, PartyBuffInfo pPartyBuffInfo);
+	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 
-protected:
-	std::map<int32_t, PartyBuffInfo> m_mapPartyBuffInfo;
+public:
+	void SendUseGeniePotion(uint32_t iItemID);
+	void SendStartGenie();
+	void SendStopGenie();
 
 protected:
 	BYTE ReadByte(DWORD dwAddress);
@@ -224,4 +236,31 @@ public:
 
 public:
 	uint8_t GetRepresentZone(uint8_t iZone);
+
+private:
+	std::chrono::milliseconds m_msLastBasicAttackTime;
+
+public:
+	void UpdateSkillSuccessRate(bool bDisableCasting);
+
+protected:
+	std::recursive_mutex m_mutexPartyMembers;
+	std::vector<PartyMember> m_vecPartyMembers;
+
+protected:
+	bool m_bLunarWarDressUp;
+
+protected:
+	std::vector<int32_t> m_vecRegionUserList;
+
+protected:
+	float m_fAttackDelta;
+	float m_fAttackTimeRecent;
+
+protected:
+	Vector3 MoveTowards(Vector3 v3Current, Vector3 v3Target, float fMaxDistanceDelta);
+
+public:
+	void SendPartyCreate(std::string szName);
+	void SendPartyInsert(std::string szName);
 };

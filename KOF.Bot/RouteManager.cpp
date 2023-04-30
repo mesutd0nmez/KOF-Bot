@@ -62,10 +62,10 @@ void RouteManager::Load()
 		}
 		catch (const std::exception& e)
 		{
-			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 			printf("%s\n", e.what());
+#else
+			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
     }
@@ -117,10 +117,10 @@ void RouteManager::Save(std::string szRouteName, uint8_t iMapIndex, std::vector<
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 }

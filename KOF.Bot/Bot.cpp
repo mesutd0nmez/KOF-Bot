@@ -17,8 +17,15 @@ Bot::Bot()
 	m_pTbl_Skill_Extension2 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
+
+	for (size_t i = 0; i < 45; i++)
+	{
+		m_pTbl_Item_Extension[i] = nullptr;
+	}
+
 	m_pTbl_Npc = nullptr;
-	m_pTbl_Mob = nullptr;
+	m_pTbl_Mob_US = nullptr;
+	m_pTbl_Mob_CN = nullptr;
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
@@ -44,6 +51,11 @@ Bot::Bot()
 
 	m_hPipe = nullptr;
 	m_bPipeWorking = false;
+
+	m_jAccountList.clear();
+	m_iSelectedAccount = -1;
+
+	m_jSelectedAccount.clear();
 }
 
 Bot::~Bot()
@@ -60,8 +72,15 @@ Bot::~Bot()
 	m_pTbl_Skill_Extension2 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
+
+	for (size_t i = 0; i < 45; i++)
+	{
+		m_pTbl_Item_Extension[i] = nullptr;
+	}
+
 	m_pTbl_Npc = nullptr;
-	m_pTbl_Mob = nullptr;
+	m_pTbl_Mob_US = nullptr;
+	m_pTbl_Mob_CN = nullptr;
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
@@ -84,6 +103,11 @@ Bot::~Bot()
 
 	m_hPipe = nullptr;
 	m_bPipeWorking = false;
+
+	m_jAccountList.clear();
+	m_iSelectedAccount = -1;
+
+	m_jSelectedAccount.clear();
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -135,14 +159,17 @@ void Bot::Process()
 	}
 	else
 	{
+
 		if (m_ClientHandler)
+		{
 			m_ClientHandler->Process();
+		}
 
 		if (m_bPipeWorking == false)
 		{
 			if (ConnectPipeServer())
 			{
-				m_bPipeWorking = true;
+				printf("Bot: Connected Pipe server\n");
 
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
 
@@ -154,6 +181,8 @@ void Bot::Process()
 				}
 
 				SendPipeServer(pkt);
+
+				m_bPipeWorking = true;
 			}
 		}
 	}
@@ -166,14 +195,14 @@ void Bot::LoadAccountList()
 		m_szAccountListFilePath = skCryptDec(".\\data\\accounts.json");
 
 		std::ifstream i(m_szAccountListFilePath.c_str());
-		m_AccountList = JSON::parse(i);
+		m_jAccountList = JSON::parse(i);
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 }
@@ -215,8 +244,11 @@ void Bot::Release()
 	if (m_pTbl_Npc)
 		m_pTbl_Npc->Release();
 
-	if (m_pTbl_Mob)
-		m_pTbl_Mob->Release();
+	if (m_pTbl_Mob_US)
+		m_pTbl_Mob_US->Release();
+
+	if (m_pTbl_Mob_CN)
+		m_pTbl_Mob_CN->Release();
 
 	if (m_pTbl_ItemSell)
 		m_pTbl_ItemSell->Release();
@@ -242,7 +274,7 @@ void Bot::InitializeStaticData()
 	{
 		case PlatformType::CNKO:
 		{
-			szPlatformPrefix = "us";
+			szPlatformPrefix = "nc";
 		}
 		break;
 
@@ -269,37 +301,6 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
 #endif
 
-	TABLE_UPC_SKILL pGodMode;
-	memset(&pGodMode, 0, sizeof(pGodMode));
-
-	pGodMode.iID = 500344;
-	pGodMode.szName = skCryptDec("God Mode");
-	pGodMode.szEngName = skCryptDec("God Mode");
-	pGodMode.iSelfAnimID1 = -1;
-	pGodMode.iSelfFX1 = 2401;
-	pGodMode.iSelfPart1 = -1;
-	pGodMode.iTarget = 9;
-	pGodMode.iCooldown = 10;
-	pGodMode.dw1stTableType = 4;
-	pGodMode.dw2ndTableType = 0;
-	pGodMode.iBaseId = 490006;
-
-	m_pTbl_Skill->Insert(pGodMode.iID, pGodMode);
-
-	TABLE_UPC_SKILL_EXTENSION4 pGodModeExtension4;
-	memset(&pGodModeExtension4, 0, sizeof(pGodModeExtension4));
-
-	pGodModeExtension4.iID = pGodMode.iID;
-	pGodModeExtension4.iBuffType = 1;
-	pGodModeExtension4.iAreaRadius = 0;
-	pGodModeExtension4.iBuffDuration = 3600;
-
-	m_pTbl_Skill_Extension4->Insert(pGodModeExtension4.iID, pGodModeExtension4);
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded custom skills\n");
-#endif
-
 	m_pTbl_Item = new Table<__TABLE_ITEM>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\item_org_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
 	m_pTbl_Item->Load(szPath);
@@ -307,6 +308,16 @@ void Bot::InitializeStaticData()
 #ifdef DEBUG
 	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
 #endif
+
+	for (size_t i = 0; i < 45; i++)
+	{
+		m_pTbl_Item_Extension[i] = new Table<__TABLE_ITEM_EXTENSION>();
+		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\item_ext_%d_%s.tbl"), m_szClientPath.c_str(), i, szPlatformPrefix.c_str());
+		m_pTbl_Item_Extension[i]->Load(szPath);
+#ifdef DEBUG
+		printf("InitializeStaticData: Loaded item extension %d, size %d\n", i, m_pTbl_Item_Extension[i]->GetDataSize());
+#endif
+	}
 
 	m_pTbl_Npc = new Table<__TABLE_NPC>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\npc_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
@@ -316,13 +327,26 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
-	m_pTbl_Mob = new Table<__TABLE_MOB_USKO>();
-	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
-	m_pTbl_Mob->Load(szPath);
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		m_pTbl_Mob_US = new Table<__TABLE_MOB_US>();
+		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+		m_pTbl_Mob_US->Load(szPath);
 
 #ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
+		printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob_US->GetDataSize());
 #endif
+	}
+	else if (m_ePlatformType == PlatformType::CNKO)
+	{
+		m_pTbl_Mob_CN = new Table<__TABLE_MOB_CN>();
+		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+		m_pTbl_Mob_CN->Load(szPath);
+
+#ifdef DEBUG
+		printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob_CN->GetDataSize());
+#endif
+	}
 
 	m_pTbl_ItemSell = new Table<__TABLE_ITEM_SELL>();
 	m_pTbl_ItemSell->Load(m_szClientPath + skCryptDec("\\Data\\itemsell_table.tbl"));
@@ -377,10 +401,10 @@ void Bot::InitializeSupplyData()
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 
@@ -427,10 +451,10 @@ void Bot::InitializePriestData()
 	}
 	catch (const std::exception& e)
 	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
 #endif
 	}
 
@@ -479,29 +503,71 @@ void Bot::OnLoaded()
 
 	BuildAdress();
 
-#if !defined(_WINDLL)
 	PROCESS_INFORMATION injectedProcessInfo;
 	std::ostringstream strCommandLine;
 	strCommandLine << GetCurrentProcessId();
 
+#ifdef DEBUG
+	printf("Bot: Knight Online process starting\n");
+#endif
+
 	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
+#ifdef DEBUG
+		printf("Bot: Process cannot started\n");
+#endif
 		Close();
 		return;
 	}
+
+#ifdef DEBUG
+	printf("Bot: Knight Online process started\n");
+#endif
 
 	if (m_ePlatformType == PlatformType::USKO)
 	{
 		DWORD dwXignCodeEntryPoint = 0;
 
+#ifdef DEBUG
+		printf("Bot: Waiting entry point\n");
+#endif
+
 		while (dwXignCodeEntryPoint == 0)
 			ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
 
+#ifdef DEBUG
+		printf("Bot: Entry point ready, Knight Online process suspending\n");
+#endif
+
 		SuspendProcess(injectedProcessInfo.hProcess);
 
-		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0x400000, 0xA30000);
-		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE30000, 0x010000);
-		Remap::PatchSection(injectedProcessInfo.hProcess, (LPVOID*)0xE40000, 0x130000);
+#ifdef DEBUG
+		printf("Bot: Knight Online process suspended, bypass started\n");
+#endif
+
+		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS1")) > 0)
+		{
+			Remap::PatchSection(
+				injectedProcessInfo.hProcess, 
+				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")), 
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")));
+		}
+
+		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
+		{
+			Remap::PatchSection(
+				injectedProcessInfo.hProcess,
+				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")));
+		}
+		
+		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
+		{
+			Remap::PatchSection(
+				injectedProcessInfo.hProcess,
+				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")));
+		}
 
 		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
 
@@ -517,6 +583,10 @@ void Bot::OnLoaded()
 				};
 
 				WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
+
+#ifdef DEBUG
+				printf("Bot: Knight Online Patched\n");
+#endif
 			}
 		}
 
@@ -528,14 +598,19 @@ void Bot::OnLoaded()
 
 	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
+#ifdef DEBUG
+	printf("Bot: Bypass finished, Knight Online process resuming\n");
+#endif
+
 	ResumeProcess(injectedProcessInfo.hProcess);
 
 	SendInjectionRequest(injectedProcessInfo.dwProcessId);
 
+	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Release\\Pipeline.dll");
+
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
-#endif
 #endif
 }
 
@@ -625,6 +700,14 @@ bool Bot::GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut)
 	return m_pTbl_Item->GetData(mapDataOut);
 }
 
+bool Bot::GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE_ITEM_EXTENSION>** mapDataOut)
+{
+	if (m_pTbl_Item_Extension[iExtensionID] == nullptr)
+		return false;
+
+	return m_pTbl_Item_Extension[iExtensionID]->GetData(mapDataOut);
+}
+
 bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
 {
 	if (m_pTbl_Npc == nullptr)
@@ -633,12 +716,20 @@ bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
 	return m_pTbl_Npc->GetData(mapDataOut);
 }
 
-bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_USKO>** mapDataOut)
+bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_US>** mapDataOut)
 {
-	if (m_pTbl_Mob == nullptr)
+	if (m_pTbl_Mob_US == nullptr)
 		return false;
 
-	return m_pTbl_Mob->GetData(mapDataOut);
+	return m_pTbl_Mob_US->GetData(mapDataOut);
+}
+
+bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_CN>** mapDataOut)
+{
+	if (m_pTbl_Mob_CN == nullptr)
+		return false;
+
+	return m_pTbl_Mob_CN->GetData(mapDataOut);
 }
 
 bool Bot::GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut)
@@ -880,6 +971,9 @@ DWORD Bot::GetAddress(std::string szAddressName)
 
 void Bot::BuildAdress()
 {
+#ifdef DEBUG
+	printf("Bot: Address build started\n");
+#endif
 	auto pAddressMap = m_iniPointer->GetConfigMap();
 
 	if (pAddressMap == nullptr)
@@ -895,6 +989,10 @@ void Bot::BuildAdress()
 
 	delete m_iniPointer;
 	m_iniPointer = nullptr;
+
+#ifdef DEBUG
+	printf("Bot: Address build completed\n");
+#endif
 }
 
 bool Bot::ConnectPipeServer()
@@ -925,4 +1023,34 @@ void Bot::SendPipeServer(Packet pkt)
 			0,
 			NULL);
 	}
+}
+
+float Bot::TimeGet()
+{
+	static bool bInit = false;
+	static bool bUseHWTimer = FALSE;
+	static LARGE_INTEGER nTime, nFrequency;
+
+	if (bInit == false)
+	{
+		if (TRUE == ::QueryPerformanceCounter(&nTime))
+		{
+			::QueryPerformanceFrequency(&nFrequency);
+			bUseHWTimer = TRUE;
+		}
+		else
+		{
+			bUseHWTimer = FALSE;
+		}
+
+		bInit = true;
+	}
+
+	if (bUseHWTimer)
+	{
+		::QueryPerformanceCounter(&nTime);
+		return (float)((double)(nTime.QuadPart) / (double)nFrequency.QuadPart);
+	}
+
+	return (float)timeGetTime();
 }

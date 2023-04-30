@@ -22,3 +22,4 @@
 #include <limits>
 #include <tlhelp32.h>
 #include <cmath>
+#include <mmsystem.h>

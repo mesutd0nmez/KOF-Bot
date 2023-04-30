@@ -32,6 +32,7 @@ void Service::Clear()
 void Service::Initialize()
 {
     std::string szIniPath = skCryptDec(".\\data\\KOF.ini");
+
     m_iniAppConfiguration = new Ini();
     m_iniAppConfiguration->Load(szIniPath.c_str());
 
@@ -142,11 +143,14 @@ void Service::HandlePacket(Packet& pkt)
                     if (m_iId == -1) return;
 
                     std::string szConfiguration;
-
-                    pkt >> szConfiguration;
+                    pkt.readString(szConfiguration);
 
                     m_iniUserConfiguration = new Ini();
-                    m_iniUserConfiguration->Load(szConfiguration);
+
+                    if (szConfiguration.size() > 0)
+                    {
+                        m_iniUserConfiguration->Load(szConfiguration);
+                    }                
 
                     OnConfigurationLoaded();
                 }
@@ -335,4 +339,8 @@ void Service::SendInjectionRequest(uint32_t iProcessId)
         << uint32_t(iProcessId);
 
     Send(pkt);
+
+#ifdef DEBUG
+    printf("Service: Injection request sended\n");
+#endif
 }

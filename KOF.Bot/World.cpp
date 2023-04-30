@@ -54,14 +54,9 @@ void World::Load(uint8_t iIndex)
 				+ skCryptDec("\\image\\")
 				+ pWorldData.szMapImageFile;
 
-			pWorldData.pMapImageData = stbi_load(
-				szMapImageFilePath.c_str(), 
-				&pWorldData.iMapImageWidth, 
-				&pWorldData.iMapImageHeight, 
-				NULL, 
-				4);
+			std::ifstream pMapImageRawDataStream(szMapImageFilePath.c_str(), std::ios::in | std::ios::binary);
 
-			if (pWorldData.pMapImageData == NULL)
+			if (!pMapImageRawDataStream)
 			{
 #ifdef _DEBUG
 				printf("World::Load: %s not loaded\n", szMapImageFilePath.c_str());
@@ -69,20 +64,26 @@ void World::Load(uint8_t iIndex)
 				return;
 			}
 
+			std::vector<uint8_t> pMapImageRawData((std::istreambuf_iterator<char>(pMapImageRawDataStream)), std::istreambuf_iterator<char>());
+			pWorldData.pMapImageRawData = pMapImageRawData;
+
+			stbi_load_from_memory(
+				pMapImageRawData.data(),
+				pMapImageRawData.size(),
+				&pWorldData.iMapImageWidth,
+				&pWorldData.iMapImageHeight,
+				NULL,
+				4);
+
 			std::string szMinimapImageFilePath =
 				std::filesystem::current_path().string()
 				+ skCryptDec("\\data\\")
 				+ skCryptDec("\\image\\")
 				+ pWorldData.szMiniMapImageFile;
 
-			pWorldData.pMiniMapImageData = stbi_load(
-				szMinimapImageFilePath.c_str(), 
-				&pWorldData.iMiniMapImageWidth, 
-				&pWorldData.iMiniMapImageHeight, 
-				NULL, 
-				4);
+			std::ifstream pMiniMapImageRawDataStream(szMinimapImageFilePath.c_str(), std::ios::in | std::ios::binary);
 
-			if (pWorldData.pMiniMapImageData == NULL)
+			if (!pMiniMapImageRawDataStream)
 			{
 #ifdef _DEBUG
 				printf("World::Load: %s not loaded\n", szMinimapImageFilePath.c_str());
@@ -90,14 +91,25 @@ void World::Load(uint8_t iIndex)
 				return;
 			}
 
+			std::vector<uint8_t> pMiniMapImageRawData((std::istreambuf_iterator<char>(pMiniMapImageRawDataStream)), std::istreambuf_iterator<char>());
+			pWorldData.pMiniMapImageRawData = pMiniMapImageRawData;
+
+			stbi_load_from_memory(
+				pMiniMapImageRawData.data(),
+				pMiniMapImageRawData.size(),
+				&pWorldData.iMiniMapImageWidth,
+				&pWorldData.iMiniMapImageHeight,
+				NULL,
+				4);
+
 			m_mapWorldData.insert(std::pair<uint8_t, WorldData>(iIndex, pWorldData));
 		}
 		catch (const std::exception& e)
 		{
-			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
+#ifdef DEBUG
 			printf("%s\n", e.what());
+#else
+			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
 	}

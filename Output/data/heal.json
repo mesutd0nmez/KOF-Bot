@@ -1,0 +1,30 @@
+[
+    {
+        "id": -1,
+        "name": "Auto"
+    },
+	{
+        "id": 111545,
+        "name": "Superior Healing"
+    },
+	{
+        "id": 111536,
+        "name": "Massive Healing"
+    },
+	{
+        "id": 111527,
+        "name": "Great Healing"
+    },
+	{
+        "id": 111518,
+        "name": "Major Healing"
+    },
+	{
+        "id": 111509,
+        "name": "Healing"
+    },
+	{
+        "id": 107705,
+        "name": "Minor Healing"
+    }
+]

@@ -551,10 +551,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QueryDisk: %s\n", e.what());
 #endif
 		}
 	}
@@ -581,10 +581,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QuerySMBIOS: %s\n", e.what());
 #endif
 		}
 	}
@@ -613,10 +613,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QueryProcessor: %s\n", e.what());
 #endif
 		}
 	}
@@ -653,10 +653,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QueryGPU: %s\n", e.what());
 #endif
 		}
 	}
@@ -694,10 +694,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QuerySystem: %s\n", e.what());
 #endif
 		}
 	}
@@ -748,10 +748,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QueryPhysicalMemory: %s\n", e.what());
 #endif
 		}
 	}
@@ -764,10 +764,10 @@ private:
 		}
 		catch (const std::exception& e)
 		{
+#ifdef DEBUG
+			printf("%s\n", e.what());
+#else
 			DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-			printf("QueryRegistry: %s\n", e.what());
 #endif
 		}
 	}

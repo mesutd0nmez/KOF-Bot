@@ -135,9 +135,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetName>KOF</TargetName>
     <LinkIncremental>true</LinkIncremental>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86</LibraryPath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetName>KOF</TargetName>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include;</IncludePath>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -163,7 +167,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Debug;..\KOF.Dependencies\snappy-1.1.9\Debug;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Debug;..\KOF.Dependencies\curl\lib\Debug</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl-d_imp.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl-d_imp.lib;$(CoreLibraryDependencies);Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -191,11 +195,14 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl_imp.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(DXSDK_DIR)Lib\x86\d3d11.lib;ImGui.lib;snappy.lib;cryptlib.lib;libcurl_imp.lib;$(CoreLibraryDependencies);Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\snappy-1.1.9\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\curl\lib\Release</AdditionalLibraryDirectories>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>call "$(SolutionDir)Scripts\VMProtect.bat"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

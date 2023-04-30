@@ -42,9 +42,10 @@ public:
 		}
 		catch (const CryptoPP::Exception& e)
 		{
-			DBG_UNREFERENCED_PARAMETER(e);
 #ifdef DEBUG
-			printf("Encryption failed: %s\n", e.what());
+			printf("%s\n", e.what());
+#else
+			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
 
@@ -68,9 +69,10 @@ public:
 		}
 		catch (const CryptoPP::Exception& e)
 		{
-			DBG_UNREFERENCED_PARAMETER(e);
 #ifdef DEBUG
-			printf("Decryption failed: %s\n", e.what());
+			printf("%s\n", e.what());
+#else
+			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
 
