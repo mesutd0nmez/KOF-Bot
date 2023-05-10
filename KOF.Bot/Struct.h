@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 static const int COSP_MAX = 9;              // 9 cospre slots
 static const int SLOT_MAX = 14;             // 14 equipped item slots
@@ -23,13 +23,88 @@ struct Vector3
 	float m_fZ;
 	float m_fY;
 
-	Vector3 GetEndPoint(const Vector3& endPoint, const float distance)
+	Vector3 GetEndPoint(const Vector3& endPoint, const float distance) const
 	{
 		Vector3 v(endPoint.m_fX - m_fX, endPoint.m_fZ - m_fZ, endPoint.m_fY - m_fY);
 		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fZ * v.m_fZ + v.m_fY * v.m_fY);
 		Vector3 u(v.m_fX / norm, v.m_fZ / norm, v.m_fY / norm);
 		Vector3 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fZ - distance * u.m_fZ, endPoint.m_fY - distance * u.m_fY);
 		return newEndPoint;
+	}
+
+	Vector3 MoveTowards(Vector3 target, float maxDistanceDelta) const
+	{
+		Vector3 vectorToTarget = { target.m_fX - m_fX, target.m_fZ - m_fZ, target.m_fY - m_fY };
+
+		float distance = std::sqrt(vectorToTarget.m_fX * vectorToTarget.m_fX +
+			vectorToTarget.m_fZ * vectorToTarget.m_fZ +
+			vectorToTarget.m_fY * vectorToTarget.m_fY);
+
+		if (distance <= maxDistanceDelta || distance == 0.0f) 
+		{
+			return target;
+		}
+
+		float scaleFactor = maxDistanceDelta / distance;
+
+		return { m_fX + vectorToTarget.m_fX * scaleFactor,
+				m_fZ + vectorToTarget.m_fZ * scaleFactor,
+				m_fY + vectorToTarget.m_fY * scaleFactor };
+	}
+
+	Vector3 WalkAround(const float radius, const float angle)
+	{
+		// açıyı radyan cinsinden hesapla
+		float radianAngle = angle * (3.14159f / 180.0f);
+
+		// son noktayı hesapla
+		Vector3 end(m_fX + radius * std::cos(radianAngle),
+			m_fZ + radius * std::sin(radianAngle),
+			m_fY);
+
+		return end;
+	}
+
+	bool operator == (const Vector3& vec)
+	{
+		if (m_fX == vec.m_fX && m_fZ == vec.m_fZ && m_fY == vec.m_fY)
+			return true;
+
+		return false;
+	}
+
+	bool operator != (const Vector3& vec)
+	{
+		if (m_fX != vec.m_fX || m_fZ != vec.m_fZ || m_fY != vec.m_fY)
+			return true;
+
+		return false;
+	}
+
+	Vector3 operator+(const Vector3& other) const 
+	{
+		return Vector3(m_fX + other.m_fX, m_fZ + other.m_fZ, m_fY + other.m_fY);
+	}
+
+	Vector3 operator-(const Vector3& other) const 
+	{
+		return Vector3(m_fX - other.m_fX, m_fZ - other.m_fZ, m_fY - other.m_fY);
+	}
+
+	Vector3 operator*(float scalar) const 
+	{
+		return Vector3(m_fX * scalar, m_fZ * scalar, m_fY * scalar);
+	}
+
+	float Magnitude() const 
+	{
+		return std::sqrt(m_fX * m_fX + m_fZ * m_fZ + m_fY * m_fY);
+	}
+
+	Vector3 Normalize() const 
+	{
+		float mag = Magnitude();
+		return Vector3(m_fX / mag, m_fZ / mag, m_fY / mag);
 	}
 };
 

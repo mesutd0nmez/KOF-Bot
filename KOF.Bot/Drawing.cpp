@@ -728,6 +728,11 @@ void Drawing::DrawGameController()
 
                 m_pClient->LoadSkillData();
             }
+
+            if (ImGui::Button(skCryptDec("Test"), ImVec2(129.0f, 0.0f)))
+            {
+                m_pClient->Test();
+            }
         }
 
         ImGui::Spacing();
@@ -1192,6 +1197,19 @@ void Drawing::DrawMainFeaturesArea()
 
             ImGui::Text(skCryptDec("Disable Death Effect"));
 
+            bool bLegalWallHack = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("LegalWallHack"), false);
+
+            if (ImGui::Checkbox(skCryptDec("##LegalWallHack"), &bLegalWallHack))
+            {
+                m_pClient->PatchObjectCollision(bLegalWallHack);
+
+                m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("LegalWallHack"), bLegalWallHack ? 1 : 0);
+            }
+
+            ImGui::SameLine();
+
+            ImGui::Text(skCryptDec("Legal Wall Hack1"));
+
             bool bCharacterSizeEnable = m_pUserConfiguration->GetBool(skCryptDec("Character"), skCryptDec("SizeEnable"), false);
 
             if (ImGui::Checkbox(skCryptDec("##CharacterSizeCheckbox"), &bCharacterSizeEnable))
@@ -1210,7 +1228,9 @@ void Drawing::DrawMainFeaturesArea()
             if (ImGui::SliderInt(skCryptDec("##CharacterSize"), &iCharacterSize, 1, 10))
                 m_pUserConfiguration->SetInt(skCryptDec("Character"), skCryptDec("Size"), iCharacterSize);
 
-            ImGui::PopItemWidth();           
+            ImGui::PopItemWidth();   
+
+            
         }
     }
 }
@@ -2030,6 +2050,7 @@ void Drawing::DrawAutomatedCharacterSkillTree()
                 ImGui::PushID(x.iID);
 
                 bool bSelected = std::find(vecCharacterSkillList.begin(), vecCharacterSkillList.end(), x.iID) != vecCharacterSkillList.end();
+
 
                 if (ImGui::Selectable(x.szName.c_str(), &bSelected))
                 {

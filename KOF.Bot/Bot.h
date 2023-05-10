@@ -159,5 +159,8 @@ public:
 
 public:
 	static float TimeGet();
+
+public:
+	void Patch(HANDLE hProcess);
 };
 

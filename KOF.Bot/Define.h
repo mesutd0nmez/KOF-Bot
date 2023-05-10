@@ -2,7 +2,7 @@
 
 #define DEBUG
 //#define PRINT_RECV_PACKET
-#define PRINT_SEND_PACKET
+//#define PRINT_SEND_PACKET
 
 //#define DISABLE_XIGNCODE
 

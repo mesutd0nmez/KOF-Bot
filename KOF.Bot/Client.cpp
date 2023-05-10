@@ -1743,14 +1743,14 @@ void Client::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition,
 	Packet pkt = Packet(WIZ_MOVE);
 
 	pkt
-		<< uint16_t(vecStartPosition.m_fX)
-		<< uint16_t(vecStartPosition.m_fY)
-		<< int16_t(vecStartPosition.m_fZ)
+		<< uint16_t(vecStartPosition.m_fX * 10.0f)
+		<< uint16_t(vecStartPosition.m_fY * 10.0f)
+		<< int16_t(vecStartPosition.m_fZ * 10.0f)
 		<< iMoveSpeed
 		<< iMoveType
-		<< uint16_t(vecTargetPosition.m_fX)
-		<< uint16_t(vecTargetPosition.m_fY)
-		<< int16_t(vecTargetPosition.m_fZ);
+		<< uint16_t(vecTargetPosition.m_fX * 10.0f)
+		<< uint16_t(vecTargetPosition.m_fY * 10.0f)
+		<< int16_t(vecTargetPosition.m_fZ * 10.0f);
 
 	SendPacket(pkt);
 }
@@ -2462,24 +2462,34 @@ void Client::SendPartyInsert(std::string szName)
 	SendPacket(pkt);
 }
 
-Vector3 Client::MoveTowards(Vector3 current, Vector3 target, float maxDistanceDelta)
+//0x7E497D
+//0x8196E7
+
+void Client::PatchObjectCollision(bool bEnable)
 {
-	float toVector_x = (target.m_fX - current.m_fX);
-	float toVector_y = (target.m_fY - current.m_fY);
-	float toVector_z = (target.m_fZ - current.m_fZ);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
-	float sqdist = (toVector_x * toVector_x) + (toVector_y * toVector_y) + (toVector_z * toVector_z);
+	if (!hProcess)
+		return;
 
-	if ((sqdist == 0) || ((maxDistanceDelta >= 0) && (sqdist <= (maxDistanceDelta * maxDistanceDelta))))
-		return target;
+	if (bEnable)
+	{
+		BYTE byPatch[] =
+		{
+			0x75
+		};
 
-	float dist = sqrt(sqdist);
+		WriteProcessMemory(hProcess, (LPVOID*)0x7E497D, byPatch, sizeof(byPatch), 0);
+	}
+	else
+	{
+		BYTE byPatch[] =
+		{
+			0x74
+		};
 
-	float X = round(current.m_fX + ((toVector_x / dist) * maxDistanceDelta * 10.0f));
-	float Y = round(current.m_fY + ((toVector_y / dist) * maxDistanceDelta * 10.0f));
-	float Z = round(current.m_fZ + ((toVector_z / dist) * maxDistanceDelta * 10.0f));
-
-	return Vector3(X, Z, Y);
+		WriteProcessMemory(hProcess, (LPVOID*)0x7E497D, byPatch, sizeof(byPatch), 0);
+	}
 }
 
 BYTE Client::ReadByte(DWORD dwAddress)

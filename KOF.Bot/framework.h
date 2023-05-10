@@ -23,3 +23,6 @@
 #include <tlhelp32.h>
 #include <cmath>
 #include <mmsystem.h>
+#include <locale>
+#include <codecvt>
+#include <charconv>

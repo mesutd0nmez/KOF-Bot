@@ -22,6 +22,7 @@ public:
 	void StartHandler();
 	void StopHandler();
 	void Process();
+	void PatchSocket();
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
@@ -29,8 +30,6 @@ private:
 
 private:
 	virtual void OnReady();
-
-	void PatchClient();
 
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
@@ -167,6 +166,9 @@ private:
 
 protected:
 	std::chrono::milliseconds m_msLastSelectedTargetTime;
+
+public:
+	void Test();
 };
 
 

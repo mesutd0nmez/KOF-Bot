@@ -594,24 +594,60 @@ void Bot::OnLoaded()
 		BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
 		WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 #endif
+
+#ifdef DEBUG
+		printf("Bot: Bypass finished, Knight Online process resuming\n");
+#endif
+
+		ResumeProcess(injectedProcessInfo.hProcess);
 	}
+
+	Patch(injectedProcessInfo.hProcess);
 
 	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
-#ifdef DEBUG
-	printf("Bot: Bypass finished, Knight Online process resuming\n");
-#endif
-
-	ResumeProcess(injectedProcessInfo.hProcess);
-
 	SendInjectionRequest(injectedProcessInfo.dwProcessId);
 
-	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Release\\Pipeline.dll");
+	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
 #endif
+}
+
+void Bot::Patch(HANDLE hProcess)
+{
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	DWORD iPatchEntryPoint1 = 0;
+	while (iPatchEntryPoint1 == 0)
+		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), &iPatchEntryPoint1, 4, 0);
+
+	BYTE byPatch1[] = 
+	{ 
+		0x90, 
+		0x90, 
+		0x90, 
+		0x90, 
+		0x90 
+	};
+
+	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	DWORD iPatchEntryPoint2 = 0;
+	while (iPatchEntryPoint2 == 0)
+		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
+
+	BYTE byPatch2[] =
+	{ 
+		0xE9, 0xC5, 0x00, 0x00, 0x00,
+		0x90 
+	};
+
+	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 void Bot::OnConfigurationLoaded()

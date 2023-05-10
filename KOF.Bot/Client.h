@@ -257,10 +257,10 @@ protected:
 	float m_fAttackDelta;
 	float m_fAttackTimeRecent;
 
-protected:
-	Vector3 MoveTowards(Vector3 v3Current, Vector3 v3Target, float fMaxDistanceDelta);
-
 public:
 	void SendPartyCreate(std::string szName);
 	void SendPartyInsert(std::string szName);
+
+public:
+	void PatchObjectCollision(bool bEnable);
 };

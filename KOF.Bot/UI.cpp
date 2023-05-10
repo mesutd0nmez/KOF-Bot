@@ -143,6 +143,9 @@ void UI::Render(Bot* pBot)
 
     ImGui::GetIO().IniFilename = nullptr;
 
+   /* ImFont* font = io.Fonts->AddFontFromFileTTF(skCrypt("c:\\Windows\\Fonts\\msyh.ttc"), 18.0f, NULL, io.Fonts->GetGlyphRangesChineseFull());
+    IM_ASSERT(font != NULL);*/
+
     ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX9_Init(g_pd3dDevice);
 

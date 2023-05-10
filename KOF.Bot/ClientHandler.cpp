@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "ClientHandler.h"
 #include "Client.h"
 #include "Memory.h"
@@ -58,7 +58,7 @@ void ClientHandler::Initialize()
 	printf("Client handler initializing\n");
 #endif
 
-	PatchClient();
+	PatchSocket();
 }
 
 void ClientHandler::StartHandler()
@@ -69,7 +69,7 @@ void ClientHandler::StartHandler()
 
 	m_bWorking = true;
 
-	new std::thread([this]() { SpeedHackProcess(); });
+	//new std::thread([this]() { SpeedHackProcess(); });
 	new std::thread([this]() { AttackProcess(); });
 	new std::thread([this]() { SearchTargetProcess(); });
 	new std::thread([this]() { MoveToTargetProcess(); });
@@ -179,7 +179,7 @@ void ClientHandler::OnReady()
 #endif
 }
 
-void ClientHandler::PatchClient()
+void ClientHandler::PatchSocket()
 {
 	onClientSendProcess = [=](BYTE* iStream, DWORD iStreamLength)
 	{
@@ -941,8 +941,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(GetZone())); });
 
-			m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
-
 #ifdef DEBUG
 			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
 #endif
@@ -1153,17 +1151,25 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif
 			new std::thread([this]()
 			{
+				m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
+
 				WaitCondition(GetUserConfiguration() == nullptr)
 				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
 
 				bool bWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
 				SetAuthority(bWallHack ? 0 : 1);
 
+				bool bLegalWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
+				PatchObjectCollision(bLegalWallHack);
+
 				bool bDeathEffect = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
 				PatchDeathEffect(bDeathEffect);
 
 				bool bDisableCasting = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DisableCasting"), false);
 				UpdateSkillSuccessRate(bDisableCasting);
+
+				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
+				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
 			});
 		}
 		break;
@@ -2807,13 +2813,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							&& szMessage.rfind(szPartyRequestMessage.c_str(), 0) == 0)
 						{
 							if (m_vecPartyMembers.size() == 0)
-							{
 								SendPartyCreate(szSenderName);
-							}
 							else
-							{
 								SendPartyInsert(szSenderName);
-							}
 						}
 
 						bool bTeleportRequest = GetUserConfiguration()->GetBool(skCryptDec("Listener"), skCryptDec("TeleportRequest"), false);
@@ -3408,28 +3410,47 @@ void ClientHandler::SpeedHackProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			//Vector3 v3MovePosition = GetMovePosition();
 
-			//if (v3MovePosition.m_fX == 0.0f 
-			//	&& v3MovePosition.m_fY == 0.0f)
+			//if (v3MovePosition.m_fX == 0.0f && v3MovePosition.m_fY == 0.0f)
 			//	continue;
 
+			//std::vector<Vector3> vecAllPositions;
+
 			//Vector3 v3CurrentPosition = GetPosition();
-			//Vector3 v3NextPosition = MoveTowards(v3CurrentPosition, v3MovePosition, 1.0f);
 
-			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")), v3NextPosition.m_fX);
-			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")), v3NextPosition.m_fY);
-			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")), v3NextPosition.m_fZ);
+			//while (true)
+			//{
+			//	std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-			//v3NextPosition.m_fZ = v3CurrentPosition.m_fZ;
+			//	v3CurrentPosition = v3CurrentPosition.MoveTowards(v3MovePosition, 6.75f);
+			//	vecAllPositions.push_back(v3CurrentPosition);
 
-			////if(v3CurrentPosition.m_fX == v3NextPosition.m_fX && v3CurrentPosition.m_fY ==)
+			//	if (v3CurrentPosition == v3MovePosition)
+			//		break;
+			//}
 
-			//SendMovePacket(v3CurrentPosition, v3NextPosition, 45, 2);
+			//for (auto& e : vecAllPositions)
+			//{
+			//	if (v3MovePosition != GetMovePosition())
+			//		break;
 
+			//	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
+			//	SendMovePacket(GetPosition(), e, 45, 2);
+
+			//	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")), e.m_fX);
+			//	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")), e.m_fY);
+			//	WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")), e.m_fZ);
+			//}
+
+			//WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE_TYPE")), 0);
+			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOX")), 0.0f);
+			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOY")), 0.0f);
+			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_GOZ")), 0.0f);
+			//WriteByte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOVE")), 0);
 		}
 		catch (const std::exception& e)
 		{
@@ -3845,6 +3866,9 @@ void ClientHandler::AttackProcess()
 					{
 						continue;
 					}
+
+					if (GetActionState() == PSA_SPELLMAGIC)
+						continue;
 
 					UseSkill(pSkillData->second, GetTarget(), 0, true, false);
 
@@ -5433,6 +5457,42 @@ void ClientHandler::RouteProcess()
 						if (pInventory.iItemID == 0)
 							continue;
 
+						std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+						if (!m_Bot->GetItemTable(&pItemTable))
+							continue;
+
+						uint32_t iItemBaseID = pInventory.iItemID / 1000 * 1000;
+						auto pItemData = pItemTable->find(iItemBaseID);
+
+						if (pItemData == pItemTable->end())
+							continue;
+
+						if (pItemData->second.byNeedRace == RACE_TRADEABLE_IN_72HR
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE_SOLD
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE_SOLD2
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+							continue;
+
+						std::map<uint32_t, __TABLE_ITEM_EXTENSION>* pItemExtensionTable;
+						if (!m_Bot->GetItemExtensionTable(pItemData->second.byExtIndex, &pItemExtensionTable))
+							continue;
+
+						auto pItemExtensionData = pItemExtensionTable->find(pInventory.iItemID % 1000);
+
+						if (pItemExtensionData == pItemExtensionTable->end())
+							continue;
+
+						if (pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_UNIQUE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_RED
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_PET
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_EVENT
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_COSPRE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_MINERVA)
+							continue;
+
 						if (m_vecItemSell[iSellPageCount].size() == 14)
 							iSellPageCount++;
 
@@ -5518,6 +5578,9 @@ void ClientHandler::RouteProcess()
 
 							if (pInventoryItem.iItemID != 0)
 							{
+								if (pInventoryItem.iCount >= iItemCount)
+									continue;
+
 								iInventoryPosition = (uint8_t)pInventoryItem.iPos;
 								iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
 							}
@@ -5761,6 +5824,15 @@ void ClientHandler::SupplyProcess()
 #ifdef DEBUG
 	printf("ClientHandler::SupplyProcess Stopped\n");
 #endif
+}
+
+void ClientHandler::Test()
+{
+	Packet pkt = Packet(PIPE_LEGAL_ITEM);
+
+	pkt << int(0) << int(8);
+
+	m_Bot->SendPipeServer(pkt);
 }
 
 void ClientHandler::SetRoute(std::vector<Route> vecRoute)
