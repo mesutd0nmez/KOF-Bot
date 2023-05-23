@@ -83,8 +83,10 @@ public:
 	bool GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills);
 
 	int32_t GetInventoryItemCount(uint32_t iItemID);
-	TInventory GetInventoryItem(uint32_t iItemID);
-	TInventory GetInventoryItemSlot(uint8_t iSlotPosition);
+	TItemData GetInventoryItem(uint32_t iItemID);
+	TItemData GetInventoryItemSlot(uint8_t iSlotPosition);
+	bool GetInventoryItemList(std::vector<TItemData>& vecItemList);
+
 	int32_t GetInventoryEmptySlot();
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
 
@@ -209,7 +211,11 @@ public:
 	bool GetPartyMember(int32_t iID, Party& pPartyMember);
 
 public:
+	void SendWarehouseOpen(uint32_t iNpcID);
 	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
+	void SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
+	int32_t GetWarehouseItemCount(uint32_t iItemID);
+	int32_t GetWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
 
 public:
 	void SendUseGeniePotion(uint32_t iItemID);
@@ -263,4 +269,22 @@ public:
 
 public:
 	void PatchObjectCollision(bool bEnable);
+
+protected:
+	std::chrono::milliseconds m_msLastGenieStartTime;
+
+public:
+	void SendRearrangeInventory();
+
+public:
+	void SendOpenVipWarehouse(uint32_t iItemID = 0);
+	void SendVipWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint16_t iCount);
+	int32_t GetVipWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
+	int32_t GetVipWarehouseItemCount(uint32_t iItemID);
+
+public:
+	void SendQuestCompleted(uint32_t iQuestID);
+
+public:
+	void ToggleInventory();
 };

@@ -522,3 +522,12 @@ enum ItemRace
 	RACE_NO_TRADE_SOLD2 = 70,  // Cannot be traded or sold.
 	RACE_NO_TRADE_SOLD_STORE = 73,  // Cannot be traded, sold or stored
 };
+
+enum InventoryItemFlag
+{
+	INVENTORY_ITEM_FLAG_NONE,
+	INVENTORY_ITEM_FLAG_DELETE,
+	INVENTORY_ITEM_FLAG_SELL,
+	INVENTORY_ITEM_FLAG_INN,
+	INVENTORY_ITEM_FLAG_VIP,
+};

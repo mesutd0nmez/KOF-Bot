@@ -148,7 +148,7 @@
 #define WIZ_PVP					0x88
 #define WIZ_CHANGE_HAIR			0x89 // Changes hair colour/facial features at character selection
 #define WIZ_PACKET12			0x8A
-#define WIZ_PACKET13			0x8B
+#define WIZ_VIPWAREHOUSE		0x8B
 #define WIZ_PACKET14			0x8C
 #define WIZ_PACKET15			0x8D
 #define WIZ_PACKET16			0x8E

@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <corecrt_math_defines.h>
 
 static const int COSP_MAX = 9;              // 9 cospre slots
 static const int SLOT_MAX = 14;             // 14 equipped item slots
@@ -50,19 +51,6 @@ struct Vector3
 		return { m_fX + vectorToTarget.m_fX * scaleFactor,
 				m_fZ + vectorToTarget.m_fZ * scaleFactor,
 				m_fY + vectorToTarget.m_fY * scaleFactor };
-	}
-
-	Vector3 WalkAround(const float radius, const float angle)
-	{
-		// açıyı radyan cinsinden hesapla
-		float radianAngle = angle * (3.14159f / 180.0f);
-
-		// son noktayı hesapla
-		Vector3 end(m_fX + radius * std::cos(radianAngle),
-			m_fZ + radius * std::sin(radianAngle),
-			m_fY);
-
-		return end;
 	}
 
 	bool operator == (const Vector3& vec)
@@ -173,7 +161,7 @@ struct EntityInfo
 	float m_fRadius;
 };
 
-typedef struct SInventory
+typedef struct SItemData
 {
 	int32_t				iPos;
 	uint32_t			iItemID;
@@ -183,7 +171,7 @@ typedef struct SInventory
 	int16_t				iRentalTime;
 	uint32_t			iSerial;
 	uint32_t			iExpirationTime;
-} TInventory;
+} TItemData;
 
 typedef struct SPlayer
 {
@@ -255,7 +243,9 @@ typedef struct SPlayer
 	int16_t			iMoveSpeed;
 	uint8_t			iMoveType;
 
-	TInventory		tInventory[INVENTORY_TOTAL];
+	TItemData		tInventory[INVENTORY_TOTAL];
+	TItemData		tWarehouse[WAREHOUSE_MAX];
+	TItemData		tVipWarehouse[VIP_HAVE_MAX];
 
 	bool			bBlinking;
 	float			fRotation;

@@ -56,6 +56,8 @@ Bot::Bot()
 	m_iSelectedAccount = -1;
 
 	m_jSelectedAccount.clear();
+
+	m_jInventoryFlags.clear();
 }
 
 Bot::~Bot()
@@ -175,7 +177,7 @@ void Bot::Process()
 
 				pkt << int32_t(m_mapAddress.size());
 
-				for (auto e : m_mapAddress)
+				for (auto &e : m_mapAddress)
 				{
 					pkt << e.first << e.second;
 				}
@@ -392,12 +394,19 @@ void Bot::InitializeSupplyData()
 
 	try
 	{
-		std::ifstream i(
+		std::ifstream ifSupply(
 			std::filesystem::current_path().string() 
 			+ skCryptDec("\\data\\") 
 			+ skCryptDec("supply.json"));
 
-		m_jSupplyList = JSON::parse(i);
+		m_jSupplyList = JSON::parse(ifSupply);
+
+		std::ifstream ifInventoryFlags(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("inventoryflags.json"));
+
+		m_jInventoryFlags = JSON::parse(ifInventoryFlags);
 	}
 	catch (const std::exception& e)
 	{
@@ -503,13 +512,47 @@ void Bot::OnLoaded()
 
 	BuildAdress();
 
-	PROCESS_INFORMATION injectedProcessInfo;
-	std::ostringstream strCommandLine;
-	strCommandLine << GetCurrentProcessId();
-
 #ifdef DEBUG
 	printf("Bot: Knight Online process starting\n");
 #endif
+
+#ifdef ENABLE_FIREWALL_RULES
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		std::string strConsoleInfo;
+		ConsoleCommand(skCryptDec("netsh advfirewall firewall show rule name=\"KOF Firewall\""), strConsoleInfo);
+
+		if (strConsoleInfo.find(skCryptDec("No rules match")) == std::string::npos)
+		{
+			ConsoleCommand(skCryptDec("netsh advfirewall firewall set rule name=\"KOF Firewall\" new enable=no"), strConsoleInfo);
+		}
+	}
+#endif
+
+#ifndef DISABLE_XIGNCODE
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		PROCESS_INFORMATION loaderProcessInfo;
+		std::ostringstream strLoaderCommandLine;
+		strLoaderCommandLine << m_szClientPath + "\\"  + m_szClientExe;
+
+		if (!StartProcess(
+			m_szClientPath + "\\XIGNCODE\\", "xldr_KnightOnline_NA_loader_win32.exe", strLoaderCommandLine.str(), loaderProcessInfo))
+		{
+#ifdef DEBUG
+			printf("Bot: Loader cannot started\n");
+#endif
+			Close();
+			return;
+		}
+
+		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+	}
+#endif
+
+	PROCESS_INFORMATION injectedProcessInfo;
+	std::ostringstream strCommandLine;
+	strCommandLine << GetCurrentProcessId();
 
 	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
@@ -636,7 +679,7 @@ void Bot::Patch(HANDLE hProcess)
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	DWORD iPatchEntryPoint2 = 0;
+	/*DWORD iPatchEntryPoint2 = 0;
 	while (iPatchEntryPoint2 == 0)
 		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
 
@@ -646,7 +689,7 @@ void Bot::Patch(HANDLE hProcess)
 		0x90 
 	};
 
-	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
+	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);*/
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
@@ -682,16 +725,6 @@ void Bot::OnConfigurationLoaded()
 			m_msLastConfigurationSave = msCurrentTime;
 		}
 	};
-
-	new std::thread([this]() 
-	{ 
-		WaitCondition(IsTableLoaded() == false);
-
-		m_ClientHandler->SetConfigurationLoaded(true);
-		m_ClientHandler->StartHandler();
-
-		new std::thread([this]() { UI::Render(this); });
-	});
 }
 
 Ini* Bot::GetAppConfiguration()
@@ -734,6 +767,27 @@ bool Bot::GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut)
 		return false;
 
 	return m_pTbl_Item->GetData(mapDataOut);
+}
+
+bool Bot::GetItemData(uint32_t iItemID, __TABLE_ITEM*& pOutItemData)
+{
+	if (m_pTbl_Item == nullptr)
+		return false;
+
+	std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+	if (!GetItemTable(&pItemTable))
+		return false;
+
+	uint32_t iItemBaseID = iItemID / 1000 * 1000;
+
+	auto pItemData = pItemTable->find(iItemBaseID);
+
+	if (pItemData == pItemTable->end())
+		return false;
+
+	pOutItemData = &(pItemData->second);
+
+	return true;
 }
 
 bool Bot::GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE_ITEM_EXTENSION>** mapDataOut)
@@ -1019,7 +1073,7 @@ void Bot::BuildAdress()
 
 	if (it != pAddressMap->end())
 	{
-		for (auto e : it->second)
+		for (auto &e : it->second)
 			m_mapAddress.insert(std::make_pair(e.first, std::strtoul(e.second.c_str(), NULL, 16)));
 	}
 
@@ -1089,4 +1143,40 @@ float Bot::TimeGet()
 	}
 
 	return (float)timeGetTime();
+}
+
+uint8_t Bot::GetInventoryItemFlag(uint32_t iItemID)
+{
+	for (size_t i = 0; i < m_jInventoryFlags.size(); i++)
+	{
+		if (m_jInventoryFlags[i]["id"].get<uint32_t>() == iItemID)
+		{
+			return m_jInventoryFlags[i]["flag"].get<uint8_t>();
+		}
+	}
+
+	return INVENTORY_ITEM_FLAG_NONE;
+};
+
+void Bot::UpdateInventoryItemFlag(JSON pInventoryFlags)
+{
+	try
+	{
+		m_jInventoryFlags = pInventoryFlags;
+
+		std::ofstream o(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("inventoryflags.json"));
+
+		o << std::setw(4) << m_jInventoryFlags << std::endl;
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
 }

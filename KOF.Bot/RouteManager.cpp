@@ -29,7 +29,7 @@ void RouteManager::Load()
 
 			for (size_t i = 0; i < jRouteData[szStepListAttribute.c_str()].size(); i++)
 			{
-				Route pRoute;
+				Route pRoute {};
 
 				std::string szXAttribute = skCryptDec("x");
 				std::string szYAttribute = skCryptDec("y");

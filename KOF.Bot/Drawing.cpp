@@ -4,15 +4,16 @@
 #include "Client.h"
 #include "ClientHandler.h"
 #include "UI.h"
-#include "Guard.h"
 #include "RouteManager.h"
 
 std::string Drawing::m_szMainWindowName = "";
 std::string Drawing::m_szRoutePlannerWindowName = "";
+std::string Drawing::m_szInventoryWindowName = "";
 
 Bot* Drawing::Bot = nullptr;
 bool Drawing::bDraw = true;
 bool Drawing::bDrawRoutePlanner = false;
+bool Drawing::bDrawInventory = false;
 bool Drawing::Done = false;
 
 ClientHandler* m_pClient = nullptr;
@@ -28,6 +29,7 @@ char m_szRouteName[255] = "";
 
 std::string m_szSelectedRoute = "";
 std::vector<Route> m_vecRoute;
+bool bEnableAutoRoute = false;
 
 float m_fScreenWidth = 0.0f;
 float m_fScreenHeight = 0.0f;
@@ -35,6 +37,8 @@ float m_fScreenHeight = 0.0f;
 bool m_bInitPos = false;
 
 int32_t m_iSkillID = 0;
+
+std::vector<int> m_vecInventorySelectedItem;
 
 void Drawing::Active()
 {
@@ -77,7 +81,10 @@ void Drawing::InitializeSceneData()
     }
 
     if (Drawing::bDrawRoutePlanner == false)
+    {
+        bEnableAutoRoute = false;
         m_vecRoute.clear();
+    }    
 }
 
 void Drawing::Draw()
@@ -114,6 +121,7 @@ void Drawing::Draw()
 	}
 
     DrawRoutePlanner();
+    DrawInventory();
 }
 
 void Drawing::DrawRoutePlanner()
@@ -151,6 +159,36 @@ void Drawing::DrawRoutePlannerArea()
     if(m_pWorldData == nullptr)
         return;
 
+    if (bEnableAutoRoute) 
+    {
+        if (m_vecRoute.size() == 0)
+        {
+            Route pAutoRoute {};
+
+            pAutoRoute.fX = m_pClient->GetX();
+            pAutoRoute.fY = m_pClient->GetY();
+            pAutoRoute.eStepType = RouteStepType::STEP_MOVE;
+
+            m_vecRoute.push_back(pAutoRoute);
+        }
+        else
+        {
+            Route pLastRoute = m_vecRoute.back();
+
+            float fDistance = m_pClient->GetDistance(Vector3(pLastRoute.fX, 0.0f, pLastRoute.fY));
+
+            if (fDistance > 3.0f)
+            {
+                Route pAutoRoute{};
+                pAutoRoute.fX = m_pClient->GetX();
+                pAutoRoute.fY = m_pClient->GetY();
+                pAutoRoute.eStepType = RouteStepType::STEP_MOVE;
+
+                m_vecRoute.push_back(pAutoRoute);
+            }
+        }
+    }
+
     ImGui::BeginChild(skCryptDec("RoutePlanner.Map"), ImVec2((float)(m_pWorldData->iMapImageWidth + 17.0f), (float)m_pWorldData->iMapImageHeight + 17.0f), true);
     {
         ImVec2 pOffsetPosition = ImGui::GetCursorScreenPos();
@@ -163,7 +201,7 @@ void Drawing::DrawRoutePlannerArea()
             ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
             ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
 
-            Route pRoute;
+            Route pRoute {};
             pRoute.fX = std::ceil(mousePositionRelative.x * (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth));
             pRoute.fY = std::ceil((m_pWorldData->iMapImageHeight - mousePositionRelative.y) * (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight));
             pRoute.eStepType = RouteStepType::STEP_MOVE;
@@ -178,7 +216,7 @@ void Drawing::DrawRoutePlannerArea()
             pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (v3CurrentPosition.m_fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
         ImGui::GetWindowDrawList()->AddCircle(currentPosition, 1.0f, IM_COL32(0, 255, 0, 255), 0, 3.0f);
-        ImGui::GetWindowDrawList()->AddText(currentPosition, IM_COL32(0, 255, 0, 255), skCryptDec("Current Position"));
+        ImGui::GetWindowDrawList()->AddText(currentPosition, IM_COL32(0, 255, 0, 255), skCryptDec("Now Here"));
 
         size_t iRouteSize = m_vecRoute.size();
 
@@ -212,47 +250,41 @@ void Drawing::DrawRoutePlannerArea()
                             pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
                         ImGui::GetWindowDrawList()->AddCircle(startPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
-                        std::string szStartPoint = skCryptDec("Start Point(") + std::to_string((int)startPosition.x) + skCryptDec(",") + std::to_string((int)startPosition.y) + skCryptDec(")");
+                        std::string szStartPoint = skCryptDec("Start Point");
                         ImGui::GetWindowDrawList()->AddText(startPosition, IM_COL32(0, 0, 255, 255), szStartPoint.c_str());
-                    }
-                    else
-                    {
-                        std::string szMovePoint = skCryptDec("Move Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
-                        ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(0, 255, 0, 255), szMovePoint.c_str());
                     }
                 }
                 break;
 
                 case RouteStepType::STEP_TOWN:
                 {
-                    std::string szTownPoint = skCryptDec("Town Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    std::string szTownPoint = skCryptDec("Town Point");
                     ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szTownPoint.c_str());
                 }
                 break;
 
                 case RouteStepType::STEP_SUPPLY:
                 {
-                    std::string szSupplyPoint = skCryptDec("Supply Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    std::string szSupplyPoint = skCryptDec("Supply Point");
                     ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(75, 0, 130, 255), szSupplyPoint.c_str());
                 }
                 break;
 
                 case RouteStepType::STEP_INN:
                 {
-                    std::string szInnPoint = skCryptDec("Inn Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    std::string szInnPoint = skCryptDec("Inn Point");
                     ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(128, 0, 0, 255), szInnPoint.c_str());
                 }
                 break;
 
                 case RouteStepType::STEP_GENIE:
                 {
-                    std::string szGeniePoint = skCryptDec("Genie Point(") + std::to_string((int)nextPosition.x) + skCryptDec(",") + std::to_string((int)nextPosition.y) + skCryptDec(")");
+                    std::string szGeniePoint = skCryptDec("Genie Point");
                     ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(210, 105, 30, 255), szGeniePoint.c_str());
                 }
                 break;
             }
         }
-
     }
     ImGui::EndChild();
 
@@ -268,198 +300,547 @@ void Drawing::DrawRoutePlannerArea()
 
         if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
         {
-            ImGui::TextUnformatted(skCryptDec("Management"));
-            ImGui::Separator();
-
             ImGui::Spacing();
             {
-                ImGui::SetNextItemWidth(174);
+                ImGui::TextUnformatted(skCryptDec("Management"));
+                ImGui::Separator();
 
-                if (ImGui::BeginCombo(skCryptDec("##RoutePlanner.RouteList"), m_szSelectedRoute.c_str()))
+                ImGui::Spacing();
                 {
-                    for (auto e : pRouteList)
-                    {
-                        const bool is_selected = (m_szSelectedRoute == e.first);
+                    if (bEnableAutoRoute)
+                        ImGui::BeginDisabled();
 
-                        if (ImGui::Selectable(e.first.c_str(), is_selected))
+                    ImGui::SetNextItemWidth(174);
+
+                    if (ImGui::BeginCombo(skCryptDec("##RoutePlanner.RouteList"), m_szSelectedRoute.c_str()))
+                    {
+                        for (auto& e : pRouteList)
                         {
-                            m_szSelectedRoute = e.first;
+                            const bool is_selected = (m_szSelectedRoute == e.first);
+
+                            if (ImGui::Selectable(e.first.c_str(), is_selected))
+                            {
+                                m_szSelectedRoute = e.first;
+                            }
+
+                            if (is_selected)
+                                ImGui::SetItemDefaultFocus();
                         }
 
-                        if (is_selected)
-                            ImGui::SetItemDefaultFocus();
+                        ImGui::EndCombo();
                     }
 
-                    ImGui::EndCombo();
-                }
-
-                if (ImGui::Button(skCryptDec("Load Plan"), ImVec2(174.0f, 0.0f)))
-                {
-                    auto pPlan = pRouteList.find(m_szSelectedRoute);
-
-                    if (pPlan != pRouteList.end())
+                    if (ImGui::Button(skCryptDec("Load Plan"), ImVec2(174.0f, 0.0f)))
                     {
-                        m_vecRoute = pPlan->second;
-                        strcpy(m_szRouteName, m_szSelectedRoute.c_str());
+                        auto pPlan = pRouteList.find(m_szSelectedRoute);
+
+                        if (pPlan != pRouteList.end())
+                        {
+                            m_vecRoute = pPlan->second;
+                            strcpy(m_szRouteName, m_szSelectedRoute.c_str());
+                        }
                     }
-                }
 
-                if (ImGui::Button(skCryptDec("Delete Plan"), ImVec2(174.0f, 0.0f)))
-                {
-                    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
-
-                    pRouteManager->Delete(m_szSelectedRoute, iZoneID);
-
-                    std::string szSelectedRouteConfiguration = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
-
-                    if (szSelectedRouteConfiguration == m_szSelectedRoute)
+                    if (ImGui::Button(skCryptDec("Delete Plan"), ImVec2(174.0f, 0.0f)))
                     {
-                        m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                        uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+                        pRouteManager->Delete(m_szSelectedRoute, iZoneID);
+
+                        std::string szSelectedRouteConfiguration = m_pUserConfiguration->GetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+
+                        if (szSelectedRouteConfiguration == m_szSelectedRoute)
+                        {
+                            m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
+                        }
+
+                        if (m_szRouteName == m_szSelectedRoute)
+                        {
+                            m_vecRoute.clear();
+                            strcpy(m_szRouteName, "");
+                        }
+
+                        m_szSelectedRoute = "";
                     }
 
-                    if (m_szRouteName == m_szSelectedRoute)
-                    {
-                        m_vecRoute.clear();
-                        strcpy(m_szRouteName, "");
-                    }
-
-                    m_szSelectedRoute = "";
+                    if (bEnableAutoRoute)
+                        ImGui::EndDisabled();
                 }
             }
         }
-
-        ImGui::TextUnformatted(skCryptDec("Action"));
-        ImGui::Separator();
 
         size_t iRouteCount = m_vecRoute.size();
 
         ImGui::Spacing();
         {
-            if (iRouteCount == 0)
-                ImGui::BeginDisabled();
+            ImGui::TextUnformatted(skCryptDec("Action"));
+            ImGui::Separator();
 
-            if (m_pClient->IsRouting())
+            ImGui::Spacing();
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
-                if (ImGui::Button(skCryptDec("Stop"), ImVec2(174.0f, 0.0f)))
+                if (bEnableAutoRoute || iRouteCount == 0)
+                    ImGui::BeginDisabled();
+
+                if (m_pClient->IsRouting())
                 {
-                    m_pClient->ClearRoute();
-                    m_pClient->StopMove();
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+                    if (ImGui::Button(skCryptDec("Stop Test"), ImVec2(174.0f, 0.0f)))
+                    {
+                        m_pClient->ClearRoute();
+                        m_pClient->StopMove();
+                    }
+                    ImGui::PopStyleColor(1);
                 }
-                ImGui::PopStyleColor(1);
-            }
-            else
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-                if (ImGui::Button(skCryptDec("Run"), ImVec2(174.0f, 0.0f)))
+                else
                 {
-                    if (m_vecRoute.size() > 0)
-                        m_pClient->SetRoute(m_vecRoute);
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+                    if (ImGui::Button(skCryptDec("Run Test"), ImVec2(174.0f, 0.0f)))
+                    {
+                        if (m_vecRoute.size() > 0)
+                            m_pClient->SetRoute(m_vecRoute);
+                    }
+                    ImGui::PopStyleColor(1);
                 }
-                ImGui::PopStyleColor(1);
+
+                if (ImGui::Button(skCryptDec("Undo"), ImVec2(83.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                        m_vecRoute.pop_back();
+                }
+
+                ImGui::SameLine();
+
+                if (ImGui::Button(skCryptDec("Reset"), ImVec2(83.0f, 0.0f)))
+                {
+                    m_vecRoute.clear();
+                }
+
+                if (bEnableAutoRoute || iRouteCount == 0)
+                    ImGui::EndDisabled();
+
+                if (bEnableAutoRoute)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+                    if (ImGui::Button(skCryptDec("Disable Auto Route"), ImVec2(174.0f, 0.0f)))
+                    {
+                        bEnableAutoRoute = false;
+                    }
+                    ImGui::PopStyleColor(1);
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+                    if (ImGui::Button(skCryptDec("Enable Auto Route"), ImVec2(174.0f, 0.0f)))
+                    {
+                        bEnableAutoRoute = true;
+                    }
+                    ImGui::PopStyleColor(1);
+                }
             }
-
-            if (ImGui::Button(skCryptDec("Undo"), ImVec2(83.0f, 0.0f)))
-            {
-                if(iRouteCount > 0)
-                    m_vecRoute.pop_back();
-            }
-
-            ImGui::SameLine();
-
-            if (ImGui::Button(skCryptDec("Reset"), ImVec2(83.0f, 0.0f)))
-            {
-                m_vecRoute.clear();
-            }
-
-            if (iRouteCount == 0)
-                ImGui::EndDisabled();
         }
 
-        ImGui::TextUnformatted(skCryptDec("Step Point"));
+        ImGui::Spacing();
+        {
+            ImGui::TextUnformatted(skCryptDec("Step Point"));
+            ImGui::Separator();
+
+            ImGui::Spacing();
+            {
+                if (iRouteCount == 0)
+                    ImGui::BeginDisabled();
+
+                if (ImGui::Button(skCryptDec("Move Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_MOVE;
+                    }
+                }
+
+                if (ImGui::Button(skCryptDec("Town Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_TOWN;
+
+                        if (bEnableAutoRoute)
+                        {
+                            m_pClient->SendTownPacket();
+                        }
+                    }
+                }
+
+                if (ImGui::Button(skCryptDec("Supply Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_SUPPLY;
+                    }
+                }
+
+                if (ImGui::Button(skCryptDec("Inn Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_INN;
+                    }
+                }
+
+                if (ImGui::Button(skCryptDec("Genie Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_GENIE;
+                    }
+                }
+
+                if (iRouteCount == 0)
+                    ImGui::EndDisabled();
+            }
+        }
+
+        ImGui::Spacing();
+        {
+            ImGui::TextUnformatted(skCryptDec("Save"));
+            ImGui::Separator();
+
+            ImGui::Spacing();
+            {
+                if (bEnableAutoRoute || iRouteCount == 0)
+                    ImGui::BeginDisabled();
+
+                ImGui::SetNextItemWidth(174);
+                ImGui::InputText(skCryptDec("##FileName"), &m_szRouteName[0], 100);
+
+                size_t routeNameSize = strlen(m_szRouteName);
+
+                if (routeNameSize == 0)
+                    ImGui::BeginDisabled();
+
+                if (ImGui::Button(skCryptDec("Save Plan"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (pRouteManager)
+                    {
+                        uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+                        pRouteManager->Save(m_szRouteName, iZoneID, m_vecRoute);
+                    }
+                }
+
+                if (routeNameSize == 0)
+                    ImGui::EndDisabled();
+
+                if (bEnableAutoRoute || iRouteCount == 0)
+                    ImGui::EndDisabled();
+            }
+        }
+    }
+
+    ImGui::EndChild();
+}
+
+void Drawing::DrawInventory()
+{
+    if (isActive())
+    {
+        InitializeSceneData();
+
+        if (!Drawing::bDrawInventory)
+            return;
+
+        ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
+
+        ImVec2 vec2InitialPos = { m_fScreenWidth, m_fScreenHeight };
+
+        ImVec2 vWindowSize = { 1030, 600 };
+
+        vec2InitialPos.x -= vWindowSize.x / 2;
+        vec2InitialPos.y -= vWindowSize.y / 2;
+
+        ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
+        ImGui::SetNextWindowSize(vWindowSize);
+        ImGui::SetNextWindowBgAlpha(1.0f);
+        ImGui::Begin(m_szRoutePlannerWindowName.c_str(), &Drawing::bDrawInventory, WindowFlags);
+        {
+            DrawInventoryArea();
+        }
+
+        ImGui::End();
+    }
+}
+
+void Drawing::DrawInventoryArea()
+{
+    ImGui::BeginChild(skCryptDec("Inventory.Child"), ImVec2(817.0f, 560.0f), true);
+    {
+        std::vector<TItemData> vecItemList;
+        std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+        if (m_pClient->GetInventoryItemList(vecItemList) && Drawing::Bot->GetItemTable(&pItemTable))
+        {
+            if (ImGui::BeginTable(skCryptDec("Inventory.Table"), 4, ImGuiTableFlags_Resizable | ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
+            {
+                for (const TItemData& pItem : vecItemList)
+                {
+                    ImGui::PushID((pItem.iPos - SLOT_MAX) + 1);
+
+                    ImGui::TableNextRow();
+
+                    uint8_t iItemFlag = Drawing::Bot->GetInventoryItemFlag(pItem.iItemID);
+
+                    switch (iItemFlag)
+                    {
+                        case INVENTORY_ITEM_FLAG_DELETE:
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+                            break;
+                        case INVENTORY_ITEM_FLAG_SELL:
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 215.0f, 0.0f, 1.0f));
+                            break;
+                        case INVENTORY_ITEM_FLAG_INN:
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 255.0f, 0.0f, 1.0f));
+                            break;
+                        case INVENTORY_ITEM_FLAG_VIP:
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 255.0f, 215.0f, 1.0f));
+                            break;
+                        default:
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 255.0f, 255.0f, 1.0f));
+                            break;
+                    }
+
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", (pItem.iPos - SLOT_MAX) + 1);
+                    ImGui::TableNextColumn();
+
+                    uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+
+                    auto pItemData = pItemTable->find(iItemBaseID);
+
+                    std::string szItemName = "";
+
+                    if (pItemData != pItemTable->end())
+                    {
+                        szItemName = pItemData->second.szName;
+                    }
+
+                    bool bSelected = std::find(m_vecInventorySelectedItem.begin(), m_vecInventorySelectedItem.end(), pItem.iItemID) != m_vecInventorySelectedItem.end();
+
+                    if (ImGui::Selectable(szItemName.c_str(), &bSelected, ImGuiSelectableFlags_SpanAllColumns) && pItem.iItemID != 0)
+                    {
+                        if (bSelected)
+                            m_vecInventorySelectedItem.push_back(pItem.iItemID);
+                        else
+                            m_vecInventorySelectedItem.erase(std::find(m_vecInventorySelectedItem.begin(), m_vecInventorySelectedItem.end(), pItem.iItemID));
+                    }
+                   
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", pItem.iCount);
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", pItem.iDurability);
+
+                    ImGui::PopStyleColor(1);
+
+                    ImGui::PopID();
+                }
+
+                ImGui::EndTable();
+            }
+        } 
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    ImGui::BeginChild(skCryptDec("Inventory.Controller"), ImVec2(190, 560), true);
+    {
+        ImGui::TextUnformatted(skCryptDec("Automation Flags"));
         ImGui::Separator();
 
         ImGui::Spacing();
         {
-            if (iRouteCount == 0)
-                ImGui::BeginDisabled();
-
-            if (ImGui::Button(skCryptDec("Move Point"), ImVec2(174.0f, 0.0f)))
-            {
-                if (iRouteCount > 0)
-                {
-                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_MOVE;
-                }
-            }
-
-            if (ImGui::Button(skCryptDec("Town Point"), ImVec2(174.0f, 0.0f)))
-            {
-                if (iRouteCount > 0)
-                {
-                    m_vecRoute[m_vecRoute.size()-1].eStepType = RouteStepType::STEP_TOWN;
-                }  
-            }
-
-            if (ImGui::Button(skCryptDec("Supply Point"), ImVec2(174.0f, 0.0f)))
-            {
-                if (iRouteCount > 0)
-                {
-                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_SUPPLY;
-                }
-            }
-
-            if (ImGui::Button(skCryptDec("Inn Point"), ImVec2(174.0f, 0.0f)))
-            {
-                if (iRouteCount > 0)
-                {
-                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_INN;
-                }
-            }
-
-            if (ImGui::Button(skCryptDec("Genie Point"), ImVec2(174.0f, 0.0f)))
-            {
-                if (iRouteCount > 0)
-                {
-                    m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_GENIE;
-                }
-            }
-
-            if (iRouteCount == 0)
-                ImGui::EndDisabled();
-        }
-
-        ImGui::TextUnformatted(skCryptDec("Save"));
-        ImGui::Separator();
-
-        ImGui::Spacing();
-        {
-            if (iRouteCount == 0)
-                ImGui::BeginDisabled();
-
-
             ImGui::SetNextItemWidth(174);
-            ImGui::InputText(skCryptDec("##FileName"), &m_szRouteName[0], 100);
 
-            size_t routeNameSize = strlen(m_szRouteName);
+            auto jInventoryFlags = Drawing::Bot->GetInventoryFlags();
 
-            if (routeNameSize == 0)
-                ImGui::BeginDisabled();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
 
-            if (ImGui::Button(skCryptDec("Save Plan"), ImVec2(174.0f, 0.0f)))
+            if (ImGui::Button(skCryptDec("Delete"), ImVec2(174.0f, 0.0f)))
             {
-                if (pRouteManager)
+                for (auto e : m_vecInventorySelectedItem)
                 {
-                    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+                    bool bExist = false;
 
-                    pRouteManager->Save(m_szRouteName, iZoneID, m_vecRoute);
+                    for (size_t i = 0; i < jInventoryFlags.size(); i++)
+                    {
+                        if (jInventoryFlags[i]["id"].get<uint32_t>() == e)
+                        {
+                            jInventoryFlags[i]["flag"] = INVENTORY_ITEM_FLAG_DELETE;
+
+                            bExist = true;
+                            break;
+                        }
+                    }
+
+                    if (!bExist)
+                    {
+                        JSON jNewInventoryFlag;
+
+                        std::string szIdAttribute = skCryptDec("id");
+                        std::string szFlagAttribute = skCryptDec("flag");
+
+                        jNewInventoryFlag[szIdAttribute.c_str()] = e;
+                        jNewInventoryFlag[szFlagAttribute.c_str()] = INVENTORY_ITEM_FLAG_DELETE;
+
+                        jInventoryFlags.push_back(jNewInventoryFlag);
+                    }
                 }
+
+                Drawing::Bot->UpdateInventoryItemFlag(jInventoryFlags);
+
+                m_vecInventorySelectedItem.clear();
             }
 
-            if (routeNameSize == 0)
-                ImGui::EndDisabled();
+            ImGui::PopStyleColor(1);
 
-            if (iRouteCount == 0)
-                ImGui::EndDisabled();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 215.0f, 0.0f, 1.0f));
+
+            if (ImGui::Button(skCryptDec("Sell"), ImVec2(174.0f, 0.0f)))
+            {
+                for (auto e : m_vecInventorySelectedItem)
+                {
+                    bool bExist = false;
+
+                    for (size_t i = 0; i < jInventoryFlags.size(); i++)
+                    {
+                        if (jInventoryFlags[i]["id"].get<uint32_t>() == e)
+                        {
+                            jInventoryFlags[i]["flag"] = INVENTORY_ITEM_FLAG_SELL;
+
+                            bExist = true;
+                            break;
+                        }
+                    }
+
+                    if (!bExist)
+                    {
+                        JSON jNewInventoryFlag;
+
+                        std::string szIdAttribute = skCryptDec("id");
+                        std::string szFlagAttribute = skCryptDec("flag");
+
+                        jNewInventoryFlag[szIdAttribute.c_str()] = e;
+                        jNewInventoryFlag[szFlagAttribute.c_str()] = INVENTORY_ITEM_FLAG_SELL;
+
+                        jInventoryFlags.push_back(jNewInventoryFlag);
+                    }
+                }
+
+                Drawing::Bot->UpdateInventoryItemFlag(jInventoryFlags);
+
+                m_vecInventorySelectedItem.clear();
+            }
+
+            ImGui::PopStyleColor(1);
+
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 255.0f, 0.0f, 1.0f));
+
+            if (ImGui::Button(skCryptDec("Inn Hostes"), ImVec2(174.0f, 0.0f)))
+            {
+                for (auto e : m_vecInventorySelectedItem)
+                {
+                    bool bExist = false;
+
+                    for (size_t i = 0; i < jInventoryFlags.size(); i++)
+                    {
+                        if (jInventoryFlags[i]["id"].get<uint32_t>() == e)
+                        {
+                            jInventoryFlags[i]["flag"] = INVENTORY_ITEM_FLAG_INN;
+
+                            bExist = true;
+                            break;
+                        }
+                    }
+
+                    if (!bExist)
+                    {
+                        JSON jNewInventoryFlag;
+
+                        std::string szIdAttribute = skCryptDec("id");
+                        std::string szFlagAttribute = skCryptDec("flag");
+
+                        jNewInventoryFlag[szIdAttribute.c_str()] = e;
+                        jNewInventoryFlag[szFlagAttribute.c_str()] = INVENTORY_ITEM_FLAG_INN;
+
+                        jInventoryFlags.push_back(jNewInventoryFlag);
+                    }
+                }
+
+                Drawing::Bot->UpdateInventoryItemFlag(jInventoryFlags);
+
+                m_vecInventorySelectedItem.clear();
+
+            }
+
+            ImGui::PopStyleColor(1);
+
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 255.0f, 215.0f, 1.0f));
+
+            if (ImGui::Button(skCryptDec("VIP Storage"), ImVec2(174.0f, 0.0f)))
+            {
+                for (auto e : m_vecInventorySelectedItem)
+                {
+                    bool bExist = false;
+
+                    for (size_t i = 0; i < jInventoryFlags.size(); i++)
+                    {
+                        if (jInventoryFlags[i]["id"].get<uint32_t>() == e)
+                        {
+                            jInventoryFlags[i]["flag"] = INVENTORY_ITEM_FLAG_VIP;
+
+                            bExist = true;
+                            break;
+                        }
+                    }
+
+                    if (!bExist)
+                    {
+                        JSON jNewInventoryFlag;
+
+                        std::string szIdAttribute = skCryptDec("id");
+                        std::string szFlagAttribute = skCryptDec("flag");
+
+                        jNewInventoryFlag[szIdAttribute.c_str()] = e;
+                        jNewInventoryFlag[szFlagAttribute.c_str()] = INVENTORY_ITEM_FLAG_VIP;
+
+                        jInventoryFlags.push_back(jNewInventoryFlag);
+                    }
+                }
+
+                Drawing::Bot->UpdateInventoryItemFlag(jInventoryFlags);
+
+                m_vecInventorySelectedItem.clear();
+            }
+
+            ImGui::PopStyleColor(1);
+
+            if (ImGui::Button(skCryptDec("Reset Flag"), ImVec2(174.0f, 0.0f)))
+            {
+                for (auto e : m_vecInventorySelectedItem)
+                {
+                    for (auto it = jInventoryFlags.begin(); it != jInventoryFlags.end(); ++it)
+                    {
+                        std::string szIdAttribute = skCryptDec("id");
+
+                        if ((*it)[szIdAttribute.c_str()] == e)
+                        {
+                            jInventoryFlags.erase(it);
+                            break;
+                        }
+                    }
+                }
+
+                Drawing::Bot->UpdateInventoryItemFlag(jInventoryFlags);
+
+                m_vecInventorySelectedItem.clear();
+            }
         }
     }
     ImGui::EndChild();
@@ -647,7 +1028,7 @@ void Drawing::DrawGameController()
                 RouteManager::RouteList pRouteList;
                 if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
                 {
-                    for (auto e : pRouteList)
+                    for (auto &e : pRouteList)
                     {
                         const bool is_selected = (szSelectedRoute == e.first);
 
@@ -668,7 +1049,7 @@ void Drawing::DrawGameController()
             if (m_pClient->IsRouting())
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
-                if (ImGui::Button(skCryptDec("Stop"), ImVec2(129.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Stop Test"), ImVec2(129.0f, 0.0f)))
                 {
                     m_pClient->ClearRoute();
                     m_pClient->StopMove();
@@ -678,7 +1059,7 @@ void Drawing::DrawGameController()
             else
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-                if (ImGui::Button(skCryptDec("Run"), ImVec2(129.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Run Test"), ImVec2(129.0f, 0.0f)))
                 {
                     uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
 
@@ -703,10 +1084,22 @@ void Drawing::DrawGameController()
                 bDrawRoutePlanner = true;
             }
 
-            if (ImGui::Button(skCryptDec("Clear"), ImVec2(266, 0.0f)))
+            if (ImGui::Button(skCryptDec("Clear"), ImVec2(266.0f, 0.0f)))
             {
                 m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedRoute"), "");
             }
+        }
+
+        ImGui::Spacing();
+        {
+            ImGui::TextUnformatted(skCryptDec("Inventory Management"));
+            ImGui::Separator();
+
+            if (ImGui::Button(skCryptDec("Inventory"), ImVec2(266.0f, 0.0f)))
+            {
+                bDrawInventory = true;
+            }
+
         }
 
         ImGui::Spacing();
@@ -1208,7 +1601,7 @@ void Drawing::DrawMainFeaturesArea()
 
             ImGui::SameLine();
 
-            ImGui::Text(skCryptDec("Legal Wall Hack1"));
+            ImGui::Text(skCryptDec("Legal Wall Hack"));
 
             bool bCharacterSizeEnable = m_pUserConfiguration->GetBool(skCryptDec("Character"), skCryptDec("SizeEnable"), false);
 
@@ -1339,7 +1732,7 @@ void Drawing::DrawMainDeveloperOnlyArea()
 
             if (findedNpc != tmpVecNpc.end())
             {
-                m_pClient->SendWarehouseGetIn(findedNpc->iID, 110110001, 0, 0, 54, 1);
+                m_pClient->SendWarehouseGetOut(findedNpc->iID, 110110001, 0, 0, 54, 1);
             }
         }
 
@@ -1352,7 +1745,7 @@ void Drawing::DrawMainDeveloperOnlyArea()
 
             if (findedNpc != tmpVecNpc.end())
             {
-                m_pClient->SendWarehouseGetIn(findedNpc->iID, 110110001, 0, 1, 68, 1);
+                m_pClient->SendWarehouseGetOut(findedNpc->iID, 110110001, 0, 1, 68, 1);
             }
         }
 
@@ -1565,7 +1958,7 @@ void Drawing::DrawMainPriestArea()
 
         if (ImGui::BeginCombo(skCryptDec("##PriestManagement.HealthBuffList"), szSelectedHealthBuff.c_str()))
         {
-            for (auto e : mapHealthBuffList)
+            for (auto &e : mapHealthBuffList)
             {
                 const bool is_selected = (iSelectedHealthBuff == e.first);
 
@@ -1614,7 +2007,7 @@ void Drawing::DrawMainPriestArea()
 
         if (ImGui::BeginCombo(skCryptDec("##PriestManagement.DefenceBuffList"), szSelectedDefenceBuff.c_str()))
         {
-            for (auto e : mapDefenceBuffList)
+            for (auto &e : mapDefenceBuffList)
             {
                 const bool is_selected = (iSelectedDefenceBuff == e.first);
 
@@ -1663,7 +2056,7 @@ void Drawing::DrawMainPriestArea()
 
         if (ImGui::BeginCombo(skCryptDec("##PriestManagement.MindBuffList"), szSelectedMindBuff.c_str()))
         {
-            for (auto e : mapMindBuffList)
+            for (auto &e : mapMindBuffList)
             {
                 const bool is_selected = (iSelectedMindBuff == e.first);
 
@@ -1723,7 +2116,7 @@ void Drawing::DrawMainPriestArea()
 
         if (ImGui::BeginCombo(skCryptDec("##PriestManagement.HealList"), szSelectedHeal.c_str()))
         {
-            for (auto e : mapHealList)
+            for (auto &e : mapHealList)
             {
                 const bool is_selected = (iSelectedHeal == e.first);
 
@@ -1962,6 +2355,15 @@ void Drawing::DrawMainSettingsArea()
             ImGui::SameLine();
 
             ImGui::Text(skCryptDec("Stop bot if character teleported"));
+
+            bool bStartGenieIfUserInRegion = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), false);
+
+            if (ImGui::Checkbox(skCryptDec("##StartGenieIfUserInRegion"), &bStartGenieIfUserInRegion))
+                m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), bStartGenieIfUserInRegion ? 1 : 0);
+
+            ImGui::SameLine();
+
+            ImGui::Text(skCryptDec("Start genie if user in region (5 min delay)"));
         }
     }
 }
@@ -2093,7 +2495,7 @@ void Drawing::DrawMonsterListTree()
 
         for (const auto& x : vecSelectedNpcList)
         {
-            SNpcData pNpcData;
+            SNpcData pNpcData {};
 
             pNpcData.iProtoID = x;
 
@@ -2118,7 +2520,7 @@ void Drawing::DrawMonsterListTree()
             if (pFindedNpc != vecTargetList.end())
                 continue;
 
-            SNpcData pNpcData;
+            SNpcData pNpcData {};
 
             pNpcData.iProtoID = x.iProtoID;
 

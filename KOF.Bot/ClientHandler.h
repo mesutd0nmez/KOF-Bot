@@ -111,15 +111,6 @@ public:
 	void LoadSkillData();
 
 private:
-	bool IsConfigurationLoaded() { return m_bConfigurationLoaded; };
-
-public:
-	void SetConfigurationLoaded(bool bValue) { m_bConfigurationLoaded = bValue; };
-
-private:
-	bool m_bConfigurationLoaded;
-
-private:
 	void AttackProcess();
 	void SpeedHackProcess();
 	void MoveToTargetProcess();

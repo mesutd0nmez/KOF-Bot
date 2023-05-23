@@ -114,9 +114,6 @@
     <ClInclude Include="Table.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="Guard.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
     <ClInclude Include="Remap.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>

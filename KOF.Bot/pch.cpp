@@ -15,8 +15,6 @@ void SuspendProcess(HANDLE hProcess)
 		if (!pNtSuspendProcess)
 			return;
 
-		//printf("NtSuspendProcess Client Handle: [%x]\n", hProcess);
-
 		pNtSuspendProcess(hProcess);
 	}
 }
@@ -244,4 +242,34 @@ void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff)
 	};
 
 	MemoryInject(&pData);
+}
+
+
+bool ConsoleCommand(const std::string& input, std::string& out)
+{
+	auto* shell_cmd = _popen(input.c_str(), "r");
+
+	if (!shell_cmd)
+	{
+		return false;
+	}
+
+	static char buffer[1024] = {};
+	while (fgets(buffer, 1024, shell_cmd))
+	{
+		out.append(buffer);
+	}
+	_pclose(shell_cmd);
+
+	while (out.back() == '\n' ||
+		out.back() == '\0' ||
+		out.back() == ' ' ||
+		out.back() == '\r' ||
+		out.back() == '\t') {
+		out.pop_back();
+	}
+
+	out.erase(std::remove(out.begin(), out.end(), '\n'), out.cend());
+
+	return !out.empty();
 }

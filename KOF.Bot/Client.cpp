@@ -2,7 +2,6 @@
 #include "Client.h"
 #include "Bot.h"
 #include "Memory.h"
-#include "Guard.h"
 
 Client::Client()
 {
@@ -42,6 +41,8 @@ void Client::Clear()
 
 	m_fAttackDelta = 1.0f;
 	m_fAttackTimeRecent = Bot::TimeGet();
+
+	m_msLastGenieStartTime = std::chrono::milliseconds(0);
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -423,7 +424,7 @@ bool Client::IsPriest(int32_t eClass)
 
 uint32_t Client::GetProperHealthBuff(int MaxHp)
 {
-	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60.0f);
+	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60);
 
 	if (GetSkillPoint(1) >= 78)
 	{
@@ -805,9 +806,9 @@ int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 	return iItemCount;
 }
 
-TInventory Client::GetInventoryItem(uint32_t iItemID)
+TItemData Client::GetInventoryItem(uint32_t iItemID)
 {
-	TInventory pInventory;
+	TItemData pInventory;
 	memset(&pInventory, 0, sizeof(pInventory));
 
 	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
@@ -899,9 +900,9 @@ int32_t Client::GetInventoryEmptySlot(std::vector<int32_t> vecExcept)
 	return -1;
 }
 
-TInventory Client::GetInventoryItemSlot(uint8_t iSlotPosition)
+TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 {
-	TInventory pInventory;
+	TItemData pInventory;
 	memset(&pInventory, 0, sizeof(pInventory));
 
 	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
@@ -933,6 +934,46 @@ TInventory Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 	}
 
 	return pInventory;
+}
+
+bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)
+{
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
+
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		TItemData pInventory;
+		memset(&pInventory, 0, sizeof(pInventory));
+
+		pInventory.iPos = i;
+
+		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+
+		if (m_Bot->GetPlatformType() == PlatformType::USKO)
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) != 0)
+			{
+				pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64));
+				pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x68);
+				pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x6C);
+			}
+
+			vecItemList.push_back(pInventory);
+		}
+		else if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) != 0)
+			{
+				pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C));
+				pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
+				pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+			}
+
+			vecItemList.push_back(pInventory);
+		}
+	}
+
+	return vecItemList.size() > 0;
 }
 
 int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
@@ -2073,7 +2114,7 @@ bool Client::IsNeedRepair()
 		case 12:
 		case 13:
 		{
-			TInventory pInventory = GetInventoryItemSlot(i);
+			TItemData pInventory = GetInventoryItemSlot(i);
 
 			if (pInventory.iItemID == 0)
 				continue;
@@ -2112,7 +2153,7 @@ bool Client::IsNeedSupply()
 			if (!bSelected)
 				continue;
 
-			TInventory pInventoryItem = GetInventoryItem(iSupplyItemId);
+			TItemData pInventoryItem = GetInventoryItem(iSupplyItemId);
 
 			if (pInventoryItem.iItemID == 0)
 				return true;
@@ -2141,7 +2182,7 @@ bool Client::IsNeedSell()
 		{
 			int iPosition = 14 + (i - 1);
 
-			TInventory pInventory = GetInventoryItemSlot((uint8_t)iPosition);
+			TItemData pInventory = GetInventoryItemSlot((uint8_t)iPosition);
 
 			if (pInventory.iItemID == 0)
 				return false;
@@ -2388,7 +2429,34 @@ void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 	}
 }
 
+void Client::SendWarehouseOpen(uint32_t iNpcID)
+{
+	Packet pkt = Packet(WIZ_WAREHOUSE);
+
+	pkt
+		<< uint8_t(1)
+		<< iNpcID;
+
+	SendPacket(pkt);
+}
+
 void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount)
+{
+	Packet pkt = Packet(WIZ_WAREHOUSE);
+
+	pkt
+		<< uint8_t(2)
+		<< int32_t(iNpcID)
+		<< uint32_t(iItemID)
+		<< uint8_t(iPage)
+		<< uint8_t(iCurrentPosition)
+		<< uint8_t(iTargetPosition)
+		<< uint32_t(iCount);
+
+	SendPacket(pkt);
+}
+
+void Client::SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount)
 {
 	Packet pkt = Packet(WIZ_WAREHOUSE);
 
@@ -2402,6 +2470,44 @@ void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage,
 		<< uint32_t(iCount);
 
 	SendPacket(pkt);
+}
+
+int32_t Client::GetWarehouseItemCount(uint32_t iItemID)
+{
+	for (size_t i = 0; i < WAREHOUSE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tWarehouse[i];
+
+		if (pItem->iItemID == iItemID)
+		{
+			return pItem->iCount;
+		}
+	}
+
+	return 0;
+}
+
+int32_t Client::GetWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable)
+{
+	int iAvailableSlot = -1;
+
+	for (size_t i = 0; i < WAREHOUSE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tWarehouse[i];
+
+		if (iAvailableSlot == -1 
+			&& pItem->iItemID == 0)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+
+		if (pItem->iItemID == iItemID && iContable)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+	}
+
+	return iAvailableSlot;
 }
 
 void Client::SendUseGeniePotion(uint32_t iItemID)
@@ -2462,9 +2568,6 @@ void Client::SendPartyInsert(std::string szName)
 	SendPacket(pkt);
 }
 
-//0x7E497D
-//0x8196E7
-
 void Client::PatchObjectCollision(bool bEnable)
 {
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
@@ -2479,7 +2582,7 @@ void Client::PatchObjectCollision(bool bEnable)
 			0x75
 		};
 
-		WriteProcessMemory(hProcess, (LPVOID*)0x7E497D, byPatch, sizeof(byPatch), 0);
+		WriteProcessMemory(hProcess, (LPVOID*)GetAddress("KO_OBJECT_COLLISION_CHECK"), byPatch, sizeof(byPatch), 0);
 	}
 	else
 	{
@@ -2488,9 +2591,123 @@ void Client::PatchObjectCollision(bool bEnable)
 			0x74
 		};
 
-		WriteProcessMemory(hProcess, (LPVOID*)0x7E497D, byPatch, sizeof(byPatch), 0);
+		WriteProcessMemory(hProcess, (LPVOID*)GetAddress("KO_OBJECT_COLLISION_CHECK"), byPatch, sizeof(byPatch), 0);
 	}
 }
+
+void Client::SendRearrangeInventory()
+{
+	Packet pkt = Packet(WIZ_ITEM_MOVE);
+
+	pkt << uint8_t(2);
+
+	SendPacket(pkt);
+}
+
+void Client::SendOpenVipWarehouse(uint32_t iItemID)
+{
+	Packet pkt = Packet(WIZ_VIPWAREHOUSE);
+
+	pkt << uint8_t(1) << iItemID;
+
+	SendPacket(pkt);
+}
+
+void Client::SendVipWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint16_t iCount)
+{
+	Packet pkt = Packet(WIZ_VIPWAREHOUSE);
+
+	pkt
+		<< uint8_t(2)
+		<< int32_t(iNpcID)
+		<< uint32_t(iItemID)
+		<< uint8_t(iPage)
+		<< uint8_t(iCurrentPosition)
+		<< uint8_t(iTargetPosition)
+		<< uint16_t(iCount);
+
+	SendPacket(pkt);
+}
+
+int32_t Client::GetVipWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable)
+{
+	int iAvailableSlot = -1;
+
+	for (size_t i = 0; i < VIP_HAVE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tVipWarehouse[i];
+
+		if (iAvailableSlot == -1
+			&& pItem->iItemID == 0)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+
+		if (pItem->iItemID == iItemID && iContable)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+	}
+
+	return iAvailableSlot;
+}
+
+int32_t Client::GetVipWarehouseItemCount(uint32_t iItemID)
+{
+	for (size_t i = 0; i < VIP_HAVE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tVipWarehouse[i];
+
+		if (pItem->iItemID == iItemID)
+		{
+			return pItem->iCount;
+		}
+	}
+
+	return 0;
+}
+
+void Client::SendQuestCompleted(uint32_t iQuestID)
+{
+	Packet pkt = Packet(WIZ_QUEST);
+
+	pkt
+		<< uint8_t(4)
+		<< int32_t(iQuestID);
+
+	SendPacket(pkt);
+}
+
+//CNKO: 0x708EC0
+//USKO: 0x737A60
+void Client::ToggleInventory()
+{
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD iDLG = GetAddress(skCryptDec("KO_PTR_DLG"));
+	CopyBytes(byCode + 3, iDLG);
+
+	DWORD iToggle = 0x737A60;
+	CopyBytes(byCode + 8, iToggle);
+
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+
+	if (!hProcess)
+		return;
+
+	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
+	CloseHandle(hProcess);
+}
+
+//6404de0f0000
 
 BYTE Client::ReadByte(DWORD dwAddress)
 {
