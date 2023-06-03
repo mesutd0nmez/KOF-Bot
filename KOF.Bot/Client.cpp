@@ -1526,7 +1526,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			}
 
 			SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
-			std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
+			//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
 		}
 
 		uint32_t iArrowCount = 0;
@@ -1602,7 +1602,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			}
 
 			SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
-			std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
+			//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
 		}
 
 		if (pSkillData.iFlyingFX != 0)
@@ -1665,9 +1665,9 @@ void Client::SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< int32_t(-1)
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
 		<< int16_t(pSkillData.iReCastTime)
 		<< uint32_t(0);
@@ -1684,9 +1684,9 @@ void Client::SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t i
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< iTargetID
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< arrowIndex
 		<< uint32_t(0) << uint32_t(0) << int16_t(0);
 
@@ -1708,9 +1708,9 @@ void Client::SendStartSkillMagicAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32
 	else
 	{
 		pkt
-			<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-			<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-			<< uint32_t(v3TargetPosition.m_fY * 10.0f);
+			<< uint32_t(v3TargetPosition.m_fX)
+			<< int32_t(v3TargetPosition.m_fZ)
+			<< uint32_t(v3TargetPosition.m_fY);
 	}
 
 	if (pSkillData.iTarget == SkillTargetType::TARGET_PARTY)
@@ -1736,9 +1736,9 @@ void Client::SendStartSkillMagicAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< int32_t(-1)
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< uint32_t(0) << uint32_t(0) << uint32_t(0)
 		<< uint32_t(0) << uint32_t(0) << int16_t(0);
 
@@ -1754,9 +1754,9 @@ void Client::SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t iTargetI
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< iTargetID
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< int32_t(-101)
 		<< arrowIndex
 		<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
@@ -1940,6 +1940,8 @@ void Client::SetTarget(uint32_t iTargetBase)
 
 	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 	CloseHandle(hProcess);
+
+	//Write4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOB")), GetID(iTargetBase));
 }
 
 bool Client::UseItem(uint32_t iItemID)
@@ -2705,6 +2707,16 @@ void Client::ToggleInventory()
 
 	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 	CloseHandle(hProcess);
+}
+
+void Client::SendRegenePacket()
+{
+	Packet pkt = Packet(WIZ_REGENE);
+
+	pkt
+		<< uint8_t(1);
+
+	SendPacket(pkt);
 }
 
 //6404de0f0000

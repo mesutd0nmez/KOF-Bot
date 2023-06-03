@@ -42,6 +42,7 @@ public:
 	bool GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut);
 	bool GetItemData(uint32_t iItemID, __TABLE_ITEM*& pItemData);
 	bool GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE_ITEM_EXTENSION>** mapDataOut);
+	bool GetItemExtensionData(uint32_t iItemID, uint8_t iExtensionID, __TABLE_ITEM_EXTENSION*& pOutItemExtensionData);
 	bool GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut);
 
 	bool GetMobTable(std::map<uint32_t, __TABLE_MOB_US>** mapDataOut);

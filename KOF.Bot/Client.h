@@ -287,4 +287,7 @@ public:
 
 public:
 	void ToggleInventory();
+
+public:
+	void SendRegenePacket();
 };

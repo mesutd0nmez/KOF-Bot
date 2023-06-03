@@ -32,6 +32,7 @@ enum PlatformType
 	USKO,
 	CNKO,
 	JPKO,
+	KOKO,
 };
 
 enum ConfigurationRequestType

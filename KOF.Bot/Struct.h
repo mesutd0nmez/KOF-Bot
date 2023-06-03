@@ -53,6 +53,21 @@ struct Vector3
 				m_fY + vectorToTarget.m_fY * scaleFactor };
 	}
 
+	std::vector<Vector3> MoveTowardsSteps(const Vector3& start, const Vector3& target, float maxDistanceDelta)
+	{
+		std::vector<Vector3> steps;
+		Vector3 currentPosition = start;
+
+		while (currentPosition != target)
+		{
+			Vector3 newPosition = currentPosition.MoveTowards(target, maxDistanceDelta);
+			steps.push_back(newPosition);
+			currentPosition = newPosition;
+		}
+
+		return steps;
+	}
+
 	bool operator == (const Vector3& vec)
 	{
 		if (m_fX == vec.m_fX && m_fZ == vec.m_fZ && m_fY == vec.m_fY)

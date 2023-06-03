@@ -152,14 +152,16 @@ std::string CurlPost(std::string szUrl, JSON jData)
 		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, FALSE);
 
 		struct curl_slist* headers = NULL;
-		headers = curl_slist_append(headers, "Content-Type: application/json");
+		headers = curl_slist_append(headers, skCryptDec("Content-Type: application/json"));
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 		res = curl_easy_perform(curl);
 
 		if (res != CURLE_OK)
 		{
+#ifdef DEBUG
 			printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+#endif
 		}
 
 		curl_easy_cleanup(curl);

@@ -384,7 +384,7 @@ void Drawing::DrawRoutePlannerArea()
                 if (m_pClient->IsRouting())
                 {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
-                    if (ImGui::Button(skCryptDec("Stop Test"), ImVec2(174.0f, 0.0f)))
+                    if (ImGui::Button(skCryptDec("Stop"), ImVec2(174.0f, 0.0f)))
                     {
                         m_pClient->ClearRoute();
                         m_pClient->StopMove();
@@ -394,7 +394,7 @@ void Drawing::DrawRoutePlannerArea()
                 else
                 {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-                    if (ImGui::Button(skCryptDec("Run Test"), ImVec2(174.0f, 0.0f)))
+                    if (ImGui::Button(skCryptDec("Run"), ImVec2(174.0f, 0.0f)))
                     {
                         if (m_vecRoute.size() > 0)
                             m_pClient->SetRoute(m_vecRoute);
@@ -1049,7 +1049,7 @@ void Drawing::DrawGameController()
             if (m_pClient->IsRouting())
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
-                if (ImGui::Button(skCryptDec("Stop Test"), ImVec2(129.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Stop"), ImVec2(129.0f, 0.0f)))
                 {
                     m_pClient->ClearRoute();
                     m_pClient->StopMove();
@@ -1059,7 +1059,7 @@ void Drawing::DrawGameController()
             else
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-                if (ImGui::Button(skCryptDec("Run Test"), ImVec2(129.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Run"), ImVec2(129.0f, 0.0f)))
                 {
                     uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
 
@@ -1122,10 +1122,10 @@ void Drawing::DrawGameController()
                 m_pClient->LoadSkillData();
             }
 
-            if (ImGui::Button(skCryptDec("Test"), ImVec2(129.0f, 0.0f)))
+            /*if (ImGui::Button(skCryptDec("Test"), ImVec2(129.0f, 0.0f)))
             {
                 m_pClient->Test();
-            }
+            }*/
         }
 
         ImGui::Spacing();
@@ -1392,8 +1392,79 @@ void Drawing::DrawGameController()
                     }
 
                     ImGui::Spacing();
+                    {
+                        ImGui::TextUnformatted(skCryptDec("Level Downer"));
+                        ImGui::Separator();
 
-                    DrawMonsterListTree();
+                        ImGui::Spacing();
+                        {
+                            bool bLevelDownerEnable = m_pUserConfiguration->GetInt(skCryptDec("LevelDowner"), skCryptDec("Enable"), false);
+
+                            if (ImGui::Checkbox(skCryptDec("##LevelDownerEnableCheckBox"), &bLevelDownerEnable))
+                                m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("Enable"), bLevelDownerEnable ? 1 : 0);
+
+                            ImGui::SameLine();
+
+                            ImGui::Text(skCryptDec("Npc ID"));
+
+                            ImGui::SameLine();
+
+                            int iLevelDownerNpcId = m_pUserConfiguration->GetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), -1);
+
+                            ImGui::PushItemWidth(100);
+                            if (ImGui::DragInt(skCryptDec("##LevelDownerNpcId"), &iLevelDownerNpcId, 1, -1, 100000))
+                            {
+                                m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), iLevelDownerNpcId);
+                            }
+                            ImGui::PopItemWidth();
+
+                            ImGui::SameLine();
+
+                            if (ImGui::Button(skCryptDec("Get Selected Npc ID"), ImVec2(150.0f, 0.0f)))
+                            {
+                                if (m_pClient->GetTarget() != -1)
+                                {
+                                    m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), m_pClient->GetTarget());
+                                }
+                            }
+
+                            bool bLevelDownerLevelLimitEnable = m_pUserConfiguration->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimitEnable"), true);
+
+                            if (ImGui::Checkbox(skCryptDec("##LevelDownerLevelLimitCheckBox"), &bLevelDownerLevelLimitEnable))
+                                m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimitEnable"), bLevelDownerLevelLimitEnable ? 1 : 0);
+
+                            ImGui::SameLine();
+
+                            ImGui::Text(skCryptDec("Level Limit"));
+
+                            ImGui::SameLine();
+
+                            int iLevelDownerLevelLimit = m_pUserConfiguration->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimit"), 35);
+
+                            ImGui::PushItemWidth(100);
+                            if (ImGui::DragInt(skCryptDec("##LevelDownerLevelLimit"), &iLevelDownerLevelLimit, 1, 1, 83))
+                            {
+                                m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimit"), iLevelDownerLevelLimit);
+                            }
+                            ImGui::PopItemWidth();
+
+                            bool bLevelDownerStopNearbyPlayer = m_pUserConfiguration->GetInt(skCryptDec("LevelDowner"), skCryptDec("StopIfNearbyPlayer"), true);
+
+                            if (ImGui::Checkbox(skCryptDec("##LevelDownerStopIfNearbyPlayerCheckBox"), &bLevelDownerStopNearbyPlayer))
+                                m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("StopIfNearbyPlayer"), bLevelDownerStopNearbyPlayer ? 1 : 0);
+
+                            ImGui::SameLine();
+
+                            ImGui::Text(skCryptDec("Stop If Nearby Player"));
+
+                        }
+                        
+                    };
+
+                    ImGui::Spacing();
+                    {
+                        DrawMonsterListTree();
+                    }
 
                     ImGui::EndTabItem();
                 }
@@ -1421,6 +1492,19 @@ void Drawing::DrawGameController()
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
                         ImGui::Text(skCryptDec("%%100 Skill Success Rate"));
                         ImGui::PopStyleColor();
+
+                        bool bUseSkillWithPacket = m_pUserConfiguration->GetBool(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), false);
+
+                        if (ImGui::Checkbox(skCryptDec("##UseSkillWithPacket"), &bUseSkillWithPacket))
+                        {
+                            m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), bUseSkillWithPacket ? 1 : 0);
+                        }
+
+                        ImGui::SameLine();
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+                        ImGui::Text(skCryptDec("Use Skill With Packet"));
+                        ImGui::PopStyleColor();
+
                     }
 
                     ImGui::TextUnformatted(skCryptDec("Settings"));
@@ -1574,7 +1658,7 @@ void Drawing::DrawMainFeaturesArea()
 
             ImGui::SameLine();
 
-            ImGui::Text(skCryptDec("Wall Hack"));
+            ImGui::Text(skCryptDec("Wall Hack (All)"));
 
             ImGui::SameLine();
 
@@ -1601,7 +1685,7 @@ void Drawing::DrawMainFeaturesArea()
 
             ImGui::SameLine();
 
-            ImGui::Text(skCryptDec("Legal Wall Hack"));
+            ImGui::Text(skCryptDec("Wall Hack (Object Only)"));
 
             bool bCharacterSizeEnable = m_pUserConfiguration->GetBool(skCryptDec("Character"), skCryptDec("SizeEnable"), false);
 

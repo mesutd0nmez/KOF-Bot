@@ -2,6 +2,7 @@
 
 enum RouteStepType
 {
+    STEP_NONE,
     STEP_MOVE,
     STEP_TOWN,
     STEP_SUPPLY,

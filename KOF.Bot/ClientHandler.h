@@ -112,7 +112,6 @@ public:
 
 private:
 	void AttackProcess();
-	void SpeedHackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();
 
@@ -133,6 +132,8 @@ private:
 
 	void SupplyProcess();
 
+	void LevelDownerProcess();
+
 private:
 	bool m_bWorking;
 	bool m_bMailSlotWorking;
@@ -144,7 +145,11 @@ private:
 public:
 	void SetRoute(std::vector<Route> vecRoute);
 	bool IsRouting() { return m_vecRoute.size() > 0; };
+	RouteStepType GetRouteStep() { return iRouteStep; };
 	void ClearRoute();
+
+protected:
+	RouteStepType iRouteStep;
 
 private:
 	std::vector<Route> m_vecRoute;

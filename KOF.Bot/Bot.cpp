@@ -171,7 +171,9 @@ void Bot::Process()
 		{
 			if (ConnectPipeServer())
 			{
+#ifdef DEBUG
 				printf("Bot: Connected Pipe server\n");
+#endif
 
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
 
@@ -552,7 +554,15 @@ void Bot::OnLoaded()
 
 	PROCESS_INFORMATION injectedProcessInfo;
 	std::ostringstream strCommandLine;
-	strCommandLine << GetCurrentProcessId();
+
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		strCommandLine << GetCurrentProcessId();
+	}
+	else if (m_ePlatformType == PlatformType::KOKO)
+	{
+		strCommandLine << "ongate MVGHONG4 NDAYOK1EPZFQT1P6TIQA0YE7ZTD0IWN8LS1V10JLT1V185JX00OMLNQ0 2330316151 15100 0";
+	}
 
 	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
@@ -567,7 +577,8 @@ void Bot::OnLoaded()
 	printf("Bot: Knight Online process started\n");
 #endif
 
-	if (m_ePlatformType == PlatformType::USKO)
+	if (m_ePlatformType == PlatformType::USKO 
+		|| m_ePlatformType == PlatformType::KOKO)
 	{
 		DWORD dwXignCodeEntryPoint = 0;
 
@@ -593,7 +604,7 @@ void Bot::OnLoaded()
 			Remap::PatchSection(
 				injectedProcessInfo.hProcess, 
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")), 
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")));
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
 
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
@@ -601,7 +612,7 @@ void Bot::OnLoaded()
 			Remap::PatchSection(
 				injectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")));
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
 		
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
@@ -609,7 +620,7 @@ void Bot::OnLoaded()
 			Remap::PatchSection(
 				injectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")));
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
 
 		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
@@ -634,8 +645,16 @@ void Bot::OnLoaded()
 		}
 
 #ifdef DISABLE_XIGNCODE
-		BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-		WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		if (m_ePlatformType == PlatformType::USKO)
+		{
+			BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
+			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		}
+		else if (m_ePlatformType == PlatformType::KOKO)
+		{
+			BYTE byPatch2[] = { 0xE9, 0x50, 0x07, 0x00, 0x00, 0x90 };
+			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		}
 #endif
 
 #ifdef DEBUG
@@ -691,6 +710,22 @@ void Bot::Patch(HANDLE hProcess)
 
 	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);*/
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	//DWORD iPatchEntryPoint3 = 0;
+	//while (iPatchEntryPoint3 == 0)
+	//	ReadProcessMemory(hProcess, (LPVOID)0xCFA26B, &iPatchEntryPoint3, 4, 0);
+
+	//BYTE byPatch3[] =
+	//{
+	//	0x90,
+	//	0x90,
+	//	0x90,
+	//	0x90,
+	//	0x90
+	//};
+
+	//WriteProcessMemory(hProcess, (LPVOID*)0xCFA26B, byPatch3, sizeof(byPatch3), 0);
 }
 
 void Bot::OnConfigurationLoaded()
@@ -710,6 +745,8 @@ void Bot::OnConfigurationLoaded()
 #ifdef DEBUG
 	printf("User configuration loaded\n");
 #endif
+
+	new std::thread([this]() { UI::Render(this); });
 
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
@@ -796,6 +833,25 @@ bool Bot::GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE
 		return false;
 
 	return m_pTbl_Item_Extension[iExtensionID]->GetData(mapDataOut);
+}
+
+bool Bot::GetItemExtensionData(uint32_t iItemID, uint8_t iExtensionID, __TABLE_ITEM_EXTENSION*& pOutItemExtensionData)
+{
+	if (m_pTbl_Item_Extension[iExtensionID] == nullptr)
+		return false;
+
+	std::map<uint32_t, __TABLE_ITEM_EXTENSION>* pItemExtensionTable;
+	if (!GetItemExtensionTable(iExtensionID, &pItemExtensionTable))
+		return false;
+
+	auto pItemExtensionData = pItemExtensionTable->find(iItemID % 1000);
+
+	if (pItemExtensionData == pItemExtensionTable->end())
+		return false;
+
+	pOutItemExtensionData = &(pItemExtensionData->second);
+
+	return true;
 }
 
 bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
