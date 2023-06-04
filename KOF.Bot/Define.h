@@ -14,7 +14,7 @@
 
 //#define ENABLE_FIREWALL_RULES
 
-//#define SET_DEBUG_CLIENT_INFORMATION
+#define SET_DEBUG_CLIENT_INFORMATION
 
 #define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #define DEVELOPMENT_EXE "KnightOnLine.exe"

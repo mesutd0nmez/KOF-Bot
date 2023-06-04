@@ -191,7 +191,7 @@ void Service::HandlePacket(Packet& pkt)
         }
         break;
 
-        case PacketHeader::INJECTION:
+       /* case PacketHeader::INJECTION:
         {
             if (m_iId == -1) return;
 
@@ -204,7 +204,7 @@ void Service::HandlePacket(Packet& pkt)
 
             Injection(iProcesssId, vecBuffer);
         }
-        break;
+        break;*/
     }
 }
 

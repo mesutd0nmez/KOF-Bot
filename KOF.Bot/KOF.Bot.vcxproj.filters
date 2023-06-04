@@ -139,7 +139,7 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Injection.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Utility</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -173,79 +173,35 @@ std::string CurlPost(std::string szUrl, JSON jData)
 	return szReadBuffer;
 }
 
-void Injection(DWORD iTargetProcess, std::string szPath)
+bool Injection(DWORD iTargetProcess, std::string szPath)
 {
-	std::ifstream instream(szPath.c_str(), std::ios::in | std::ios::binary);
+	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Injector.dll"));
 
-	if (instream)
+	if (!hInjectionModule)
 	{
-		std::vector<uint8_t> dllBuff((std::istreambuf_iterator<char>(instream)), std::istreambuf_iterator<char>());
-		Injection(iTargetProcess, dllBuff);
-	}
-}
-
-void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff)
-{
-	HINSTANCE hInjectionMod = LoadLibrary(GH_INJ_MOD_NAME);
-
-	if (hInjectionMod == nullptr)
-		return;
-
-	auto MemoryInject = (f_Memory_Inject)GetProcAddress(hInjectionMod, "Memory_Inject");
-	auto GetSymbolState = (f_GetSymbolState)GetProcAddress(hInjectionMod, "GetSymbolState");
-	auto GetImportState = (f_GetSymbolState)GetProcAddress(hInjectionMod, "GetImportState");
-	auto StartDownload = (f_StartDownload)GetProcAddress(hInjectionMod, "StartDownload");
-	auto GetDownloadProgressEx = (f_GetDownloadProgressEx)GetProcAddress(hInjectionMod, "GetDownloadProgressEx");
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-	StartDownload();
-
-	while (GetDownloadProgressEx(PDB_DOWNLOAD_INDEX_NTDLL, false) != 1.0f)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		return false;
 	}
 
-#ifdef _WIN64
-	while (GetDownloadProgressEx(PDB_DOWNLOAD_INDEX_NTDLL, true) != 1.0f)
+	auto InjectA = (f_InjectA)GetProcAddress(hInjectionModule, skCryptDec("InjectA"));
+
+	INJECTIONDATAA data =
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-#endif
-
-	while (GetSymbolState() != 0)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-
-	while (GetImportState() != 0)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-
-	bool bGenerateErrorLog = false;
-
-//#ifdef DEBUG
-//	bGenerateErrorLog = true;
-//#endif
-
-	MEMORY_INJECTIONDATA pData =
-	{
-		vecBuff.data(),
-		vecBuff.size(),
+		0,
+		"",
 		iTargetProcess,
 		INJECTION_MODE::IM_ManualMap,
-		LAUNCH_METHOD::LM_QueueUserAPC,
-		MM_DEFAULT,
+		LAUNCH_METHOD::LM_HijackThread,
+		INJ_ERASE_HEADER,
 		0,
-		NULL,
-		NULL,
-		bGenerateErrorLog
+		NULL
 	};
 
-	MemoryInject(&pData);
-}
+	strcpy(data.szDllPath, szPath.c_str());
 
+	InjectA(&data);
+
+	return true;
+}
 
 bool ConsoleCommand(const std::string& input, std::string& out)
 {

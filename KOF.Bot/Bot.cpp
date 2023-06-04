@@ -196,7 +196,7 @@ void Bot::LoadAccountList()
 {
 	try
 	{
-		m_szAccountListFilePath = skCryptDec(".\\data\\accounts.json");
+		m_szAccountListFilePath = skCryptDec("data\\accounts.json");
 
 		std::ifstream i(m_szAccountListFilePath.c_str());
 		m_jAccountList = JSON::parse(i);
@@ -397,16 +397,12 @@ void Bot::InitializeSupplyData()
 	try
 	{
 		std::ifstream ifSupply(
-			std::filesystem::current_path().string() 
-			+ skCryptDec("\\data\\") 
-			+ skCryptDec("supply.json"));
+			skCryptDec("data\\supply.json"));
 
 		m_jSupplyList = JSON::parse(ifSupply);
 
 		std::ifstream ifInventoryFlags(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("inventoryflags.json"));
+			skCryptDec("data\\inventoryflags.json"));
 
 		m_jInventoryFlags = JSON::parse(ifInventoryFlags);
 	}
@@ -433,30 +429,22 @@ void Bot::InitializePriestData()
 	try
 	{
 		std::ifstream iHealthBuffList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("health.json"));
+			skCryptDec("data\\health.json"));
 
 		m_jHealthBuffList = JSON::parse(iHealthBuffList);
 
 		std::ifstream iDefenceBuffList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("defence.json"));
+			skCryptDec("data\\defence.json"));
 
 		m_jDefenceBuffList = JSON::parse(iDefenceBuffList);
 
 		std::ifstream iMindBuffList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("mind.json"));
+			skCryptDec("data\\mind.json"));
 
 		m_jMindBuffList = JSON::parse(iMindBuffList);
 
 		std::ifstream iHealList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("heal.json"));
+			skCryptDec("data\\heal.json"));
 
 		m_jHealList = JSON::parse(iHealList);
 	}
@@ -573,6 +561,8 @@ void Bot::OnLoaded()
 		return;
 	}
 
+	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
+
 #ifdef DEBUG
 	printf("Bot: Knight Online process started\n");
 #endif
@@ -623,26 +613,9 @@ void Bot::OnLoaded()
 				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
 
-		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
-
-		if (hModuleAdvapi != 0)
-		{
-			LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, skCryptDec("OpenServiceW"));
-
-			if (pOpenServicePtr != 0)
-			{
-				BYTE byPatch1[] =
-				{
-					0xC2, 0x0C, 0x00
-				};
-
-				WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
-
 #ifdef DEBUG
-				printf("Bot: Knight Online Patched\n");
+		printf("Bot: Knight Online Patched\n");
 #endif
-			}
-		}
 
 #ifdef DISABLE_XIGNCODE
 		if (m_ePlatformType == PlatformType::USKO)
@@ -666,11 +639,7 @@ void Bot::OnLoaded()
 
 	Patch(injectedProcessInfo.hProcess);
 
-	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
-
-	SendInjectionRequest(injectedProcessInfo.dwProcessId);
-
-	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll");
+	Injection(injectedProcessInfo.dwProcessId, skCryptDec("KOF.dll"));
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
@@ -1163,10 +1132,12 @@ void Bot::SendPipeServer(Packet pkt)
 {
 	if (m_hPipe != INVALID_HANDLE_VALUE)
 	{
+		DWORD iNumberOfBytesWritten;
+
 		WriteFile(m_hPipe,
 			pkt.contents(),
 			pkt.size(),
-			0,
+			&iNumberOfBytesWritten,
 			NULL);
 	}
 }

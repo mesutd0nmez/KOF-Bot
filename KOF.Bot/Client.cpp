@@ -1341,7 +1341,6 @@ void Client::PushPhase(DWORD iAddress)
 	BYTE byCode[] =
 	{
 		0x60,
-		0xC6,0x81,0x0C,0x01,0x0,0x0,0x01,
 		0xFF,0x35,0x0,0x0,0x0,0x0,
 		0xBF,0,0,0,0,
 		0xFF,0xD7,
@@ -1351,10 +1350,10 @@ void Client::PushPhase(DWORD iAddress)
 		0xC2,0x04,0x0,
 	};
 
-	CopyBytes(byCode + 10, iAddress);
+	CopyBytes(byCode + 3, iAddress);
 
 	DWORD dwPushPhase = GetAddress(skCryptDec("KO_PTR_PUSH_PHASE"));
-	CopyBytes(byCode + 15, dwPushPhase);
+	CopyBytes(byCode + 8, dwPushPhase);
 
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
