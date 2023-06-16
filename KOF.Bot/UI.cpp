@@ -10,6 +10,8 @@
 #include <imgui_impl_dx9.h>
 #include <imgui_impl_win32.h>
 
+#include "resource.h"
+
 LPDIRECT3D9              UI::g_pD3D = nullptr;
 LPDIRECT3DDEVICE9        UI::g_pd3dDevice = nullptr;
 D3DPRESENT_PARAMETERS    UI::g_d3dpp = {};
@@ -99,16 +101,17 @@ LRESULT WINAPI UI::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-#define IDI_MYICON 1000
+//#define IDI_MYICON 1000
 
 void UI::Render(Bot* pBot)
 {
     Drawing::m_szMainWindowName = skCryptDec("Google Chrome");
     Drawing::m_szRoutePlannerWindowName = skCryptDec("Yeni Sekme - Google Chrome");
+    Drawing::m_szInventoryWindowName = skCryptDec("Yeni Sekme - Google Chrome");
 
     ImGui_ImplWin32_EnableDpiAwareness();
     WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, _T(Drawing::m_szMainWindowName.c_str()), nullptr };
-    wc.hIcon = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDI_MYICON));
+    wc.hIcon = LoadIcon(wc.hInstance, MAKEINTRESOURCE(IDC_MYICON));
     ::RegisterClassEx(&wc);
     const HWND hWnd = ::CreateWindow(wc.lpszClassName, _T(Drawing::m_szMainWindowName.c_str()), WS_POPUP, 0, 0, 5, 5, NULL, NULL, wc.hInstance, NULL);
   
@@ -143,6 +146,9 @@ void UI::Render(Bot* pBot)
 
     ImGui::GetIO().IniFilename = nullptr;
 
+   /* ImFont* font = io.Fonts->AddFontFromFileTTF(skCrypt("c:\\Windows\\Fonts\\msyh.ttc"), 18.0f, NULL, io.Fonts->GetGlyphRangesChineseFull());
+    IM_ASSERT(font != NULL);*/
+
     ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX9_Init(g_pd3dDevice);
 
@@ -155,6 +161,8 @@ void UI::Render(Bot* pBot)
 
     while (!Drawing::Done)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         if (GetAsyncKeyState(VK_INSERT) & 1)
             Drawing::bDraw = !Drawing::bDraw;
 

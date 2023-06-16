@@ -1,16 +1,16 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "ClientHandler.h"
 #include "Client.h"
 #include "Memory.h"
 #include "Packet.h"
 #include "Bot.h"
 #include "Service.h"
-#include "Guard.h"
 #include "Drawing.h"
 #include <stb_image.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 #include <base64.h>
+#include "UI.h"
 
 ClientHandler::ClientHandler(Bot* pBot)
 {
@@ -30,8 +30,6 @@ void ClientHandler::Clear()
 {
 	m_bWorking = false;
 
-	m_bConfigurationLoaded = false;
-
 	m_bMailSlotWorking = false;
 	m_hMailSlotRecv = nullptr;
 	m_szMailSlotRecvName.clear();
@@ -50,6 +48,8 @@ void ClientHandler::Clear()
 
 	m_msLastSupplyTime = std::chrono::milliseconds(0);
 	m_msLastSelectedTargetTime = std::chrono::milliseconds(0);
+
+	iRouteStep = RouteStepType::STEP_NONE;
 }
 
 void ClientHandler::Initialize()
@@ -58,7 +58,7 @@ void ClientHandler::Initialize()
 	printf("Client handler initializing\n");
 #endif
 
-	PatchClient();
+	PatchSocket();
 }
 
 void ClientHandler::StartHandler()
@@ -69,7 +69,6 @@ void ClientHandler::StartHandler()
 
 	m_bWorking = true;
 
-	new std::thread([this]() { SpeedHackProcess(); });
 	new std::thread([this]() { AttackProcess(); });
 	new std::thread([this]() { SearchTargetProcess(); });
 	new std::thread([this]() { MoveToTargetProcess(); });
@@ -84,6 +83,7 @@ void ClientHandler::StartHandler()
 	new std::thread([this]() { AutoLootProcess(); });
 	new std::thread([this]() { RouteProcess(); });
 	new std::thread([this]() { SupplyProcess(); });
+	new std::thread([this]() { LevelDownerProcess(); });
 }
 
 void ClientHandler::StopHandler()
@@ -137,6 +137,24 @@ void ClientHandler::OnReady()
 	printf("Client handler ready\n");
 #endif
 
+#ifdef ENABLE_FIREWALL_RULES
+	if (m_Bot->m_ePlatformType == PlatformType::USKO || m_Bot->m_ePlatformType == PlatformType::KOKO)
+	{
+		std::string strConsoleInfo;
+		ConsoleCommand(skCryptDec("netsh advfirewall firewall show rule name=\"KOF Firewall\""), strConsoleInfo);
+
+		if (strConsoleInfo.find(skCryptDec("No rules match")) != std::string::npos)
+		{
+			ConsoleCommand(skCryptDec("netsh advfirewall firewall add rule name=\"KOF Firewall\" dir=out action=block program=\""
+				+ m_Bot->m_szClientPath + "\\" + m_Bot->m_szClientExe + "\" protocol=TCP remoteport=80,443"), strConsoleInfo);
+		}
+		else
+		{
+			ConsoleCommand(skCryptDec("netsh advfirewall firewall set rule name=\"KOF Firewall\" new enable=yes"), strConsoleInfo);
+		}
+	}
+#endif
+
 #ifndef DISABLE_AUTO_LOGIN
 	new std::thread([&]()
 	{
@@ -179,7 +197,7 @@ void ClientHandler::OnReady()
 #endif
 }
 
-void ClientHandler::PatchClient()
+void ClientHandler::PatchSocket()
 {
 	onClientSendProcess = [=](BYTE* iStream, DWORD iStreamLength)
 	{
@@ -568,7 +586,7 @@ void ClientHandler::MailSlotRecvProcess()
 
 		vecMessageBuffer.resize(iCurrentMesageSize);
 
-		OVERLAPPED ov;
+		OVERLAPPED ov {};
 		ov.Offset = 0;
 		ov.OffsetHigh = 0;
 		ov.hEvent = NULL;
@@ -610,7 +628,7 @@ void ClientHandler::MailSlotSendProcess()
 
 		vecMessageBuffer.resize(iCurrentMesageSize);
 
-		OVERLAPPED ov;
+		OVERLAPPED ov {};
 		ov.Offset = 0;
 		ov.OffsetHigh = 0;
 		ov.hEvent = NULL;
@@ -941,8 +959,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(GetZone())); });
 
-			m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
-
 #ifdef DEBUG
 			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
 #endif
@@ -1151,19 +1167,34 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 			printf("RecvProcess::WIZ_GAMESTART: Started\n");
 #endif
+			
+
 			new std::thread([this]()
 			{
+				m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
+
 				WaitCondition(GetUserConfiguration() == nullptr)
 				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
+				WaitCondition(m_Bot->IsTableLoaded() == false);
+
+				LoadSkillData();
 
 				bool bWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), false);
 				SetAuthority(bWallHack ? 0 : 1);
+
+				bool bLegalWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("LegalWallHack"), false);
+				PatchObjectCollision(bLegalWallHack);
 
 				bool bDeathEffect = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
 				PatchDeathEffect(bDeathEffect);
 
 				bool bDisableCasting = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DisableCasting"), false);
 				UpdateSkillSuccessRate(bDisableCasting);
+
+				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
+				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
+
+				StartHandler();
 			});
 		}
 		break;
@@ -1262,17 +1293,15 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				for (int16_t i = 0; i < iNpcCount; i++)
 				{
 					int32_t iNpcID = pkt.read<int32_t>();
-
 					vecRegionNpcList.push_back(iNpcID);
 				}
 
-				std::vector<TNpc> tmpVecNpc = m_vecNpc;
-
-				for (const auto& pNpc : tmpVecNpc)
+				for (const auto& pNpc : m_vecNpc)
 				{
 					if (std::find(vecRegionNpcList.begin(), vecRegionNpcList.end(), pNpc.iID) == vecRegionNpcList.end())
 					{
 						std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
+
 						m_vecNpc.erase(
 							std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
 								[&](const TNpc& a) { return a.iID == pNpc.iID; }),
@@ -1411,13 +1440,12 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				case 2:
 				{			
-					std::vector<TPlayer> tmpVecPlayer = m_vecPlayer;
-
-					for (const auto& pPlayer : tmpVecPlayer)
+					for (const auto& pPlayer : m_vecPlayer)
 					{
 						if (std::find(m_vecRegionUserList.begin(), m_vecRegionUserList.end(), pPlayer.iID) == m_vecRegionUserList.end())
 						{
 							std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
+
 							m_vecPlayer.erase(
 								std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 									[&](const TPlayer& a) { return a.iID == pPlayer.iID; }),
@@ -1459,6 +1487,25 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
 					GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
 				}
+
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+					[&](const PartyMember& a)
+					{
+						return a.iMemberID == iID;
+					});
+
+				if (pMember != m_vecPartyMembers.end())
+				{
+					pMember->iHpBuffTime = std::chrono::milliseconds(0);
+					pMember->iHpBuffAttemptCount = 0;
+					pMember->iACBuffTime = std::chrono::milliseconds(0);
+					pMember->iACBuffAttemptCount = 0;
+					pMember->iMindBuffTime = std::chrono::milliseconds(0);
+					pMember->iMindBuffAttemptCount = 0;
+					pMember->iSwiftBuffTime = std::chrono::milliseconds(0);
+					pMember->iSwiftBuffAttemptCount = 0;
+				}
 #ifdef DEBUG
 				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
 #endif
@@ -1489,6 +1536,25 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					if (it != m_vecPlayer.end())
 					{
 						it->eState = PSA_DEATH;
+
+						std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+						auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+							[&](const PartyMember& a)
+							{
+								return a.iMemberID == iID;
+							});
+
+						if (pMember != m_vecPartyMembers.end())
+						{
+							pMember->iHpBuffTime = std::chrono::milliseconds(0);
+							pMember->iHpBuffAttemptCount = 0;
+							pMember->iACBuffTime = std::chrono::milliseconds(0);
+							pMember->iACBuffAttemptCount = 0;
+							pMember->iMindBuffTime = std::chrono::milliseconds(0);
+							pMember->iMindBuffAttemptCount = 0;
+							pMember->iSwiftBuffTime = std::chrono::milliseconds(0);
+							pMember->iSwiftBuffAttemptCount = 0;
+						}
 
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_DEAD: %d Player Dead\n", iID);
@@ -1826,6 +1892,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					int32_t iTargetID = pkt.read<int32_t>();
 
 					int32_t iData[6];
+					memset(iData, 0, sizeof(iData));
 
 					for (size_t i = 0; i < 6; i++)
 						iData[i] = pkt.read<int32_t>();
@@ -2216,38 +2283,50 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							uint32_t iItemCount = pkt.read<int16_t>();
 
 							if (iItemID == 900000000)
+							{
 								SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+#ifdef DEBUG
+								printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
+#endif
+							}
 							else
 							{
-								std::map<uint32_t, __TABLE_ITEM>* pItemTable;
-								if (m_Bot->GetItemTable(&pItemTable))
+								__TABLE_ITEM* pItemData;
+								__TABLE_ITEM_EXTENSION* pItemExtensionData;
+								if (m_Bot->GetItemData(iItemID, pItemData) 
+									&& m_Bot->GetItemExtensionData(iItemID, pItemData->byExtIndex, pItemExtensionData))
 								{
-									uint32_t iItemBaseID = iItemID / 1000 * 1000;
+									int iLootMinPrice = GetUserConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), 0);
 
-									auto pItemData = pItemTable->find(iItemBaseID);
-
-									if (pItemData != pItemTable->end())
+									if (iLootMinPrice == 0
+										|| (iLootMinPrice > 0 && pItemData->iPriceRepair >= iLootMinPrice)
+										|| (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA))
 									{
-										int iLootMinPrice = GetUserConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), 0);
-
-										if (iLootMinPrice == 0 || (iLootMinPrice > 0 && pItemData->second.iPriceRepair >= iLootMinPrice))
-										{
-											SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
-										}
-									}
-									else
-									{
+										
 										SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+#ifdef DEBUG
+										printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d,%d,%d\n", 
+											iBundleID, iItemID, iItemCount, (int16_t)i, pItemData->iPriceRepair, pItemExtensionData->iItemType);
+#endif
 									}
 								}
 								else
 								{
 									SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+#ifdef DEBUG
+									printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: pItemData == nullptr || pItemExtensionData == nullptr\n");
+									printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
+#endif
 								}
 							}						
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
-#endif
+
 							std::this_thread::sleep_for(std::chrono::milliseconds(100));
 						}
 					}
@@ -2807,13 +2886,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							&& szMessage.rfind(szPartyRequestMessage.c_str(), 0) == 0)
 						{
 							if (m_vecPartyMembers.size() == 0)
-							{
 								SendPartyCreate(szSenderName);
-							}
 							else
-							{
 								SendPartyInsert(szSenderName);
-							}
 						}
 
 						bool bTeleportRequest = GetUserConfiguration()->GetBool(skCryptDec("Listener"), skCryptDec("TeleportRequest"), false);
@@ -2856,6 +2931,80 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif
 				}
 				break;
+			}
+		}
+		break;
+
+		case WIZ_WAREHOUSE:
+		{
+			uint8_t iOpCode = pkt.read<uint8_t>();
+
+			switch (iOpCode)
+			{
+				case 0x01:
+				{
+					uint8_t iUnknown = pkt.read<uint8_t>();
+					uint32_t iCoins = pkt.read<uint32_t>();
+
+					for (size_t i = 0; i < WAREHOUSE_MAX; i++)
+					{
+						TItemData* pItem = &m_PlayerMySelf.tWarehouse[i];
+
+						pItem->iPos = i;
+
+						pkt >> pItem->iItemID >> pItem->iDurability >> pItem->iCount >> pItem->iFlag >> pItem->iSerial >> pItem->iExpirationTime;
+					}
+				}
+				break;
+
+				default:
+				{
+#ifdef DEBUG
+					printf("RecvProcess::WIZ_WAREHOUSE: Not implemented opcode(%d)\n", iOpCode);
+#endif
+					break;
+				}
+			}
+		}
+		break;
+
+		case WIZ_VIPWAREHOUSE:
+		{
+			uint8_t iOpCode = pkt.read<uint8_t>();
+
+			switch (iOpCode)
+			{
+				case 0x01:
+				{
+					uint8_t iUnknown1 = pkt.read<uint8_t>();
+					uint8_t iIsPasswordUsed = pkt.read<uint8_t>();
+					uint8_t iUnknown2 = pkt.read<uint8_t>();
+					uint32_t iExpirationTime = pkt.read<uint32_t>();
+					uint32_t iVaultKey = pkt.read<uint32_t>();
+					uint16_t iUnknown3 = pkt.read<uint16_t>();
+					uint16_t iUnknown4 = pkt.read<uint16_t>();
+					uint8_t iUnknown5 = pkt.read<uint8_t>();
+					uint32_t iUnknown6 = pkt.read<uint32_t>();
+					uint16_t iUnknown7 = pkt.read<uint16_t>();
+
+					for (size_t i = 0; i < VIP_HAVE_MAX; i++)
+					{
+						TItemData* pItem = &m_PlayerMySelf.tVipWarehouse[i];
+
+						pItem->iPos = i;
+
+						pkt >> pItem->iItemID >> pItem->iDurability >> pItem->iCount >> pItem->iFlag >> pItem->iSerial >> pItem->iExpirationTime;
+					}
+				}
+				break;
+
+				default:
+				{
+#ifdef DEBUG
+					printf("RecvProcess::WIZ_VIPWAREHOUSE: Not implemented opcode(%d)\n", iOpCode);
+#endif
+					break;
+				}
 			}
 		}
 		break;
@@ -3347,7 +3496,16 @@ void ClientHandler::LoadSkillData()
 
 	for (const auto& [key, value] : *pSkillTable)
 	{
-		if ((bEnableSpecialFeatures && value.iID != 490803) || !bEnableSpecialFeatures)
+		if ((bEnableSpecialFeatures 
+			&& (value.iID != 490803 
+				&& value.iID != 490811 
+				&& value.iID != 490808 
+				&& value.iID != 490809 
+				&& value.iID != 490810 
+				&& value.iID != 490800 
+				&& value.iID != 490801
+				&& value.iID != 490817))
+			|| !bEnableSpecialFeatures)
 		{
 			if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(GetClass())))
 				continue;
@@ -3398,54 +3556,6 @@ void ClientHandler::LoadSkillData()
 	}
 }
 
-void ClientHandler::SpeedHackProcess()
-{
-#ifdef DEBUG
-	printf("ClientHandler::SpeedHackProcess Started\n");
-#endif
-
-	while (m_bWorking)
-	{
-		try
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-			//Vector3 v3MovePosition = GetMovePosition();
-
-			//if (v3MovePosition.m_fX == 0.0f 
-			//	&& v3MovePosition.m_fY == 0.0f)
-			//	continue;
-
-			//Vector3 v3CurrentPosition = GetPosition();
-			//Vector3 v3NextPosition = MoveTowards(v3CurrentPosition, v3MovePosition, 1.0f);
-
-			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_X")), v3NextPosition.m_fX);
-			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Y")), v3NextPosition.m_fY);
-			//WriteFloat(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_Z")), v3NextPosition.m_fZ);
-
-			//v3NextPosition.m_fZ = v3CurrentPosition.m_fZ;
-
-			////if(v3CurrentPosition.m_fX == v3NextPosition.m_fX && v3CurrentPosition.m_fY ==)
-
-			//SendMovePacket(v3CurrentPosition, v3NextPosition, 45, 2);
-
-
-		}
-		catch (const std::exception& e)
-		{
-#ifdef DEBUG
-			printf("SpeedHackProcess:Exception: %s\n", e.what());
-#else
-			UNREFERENCED_PARAMETER(e);
-#endif
-		}
-	}
-
-#ifdef DEBUG
-		printf("ClientHandler::SpeedHackProcess Stopped\n");
-#endif
-}
-
 void ClientHandler::MoveToTargetProcess()
 {
 #ifdef DEBUG
@@ -3456,7 +3566,7 @@ void ClientHandler::MoveToTargetProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			if (GetTarget() == -1)
 				continue;
@@ -3491,17 +3601,22 @@ void ClientHandler::MoveToTargetProcess()
 			if (!IsAttackable(iTargetBase))
 				continue;
 
-			float fTargetRadius = GetRadius(iTargetBase) * GetScaleZ(iTargetBase);
-			float fMySelfRadius = GetRadius() * GetScaleZ();
+			std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+			if (!m_Bot->GetItemTable(&pItemTable))
+				continue;
 
 			Vector3 v3TargetPosition = GetTargetPosition();
 
-			if (GetDistance(v3TargetPosition) > fTargetRadius + fMySelfRadius)
+			if (v3TargetPosition == Vector3(0.0f, 0.0f, 0.0f))
+				continue;
+
+			float fTargetRadius = GetRadius(iTargetBase) * GetScaleZ(iTargetBase);
+			float fMySelfRadius = GetRadius() * GetScaleZ();			
+
+			if (GetDistance(v3TargetPosition) > ((fTargetRadius + fMySelfRadius) + 1.0f)
+				&& GetActionState() != PSA_SPELLMAGIC)
 			{
-				if (GetActionState() != PSA_SPELLMAGIC)
-				{
-					SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
-				}
+				SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, (fTargetRadius + fMySelfRadius)));
 			}
 		}
 		catch (const std::exception& e)
@@ -3561,7 +3676,9 @@ void ClientHandler::AttackProcess()
 			if (!m_Bot->GetItemTable(&pItemTable))
 				continue;
 
-			if (GetActionState() == PSA_SPELLMAGIC)
+			bool bUseSkillWithPacket = GetUserConfiguration()->GetBool(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), false);
+
+			if (!bUseSkillWithPacket && GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
 			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -3639,36 +3756,50 @@ void ClientHandler::AttackProcess()
 				}
 
 				Vector3 v3TargetPosition = GetTargetPosition();
-
 				float fDistance = GetDistance(v3TargetPosition);
 
 				float fTargetRadius = GetRadius(iTargetBase) * GetScaleZ(iTargetBase);
 				float fMySelfRadius = GetRadius() * GetScaleZ();
 
-				if (fDistance > (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
-					continue;
+				bool bAttackRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
+				int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
 
-				bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+				float fCalculatedEffectiveAttackRange = fEffectiveAttackRange / 10.0f;
 
-				if (!bIsEquippedBow && bBasicAttack)
+				if (bAttackRangeLimit)
 				{
-					BasicAttack();
-					BasicAttack();
+					fCalculatedEffectiveAttackRange = (float)iAttackRangeLimitValue;
 				}
 
 				bool bBasicAttackWithPacket = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), false);
 
-				if (!bIsEquippedBow && bBasicAttackWithPacket)
+				if (!bBasicAttackWithPacket)
 				{
-					float fTime = Bot::TimeGet();
-					float fAttackInterval = fBasicAttackIntervalTable;
-
-					float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
-					SendBasicAttackPacket(GetTarget(), fBasicAttackIntervalTable, fDistanceExceptRadius);
-
-					if (fTime > m_fAttackTimeRecent + fAttackInterval)
+					if (fDistance <= (fCalculatedEffectiveAttackRange + fTargetRadius) + fMySelfRadius)
 					{
-						m_fAttackTimeRecent = fTime;
+						bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+
+						if (!bIsEquippedBow && bBasicAttack)
+						{
+							BasicAttack();
+							BasicAttack();
+						}
+					}
+				}
+				else
+				{
+					if (!bIsEquippedBow)
+					{
+						float fTime = Bot::TimeGet();
+						float fAttackInterval = fBasicAttackIntervalTable;
+
+						float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
+						SendBasicAttackPacket(GetTarget(), fBasicAttackIntervalTable, fDistanceExceptRadius);
+
+						if (fTime > m_fAttackTimeRecent + fAttackInterval)
+						{
+							m_fAttackTimeRecent = fTime;
+						}
 					}
 				}
 
@@ -3779,29 +3910,44 @@ void ClientHandler::AttackProcess()
 					if (!IsAttackable(iTargetBase))
 						break;
 
+					float fTargetRadius = GetRadius(iTargetBase) * GetScaleZ(iTargetBase);
+					float fMySelfRadius = GetRadius() * GetScaleZ();
+
 					Vector3 v3TargetPosition = GetTargetPosition();
+
+					float fDistance = GetDistance(v3TargetPosition);
 
 					bool bAttackRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
 					int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
 
-					float fDistance = GetDistance(v3TargetPosition);
+					float fCalculatedEffectiveAttackRange = fEffectiveAttackRange / 10.0f;
 
-					if (bAttackRangeLimit && fDistance > (float)iAttackRangeLimitValue)
-						break;
+					if (bAttackRangeLimit)
+					{
+						fCalculatedEffectiveAttackRange = (float)iAttackRangeLimitValue;
+					}
 
-					if (pSkillData->second.iReCastTime != 0 && GetActionState() == PSA_SPELLMAGIC)
+					/*if (pSkillData->second.iReCastTime != 0 && GetActionState() == PSA_SPELLMAGIC)
+						continue;*/
+
+					if (GetActionState() == PSA_SPELLMAGIC)
 						continue;
 
-					if (pSkillData->second.iValidDist > 0
-						&& fDistance > (float)pSkillData->second.iValidDist)
-						continue;
+					if (!bUseSkillWithPacket)
+					{
+						if (pSkillData->second.iValidDist > 0
+							&& fDistance > (float)pSkillData->second.iValidDist)
+							continue;
 
-					float fTargetRadius = GetRadius(iTargetBase) * GetScaleZ(iTargetBase);
-					float fMySelfRadius = GetRadius() * GetScaleZ();
-
-					if (pSkillData->second.iValidDist == 0
-						&& fDistance > (fEffectiveAttackRange / 10.0f) + (fTargetRadius + fMySelfRadius))
-						continue;
+						if (pSkillData->second.iValidDist == 0
+							&& fDistance > fCalculatedEffectiveAttackRange + (fTargetRadius + fMySelfRadius))
+							continue;
+					}
+					else
+					{
+						if (fDistance > fCalculatedEffectiveAttackRange + (fTargetRadius + fMySelfRadius))
+							continue;
+					}
 
 					uint32_t iNeedItem = pSkillData->second.dwNeedItem;
 
@@ -3837,7 +3983,7 @@ void ClientHandler::AttackProcess()
 					if (GetMp() < pSkillData->second.iExhaustMSP
 						|| (iNeedItem != 0 && iExistItemCount < iNeedItemCount))
 					{
-						continue;
+						goto ProcessBasicAttack;
 					}
 
 					if (!bIsEquippedBow
@@ -3846,33 +3992,74 @@ void ClientHandler::AttackProcess()
 						continue;
 					}
 
-					UseSkill(pSkillData->second, GetTarget(), 0, true, false);
+					if (m_vecPlayer.size() > 0 
+						&& (pSkillData->second.iID == 490801 
+							|| pSkillData->second.iID == 490800
+							|| pSkillData->second.iID == 490817))
+						goto ProcessBasicAttack;
 
-					bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-
-					if (!bIsEquippedBow && bBasicAttack)
+					if (bUseSkillWithPacket 
+						|| (pSkillData->second.iID == 490808 
+							|| pSkillData->second.iID == 490809 
+							|| pSkillData->second.iID == 490810 
+							|| pSkillData->second.iID == 490800 
+							|| pSkillData->second.iID == 490801
+							|| pSkillData->second.iID == 490817))
 					{
-						BasicAttack();
-						BasicAttack();
+						UseSkillWithPacket(pSkillData->second, GetTarget());
 					}
+					else
+					{
+						UseSkill(pSkillData->second, GetTarget(), 0, true, false);
+					}
+
+ProcessBasicAttack:
 
 					bool bBasicAttackWithPacket = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), false);
 
-					if (!bIsEquippedBow && bBasicAttackWithPacket)
+					if (!bBasicAttackWithPacket)
 					{
-						float fTime = Bot::TimeGet();
-						float fAttackInterval = fBasicAttackIntervalTable;
-
-						float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
-						SendBasicAttackPacket(GetTarget(), fBasicAttackIntervalTable, fDistanceExceptRadius);
-
-						if (fTime > m_fAttackTimeRecent + fAttackInterval)
+						if (fDistance <= (fCalculatedEffectiveAttackRange + fTargetRadius) + fMySelfRadius)
 						{
-							m_fAttackTimeRecent = fTime;
+							bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+
+							if (!bIsEquippedBow && bBasicAttack)
+							{
+								BasicAttack();
+								BasicAttack();
+							}
 						}
 					}
+					else
+					{
+						if (!bIsEquippedBow)
+						{
+							float fTime = Bot::TimeGet();
+							float fAttackInterval = fBasicAttackIntervalTable;
 
-					bool bComboDelay = false;
+							float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
+							SendBasicAttackPacket(GetTarget(), fBasicAttackIntervalTable, fDistanceExceptRadius);
+
+							if (fTime > m_fAttackTimeRecent + fAttackInterval)
+							{
+								m_fAttackTimeRecent = fTime;
+							}
+						}
+					}	
+
+					bool bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", false);
+
+					if (bAttackSpeed)
+					{
+						int iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
+
+						if (iAttackSpeedValue > 0)
+							std::this_thread::sleep_for(std::chrono::milliseconds(iAttackSpeedValue));
+					}
+					else
+						std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+					/*bool bComboDelay = false;
 
 					if (IsRogue()
 						&& pSkillData->second.dw1stTableType == 2)
@@ -3908,7 +4095,7 @@ void ClientHandler::AttackProcess()
 						}
 						else
 							std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-					}
+					}*/
 				}
 			}
 		}
@@ -3999,6 +4186,7 @@ void ClientHandler::SearchTargetProcess()
 							&& c.eState != PSA_DYING
 							&& c.eState != PSA_DEATH
 							&& ((c.iHPMax == 0) || (c.iHPMax > 0 && c.iHP > 0))
+							&& GetEntityBase(c.iID) != 0
 							&& ((bRangeLimit && GetDistance(Vector3(c.fX, c.fZ, c.fY)) <= (float)iRangeLimitValue) || !bRangeLimit);
 					});
 			}
@@ -4018,6 +4206,7 @@ void ClientHandler::SearchTargetProcess()
 							&& c.eState != PSA_DYING
 							&& c.eState != PSA_DEATH
 							&& ((c.iHPMax == 0) || (c.iHPMax > 0 && c.iHP > 0))
+							&& GetEntityBase(c.iID) != 0
 							&& std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.iProtoID)
 							&& ((bRangeLimit && GetDistance(Vector3(c.fX, c.fZ, c.fY)) <= (float)iRangeLimitValue) || !bRangeLimit);
 					});
@@ -4051,7 +4240,7 @@ void ClientHandler::SearchTargetProcess()
 					if (iNewTargetBase == 0)
 						continue;
 
-					DWORD iNewTargetHp = GetHp(iNewTargetBase);
+					/*DWORD iNewTargetHp = GetHp(iNewTargetBase);
 					DWORD iNewTargetMaxHp = GetMaxHp(iNewTargetBase);
 					DWORD iNewTargetState = GetActionState(iNewTargetBase);
 
@@ -4073,7 +4262,7 @@ void ClientHandler::SearchTargetProcess()
 							continue;
 					}
 
-					m_msLastSelectedTargetTime = msNow;
+					m_msLastSelectedTargetTime = msNow;*/
 
 					SetTarget(iNewTargetBase);
 
@@ -4085,7 +4274,7 @@ void ClientHandler::SearchTargetProcess()
 						SetScale(iNewTargetBase, (float)iTargetSize, (float)iTargetSize, (float)iTargetSize);
 					}
 
-					bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+					/*bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
 
 					if (bMoveToTarget)
 					{
@@ -4101,7 +4290,7 @@ void ClientHandler::SearchTargetProcess()
 								SetMovePosition(GetPosition().GetEndPoint(v3TargetPosition, fTargetRadius));
 							}
 						}
-					}
+					}*/
 				}
 			}
 		}
@@ -4130,7 +4319,7 @@ void ClientHandler::AutoLootProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			if (m_vecLootList.size() == 0)
 				continue;
@@ -4147,8 +4336,8 @@ void ClientHandler::AutoLootProcess()
 			if (IsDeath())
 				continue;
 
-			if (GetActionState() == PSA_SPELLMAGIC)
-				continue;
+			/*if (GetActionState() == PSA_SPELLMAGIC)
+				continue;*/
 
 			bool bAutoLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
 
@@ -4165,7 +4354,7 @@ void ClientHandler::AutoLootProcess()
 					std::back_inserter(vecFilteredLoot),
 					[&](const TLoot& c)
 					{
-						return  (c.msDropTime.count() + 500) < msNow.count() && c.iRequestedOpen == false;
+						return  /*(c.msDropTime.count() + 750) < msNow.count() && */c.iRequestedOpen == false;
 					});
 
 				if (vecFilteredLoot.size() > 0)
@@ -4203,14 +4392,17 @@ void ClientHandler::AutoLootProcess()
 								&& (pFindedLoot.msDropTime.count() + 30000) > msNow.count()
 								&& GetDistance(v3NpcPosition) > 1.0f
 								&& GetDistance(v3NpcPosition) < 50.0f)
-							{
-								std::this_thread::sleep_for(std::chrono::milliseconds(250));
-
+							{				
 								if (GetActionState() == PSA_SPELLMAGIC)
+								{
+									std::this_thread::sleep_for(std::chrono::milliseconds(250));
 									continue;
+								}
 
 								SetMovePosition(v3NpcPosition);
 								SetMovingToLoot(true);
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(250));
 							}
 
 							SendRequestBundleOpen(pFindedLoot.iBundleID);
@@ -4449,6 +4641,11 @@ void ClientHandler::CharacterProcess()
 			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
+			if (IsRouting() 
+				&& (GetRouteStep() == RouteStepType::STEP_SUPPLY 
+					|| GetRouteStep() == RouteStepType::STEP_INN))
+				continue;
+
 			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
 
 			if (bCharacterStatus)
@@ -4502,6 +4699,15 @@ void ClientHandler::CharacterProcess()
 									iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 							}
 
+							if (IsRouting() 
+								&& pSkillData->second.iBaseId != 107725		//Light Feet
+								&& pSkillData->second.iBaseId != 107010		//Swift
+								&& pSkillData->second.iBaseId != 101001		//Sprint
+								&& pSkillData->second.iBaseId != 490811)	//Light Feet [Tournament Use Only]
+							{
+								continue;
+							}
+
 							if (GetMp() >= pSkillData->second.iExhaustMSP && (iNeedItem == 0 || (iNeedItem != 0 && iExistItemCount >= iNeedItemCount)))
 							{
 								std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
@@ -4530,7 +4736,7 @@ void ClientHandler::CharacterProcess()
 
 								if (bUse)
 								{
-									if (pSkillData->second.iID == 490803)
+									if (pSkillData->second.iID == 490803 || pSkillData->second.iID == 490811)
 									{
 										SendStartSkillMagicAtTargetPacket(pSkillData->second, GetID(), Vector3(0.0f, 0.0f, 0.0f));
 									}
@@ -4583,6 +4789,32 @@ void ClientHandler::CharacterProcess()
 				if ((!bPartyProtection || m_vecPartyMembers.size() == 0) && IsPriest())
 				{
 					PriestCharacterProcess();
+				}
+			}
+
+			bool bStartGenieIfUserInRegion = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), false);
+			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+
+			if (bStartGenieIfUserInRegion && (bAttackStatus || bCharacterStatus))
+			{
+				std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+					std::chrono::system_clock::now().time_since_epoch()
+				);
+
+				if (m_vecPlayer.size() > 0
+					&& m_msLastGenieStartTime == std::chrono::milliseconds(0))
+				{
+					SendStartGenie();
+
+					m_msLastGenieStartTime = msNow;
+				}
+				else if (m_vecPlayer.size() == 0 
+					&& m_msLastGenieStartTime != std::chrono::milliseconds(0) 
+					&& (m_msLastGenieStartTime.count() + 300000) < msNow.count())
+				{
+					SendStopGenie();
+
+					m_msLastGenieStartTime = std::chrono::milliseconds(0);
 				}
 			}
 		}
@@ -4726,7 +4958,8 @@ void ClientHandler::RogueCharacterProcess(int32_t iTargetID, bool bIsPartyReques
 					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
 					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
 
-				if (GetDistance(iPlayerPosition) > 50.0f)
+				if (GetDistance(iPlayerPosition) > 25.0f 
+					|| pMember->iHP)
 				{
 					bUse = false;
 				}
@@ -4889,7 +5122,8 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
 						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
 
-					if (GetDistance(iPlayerPosition) > 50.0f)
+					if (GetDistance(iPlayerPosition) > 25.0f 
+						|| pMember->iHP == 0)
 					{
 						bUse = false;
 					}
@@ -5005,7 +5239,8 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
 						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
 
-					if (GetDistance(iPlayerPosition) > 50.0f)
+					if (GetDistance(iPlayerPosition) > 25.0f 
+						|| pMember->iHP == 0)
 					{
 						bUse = false;
 					}
@@ -5121,7 +5356,8 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
 						ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
 
-					if (GetDistance(iPlayerPosition) > 50.0f)
+					if (GetDistance(iPlayerPosition) > 25.0f 
+						|| pMember->iHP == 0)
 					{
 						bUse = false;
 					}
@@ -5208,6 +5444,22 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 				bUse = false;
 			}
 
+			if (bIsPartyRequest)
+			{
+				std::lock_guard<std::recursive_mutex> lock(m_mutexPartyMembers);
+				auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+					[&](const PartyMember& a)
+					{
+						return a.iMemberID == iTargetID;
+					});
+
+				if (pMember != m_vecPartyMembers.end())
+				{
+					if (pMember->iHP == 0)
+						bUse = false;
+				}
+			}
+
 			DWORD iPlayerBase = GetEntityBase(iTargetID);
 
 			if (iPlayerBase == 0)
@@ -5219,7 +5471,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Z")),
 					ReadFloat(iPlayerBase + GetAddress("KO_OFF_Y")));
 
-				if (GetDistance(iPlayerPosition) > 50.0f)
+				if (GetDistance(iPlayerPosition) > 25.0f)
 				{
 					bUse = false;
 				}
@@ -5258,7 +5510,7 @@ bool ClientHandler::HealthPotionProcess()
 
 	std::sort(vecPotions.begin(), vecPotions.end(), pSort);
 
-	TInventory tInventoryItem;
+	TItemData tInventoryItem;
 
 	for (const auto& x : vecPotions)
 	{
@@ -5295,7 +5547,7 @@ bool ClientHandler::ManaPotionProcess()
 
 	std::sort(vecPotions.begin(), vecPotions.end(), pSort);
 
-	TInventory tInventoryItem;
+	TItemData tInventoryItem;
 
 	for (const auto& x : vecPotions)
 	{
@@ -5328,10 +5580,10 @@ void ClientHandler::RouteProcess()
 			if (IsBlinking())
 				continue;
 
-			if (m_vecRoute.size() == 0)
+			if (IsDeath())
 				continue;
 
-			if (IsDeath())
+			if (m_vecRoute.size() == 0)
 				continue;
 
 			Route pRoute = m_vecRoute.front();
@@ -5339,10 +5591,16 @@ void ClientHandler::RouteProcess()
 			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
+			iRouteStep = pRoute.eStepType;
+
 			switch (pRoute.eStepType)
 			{
 			case RouteStepType::STEP_MOVE:
 			{
+
+				if (m_vecRoute.size() == 0)
+					continue;
+
 				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
 
 				if (fDistance > 3.0f)
@@ -5355,6 +5613,9 @@ void ClientHandler::RouteProcess()
 
 			case RouteStepType::STEP_TOWN:
 			{
+				if (m_vecRoute.size() == 0)
+					continue;
+
 				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
 
 				if (fDistance > 50.0f)
@@ -5428,9 +5689,45 @@ void ClientHandler::RouteProcess()
 					{
 						int iPosition = 14 + (i - 1);
 
-						TInventory pInventory = GetInventoryItemSlot((uint8_t)iPosition);
+						TItemData pInventory = GetInventoryItemSlot((uint8_t)iPosition);
 
 						if (pInventory.iItemID == 0)
+							continue;
+
+						std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+						if (!m_Bot->GetItemTable(&pItemTable))
+							continue;
+
+						uint32_t iItemBaseID = pInventory.iItemID / 1000 * 1000;
+						auto pItemData = pItemTable->find(iItemBaseID);
+
+						if (pItemData == pItemTable->end())
+							continue;
+
+						if (pItemData->second.byNeedRace == RACE_TRADEABLE_IN_72HR
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE_SOLD
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE_SOLD2
+							|| pItemData->second.byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+							continue;
+
+						std::map<uint32_t, __TABLE_ITEM_EXTENSION>* pItemExtensionTable;
+						if (!m_Bot->GetItemExtensionTable(pItemData->second.byExtIndex, &pItemExtensionTable))
+							continue;
+
+						auto pItemExtensionData = pItemExtensionTable->find(pInventory.iItemID % 1000);
+
+						if (pItemExtensionData == pItemExtensionTable->end())
+							continue;
+
+						if (pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_UNIQUE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_RED
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_PET
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_EVENT
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_COSPRE
+							|| pItemExtensionData->second.iItemType == ITEM_ATTRIBUTE_MINERVA)
 							continue;
 
 						if (m_vecItemSell[iSellPageCount].size() == 14)
@@ -5514,10 +5811,13 @@ void ClientHandler::RouteProcess()
 								std::to_string(iItemId).c_str(),
 								jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
 
-							TInventory pInventoryItem = GetInventoryItem(iItemId);
+							TItemData pInventoryItem = GetInventoryItem(iItemId);
 
 							if (pInventoryItem.iItemID != 0)
 							{
+								if (pInventoryItem.iCount >= iItemCount)
+									continue;
+
 								iInventoryPosition = (uint8_t)pInventoryItem.iPos;
 								iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
 							}
@@ -5592,7 +5892,7 @@ void ClientHandler::RouteProcess()
 									case 12:
 									case 13:
 									{
-										TInventory pInventory = GetInventoryItemSlot(i);
+										TItemData pInventory = GetInventoryItemSlot(i);
 
 										if (pInventory.iItemID == 0)
 											continue;
@@ -5643,7 +5943,7 @@ void ClientHandler::RouteProcess()
 								case 12:
 								case 13:
 								{
-									TInventory pInventory = GetInventoryItemSlot(i);
+									TItemData pInventory = GetInventoryItemSlot(i);
 
 									if (pInventory.iItemID == 0)
 										continue;
@@ -5663,7 +5963,138 @@ void ClientHandler::RouteProcess()
 
 			case RouteStepType::STEP_INN:
 			{
-				//TODO: Inn hostes
+				std::vector<TItemData> vecItemList;
+				std::vector<TItemData> vecFlaggedItemList;
+
+				if (GetInventoryItemList(vecItemList))
+				{
+					for (const TItemData& pItem : vecItemList)
+					{
+						uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+
+						if (iItemFlag != INVENTORY_ITEM_FLAG_INN)
+						{
+							continue;
+						}
+
+						vecFlaggedItemList.push_back(pItem);
+					}
+				}
+
+				if (vecFlaggedItemList.size() > 0)
+				{
+					float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+
+					if (fDistance > 50.0f)
+					{
+						SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+						continue;
+					}
+
+					struct SNpcInformation
+					{
+						SNpcInformation(int32_t iNpcID, int32_t iFamilyType, Vector3 v3NpcPosition) :
+							m_iNpcID(iNpcID), m_iFamilyType(iFamilyType), m_v3NpcPosition(v3NpcPosition) {};
+
+						int32_t m_iNpcID;
+						int32_t m_iFamilyType;
+						Vector3 m_v3NpcPosition;
+					};
+
+					SNpcInformation* pWarehouseNpcInfo = nullptr;
+
+					{
+						std::lock_guard<std::recursive_mutex> lock(m_mutexNpc);
+						std::vector<TNpc> tmpVecNpc = m_vecNpc;
+
+						Vector3 v3CurrentPosition = GetPosition();
+
+						auto pSort = [&](TNpc const& a, TNpc const& b)
+						{
+							auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+							auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+
+							if (fADistance != fBDistance)
+							{
+								return fADistance < fBDistance;
+							}
+
+							return false;
+						};
+
+						std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
+
+						for (auto& e : tmpVecNpc)
+						{
+							if (e.iFamilyType == 31)
+							{
+								pWarehouseNpcInfo = new SNpcInformation(e.iID, e.iFamilyType, Vector3(e.fX, e.fZ, e.fY));
+								break;
+							}
+						}
+					}
+
+					if (pWarehouseNpcInfo)
+					{
+						while (
+							m_vecRoute.size() > 0
+							&& GetDistance(Vector3(GetX(), 0.0f, GetY()), pWarehouseNpcInfo->m_v3NpcPosition) > 3.0f)
+						{
+							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+							if (GetActionState() == PSA_SPELLMAGIC)
+								continue;
+
+							SetMovePosition(pWarehouseNpcInfo->m_v3NpcPosition);
+						}
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+						SendWarehouseOpen(pWarehouseNpcInfo->m_iNpcID);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+						for (const TItemData& pItem : vecFlaggedItemList)
+						{
+							uint8_t iContable = 0;
+
+							__TABLE_ITEM* pItemData;
+							if (m_Bot->GetItemData(pItem.iItemID, pItemData))
+							{
+								iContable = pItemData->byContable;
+							}
+
+							int iRealSlot = GetWarehouseAvailableSlot(pItem.iItemID, iContable);
+							int iPage = iRealSlot / 24;
+
+							int iSlot = iRealSlot;
+
+							if (iContable)
+							{
+								if (GetWarehouseItemCount(pItem.iItemID) > 0)
+								{
+									iSlot = (iRealSlot) % 24;
+								}
+							}
+
+							SendWarehouseGetIn(pWarehouseNpcInfo->m_iNpcID, pItem.iItemID, (uint8_t)iPage, pItem.iPos - 14, (uint8_t)iSlot, pItem.iCount);
+
+							m_PlayerMySelf.tWarehouse[iRealSlot] = pItem;
+							m_PlayerMySelf.tWarehouse[iRealSlot].iPos = iRealSlot;
+
+							if (iContable)
+							{
+								m_PlayerMySelf.tWarehouse[iRealSlot].iCount += pItem.iCount;
+							}
+						}
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+						SendNpcEvent(pWarehouseNpcInfo->m_iNpcID);
+
+						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+					}
+				}
 			}
 			break;
 
@@ -5677,6 +6108,9 @@ void ClientHandler::RouteProcess()
 
 			if (m_vecRoute.size() > 0)
 				m_vecRoute.erase(m_vecRoute.begin());
+
+			if(m_vecRoute.size() == 0)
+				iRouteStep = RouteStepType::STEP_NONE;
 		}
 		catch (const std::exception& e)
 		{
@@ -5703,7 +6137,7 @@ void ClientHandler::SupplyProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 			if (IsZoneChanging())
 				continue;
@@ -5763,6 +6197,136 @@ void ClientHandler::SupplyProcess()
 #endif
 }
 
+void ClientHandler::LevelDownerProcess()
+{
+#ifdef DEBUG
+	printf("ClientHandler::LevelDownerProcess Started\n");
+#endif
+
+	while (m_bWorking)
+	{
+		try
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+			if (IsZoneChanging())
+				continue;
+
+			if (IsBlinking())
+				continue;
+
+			if (IsRouting())
+				continue;
+
+			bool bLevelDownerEnable = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("Enable"), false);
+
+			if (!bLevelDownerEnable)
+				continue;
+
+			int iLevelDownerNpcId = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), -1);
+
+			if (iLevelDownerNpcId == -1)
+				continue;
+
+			bool bLevelDownerStopNearbyPlayer = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("StopIfNearbyPlayer"), true);
+
+			if (bLevelDownerStopNearbyPlayer 
+				&& m_vecPlayer.size() > 0)
+				continue;
+
+			bool bLevelDownerLevelLimitEnable = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimitEnable"), true);
+			int iLevelDownerLevelLimit = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimit"), 35);
+
+			if (bLevelDownerLevelLimitEnable 
+				&& GetLevel() < iLevelDownerLevelLimit)
+				continue;
+
+			if (IsDeath())
+				SendRegenePacket();
+			else
+			{
+				Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+				pkt
+					<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING)
+					<< uint32_t(300215)
+					<< iLevelDownerNpcId
+					<< m_PlayerMySelf.iID;
+
+				SendPacket(pkt);
+			}
+		}
+		catch (const std::exception& e)
+		{
+#ifdef DEBUG
+			printf("LevelDownerProcess:Exception: %s\n", e.what());
+#else
+			UNREFERENCED_PARAMETER(e);
+#endif
+		}
+	}
+
+#ifdef DEBUG
+	printf("ClientHandler::LevelDownerProcess Stopped\n");
+#endif
+}
+
+void ClientHandler::Test()
+{
+	/*std::vector<TItemData> vecItemList;
+	std::vector<TItemData> vecFlaggedItemList;
+
+	if (GetInventoryItemList(vecItemList))
+	{
+		for (const TItemData& pItem : vecItemList)
+		{
+			uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+
+			if (iItemFlag != INVENTORY_ITEM_FLAG_VIP)
+			{
+				continue;
+			}
+
+			vecFlaggedItemList.push_back(pItem);
+		}
+	}
+
+	if (vecFlaggedItemList.size() > 0)
+	{
+		SendOpenVipWarehouse();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+		for (const TItemData& pItem : vecFlaggedItemList)
+		{
+			uint8_t iContable = 0;
+
+			__TABLE_ITEM* pItemData;
+			if (m_Bot->GetItemData(pItem.iItemID, pItemData))
+			{
+				iContable = pItemData->byContable;
+			}
+
+			int iRealSlot = GetVipWarehouseAvailableSlot(pItem.iItemID, iContable);
+
+			SendVipWarehouseGetIn(0, pItem.iItemID, 0, pItem.iPos - 14, (uint8_t)iRealSlot, pItem.iCount);
+
+			m_PlayerMySelf.tVipWarehouse[iRealSlot] = pItem;
+			m_PlayerMySelf.tVipWarehouse[iRealSlot].iPos = iRealSlot;
+
+			if (iContable)
+			{
+				m_PlayerMySelf.tVipWarehouse[iRealSlot].iCount += pItem.iCount;
+			}
+		}
+
+		ToggleInventory();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+		SendShoppingMall(ShoppingMallType::STORE_CLOSE);		
+	}*/	
+}
+
 void ClientHandler::SetRoute(std::vector<Route> vecRoute)
 {
 	m_vecRoute = vecRoute;
@@ -5770,6 +6334,8 @@ void ClientHandler::SetRoute(std::vector<Route> vecRoute)
 
 void ClientHandler::ClearRoute()
 {
+	iRouteStep = RouteStepType::STEP_NONE;
 	m_vecRoute.clear();
 }
+
 

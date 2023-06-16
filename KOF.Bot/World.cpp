@@ -22,9 +22,7 @@ void World::Load(uint8_t iIndex)
 		try
 		{
 			std::string szFileName = 
-				std::filesystem::current_path().string() 
-				+ skCryptDec("\\data\\")
-				+ skCryptDec("\\world\\") 
+				skCryptDec("data\\world\\")
 				+ std::to_string(iIndex) 
 				+ skCryptDec(".json");
 
@@ -49,9 +47,7 @@ void World::Load(uint8_t iIndex)
 			pWorldData.fMapLength = jWorldData[szMapLengthAttribute.c_str()].get<float>();
 
 			std::string szMapImageFilePath =
-				std::filesystem::current_path().string()
-				+ skCryptDec("\\data\\")
-				+ skCryptDec("\\image\\")
+				skCryptDec("data\\image\\")
 				+ pWorldData.szMapImageFile;
 
 			std::ifstream pMapImageRawDataStream(szMapImageFilePath.c_str(), std::ios::in | std::ios::binary);
@@ -76,9 +72,7 @@ void World::Load(uint8_t iIndex)
 				4);
 
 			std::string szMinimapImageFilePath =
-				std::filesystem::current_path().string()
-				+ skCryptDec("\\data\\")
-				+ skCryptDec("\\image\\")
+				skCryptDec("data\\image\\")
 				+ pWorldData.szMiniMapImageFile;
 
 			std::ifstream pMiniMapImageRawDataStream(szMinimapImageFilePath.c_str(), std::ios::in | std::ios::binary);

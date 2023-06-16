@@ -1,4 +1,5 @@
-#pragma once
+﻿#pragma once
+#include <corecrt_math_defines.h>
 
 static const int COSP_MAX = 9;              // 9 cospre slots
 static const int SLOT_MAX = 14;             // 14 equipped item slots
@@ -23,13 +24,90 @@ struct Vector3
 	float m_fZ;
 	float m_fY;
 
-	Vector3 GetEndPoint(const Vector3& endPoint, const float distance)
+	Vector3 GetEndPoint(const Vector3& endPoint, const float distance) const
 	{
 		Vector3 v(endPoint.m_fX - m_fX, endPoint.m_fZ - m_fZ, endPoint.m_fY - m_fY);
 		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fZ * v.m_fZ + v.m_fY * v.m_fY);
 		Vector3 u(v.m_fX / norm, v.m_fZ / norm, v.m_fY / norm);
 		Vector3 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fZ - distance * u.m_fZ, endPoint.m_fY - distance * u.m_fY);
 		return newEndPoint;
+	}
+
+	Vector3 MoveTowards(Vector3 target, float maxDistanceDelta) const
+	{
+		Vector3 vectorToTarget = { target.m_fX - m_fX, target.m_fZ - m_fZ, target.m_fY - m_fY };
+
+		float distance = std::sqrt(vectorToTarget.m_fX * vectorToTarget.m_fX +
+			vectorToTarget.m_fZ * vectorToTarget.m_fZ +
+			vectorToTarget.m_fY * vectorToTarget.m_fY);
+
+		if (distance <= maxDistanceDelta || distance == 0.0f) 
+		{
+			return target;
+		}
+
+		float scaleFactor = maxDistanceDelta / distance;
+
+		return { m_fX + vectorToTarget.m_fX * scaleFactor,
+				m_fZ + vectorToTarget.m_fZ * scaleFactor,
+				m_fY + vectorToTarget.m_fY * scaleFactor };
+	}
+
+	std::vector<Vector3> MoveTowardsSteps(const Vector3& start, const Vector3& target, float maxDistanceDelta)
+	{
+		std::vector<Vector3> steps;
+		Vector3 currentPosition = start;
+
+		while (currentPosition != target)
+		{
+			Vector3 newPosition = currentPosition.MoveTowards(target, maxDistanceDelta);
+			steps.push_back(newPosition);
+			currentPosition = newPosition;
+		}
+
+		return steps;
+	}
+
+	bool operator == (const Vector3& vec)
+	{
+		if (m_fX == vec.m_fX && m_fZ == vec.m_fZ && m_fY == vec.m_fY)
+			return true;
+
+		return false;
+	}
+
+	bool operator != (const Vector3& vec)
+	{
+		if (m_fX != vec.m_fX || m_fZ != vec.m_fZ || m_fY != vec.m_fY)
+			return true;
+
+		return false;
+	}
+
+	Vector3 operator+(const Vector3& other) const 
+	{
+		return Vector3(m_fX + other.m_fX, m_fZ + other.m_fZ, m_fY + other.m_fY);
+	}
+
+	Vector3 operator-(const Vector3& other) const 
+	{
+		return Vector3(m_fX - other.m_fX, m_fZ - other.m_fZ, m_fY - other.m_fY);
+	}
+
+	Vector3 operator*(float scalar) const 
+	{
+		return Vector3(m_fX * scalar, m_fZ * scalar, m_fY * scalar);
+	}
+
+	float Magnitude() const 
+	{
+		return std::sqrt(m_fX * m_fX + m_fZ * m_fZ + m_fY * m_fY);
+	}
+
+	Vector3 Normalize() const 
+	{
+		float mag = Magnitude();
+		return Vector3(m_fX / mag, m_fZ / mag, m_fY / mag);
 	}
 };
 
@@ -98,7 +176,7 @@ struct EntityInfo
 	float m_fRadius;
 };
 
-typedef struct SInventory
+typedef struct SItemData
 {
 	int32_t				iPos;
 	uint32_t			iItemID;
@@ -108,7 +186,7 @@ typedef struct SInventory
 	int16_t				iRentalTime;
 	uint32_t			iSerial;
 	uint32_t			iExpirationTime;
-} TInventory;
+} TItemData;
 
 typedef struct SPlayer
 {
@@ -180,7 +258,9 @@ typedef struct SPlayer
 	int16_t			iMoveSpeed;
 	uint8_t			iMoveType;
 
-	TInventory		tInventory[INVENTORY_TOTAL];
+	TItemData		tInventory[INVENTORY_TOTAL];
+	TItemData		tWarehouse[WAREHOUSE_MAX];
+	TItemData		tVipWarehouse[VIP_HAVE_MAX];
 
 	bool			bBlinking;
 	float			fRotation;

@@ -39,7 +39,7 @@ void Service::Initialize()
     m_szToken = m_iniAppConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
 //#ifdef DEBUG
-//    Connect(skCryptDec("127.0.0.1"), 8888);
+   //Connect(skCryptDec("127.0.0.1"), 8888);
 //#else
     Connect(skCryptDec("watchdog.kofbot.com"), 8888);
 //#endif 
@@ -191,7 +191,7 @@ void Service::HandlePacket(Packet& pkt)
         }
         break;
 
-        case PacketHeader::INJECTION:
+       /* case PacketHeader::INJECTION:
         {
             if (m_iId == -1) return;
 
@@ -204,7 +204,7 @@ void Service::HandlePacket(Packet& pkt)
 
             Injection(iProcesssId, vecBuffer);
         }
-        break;
+        break;*/
     }
 }
 

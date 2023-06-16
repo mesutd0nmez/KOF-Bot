@@ -113,6 +113,10 @@ public:
         }
 
         WaitForSingleObject(hThread, INFINITE);
+
+        DWORD iExitCode;
+        GetExitCodeThread(hThread, &iExitCode);
+
         CloseHandle(hThread);
         VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
 
@@ -121,7 +125,7 @@ public:
 
     inline static bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
     {
-        HANDLE hThread = CreateRemoteThread(hProcess, 0, 0, (LPTHREAD_START_ROUTINE)pAddress, 0, 0, 0);
+        HANDLE hThread = CreateRemoteThread(hProcess, NULL, 0, reinterpret_cast<LPTHREAD_START_ROUTINE>(pAddress), NULL, 0, NULL);
 
         if (hThread != nullptr)
         {

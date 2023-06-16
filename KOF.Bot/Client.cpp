@@ -2,7 +2,6 @@
 #include "Client.h"
 #include "Bot.h"
 #include "Memory.h"
-#include "Guard.h"
 
 Client::Client()
 {
@@ -42,6 +41,8 @@ void Client::Clear()
 
 	m_fAttackDelta = 1.0f;
 	m_fAttackTimeRecent = Bot::TimeGet();
+
+	m_msLastGenieStartTime = std::chrono::milliseconds(0);
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -423,7 +424,7 @@ bool Client::IsPriest(int32_t eClass)
 
 uint32_t Client::GetProperHealthBuff(int MaxHp)
 {
-	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60.0f);
+	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60);
 
 	if (GetSkillPoint(1) >= 78)
 	{
@@ -805,9 +806,9 @@ int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 	return iItemCount;
 }
 
-TInventory Client::GetInventoryItem(uint32_t iItemID)
+TItemData Client::GetInventoryItem(uint32_t iItemID)
 {
-	TInventory pInventory;
+	TItemData pInventory;
 	memset(&pInventory, 0, sizeof(pInventory));
 
 	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
@@ -899,9 +900,9 @@ int32_t Client::GetInventoryEmptySlot(std::vector<int32_t> vecExcept)
 	return -1;
 }
 
-TInventory Client::GetInventoryItemSlot(uint8_t iSlotPosition)
+TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 {
-	TInventory pInventory;
+	TItemData pInventory;
 	memset(&pInventory, 0, sizeof(pInventory));
 
 	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
@@ -933,6 +934,46 @@ TInventory Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 	}
 
 	return pInventory;
+}
+
+bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)
+{
+	DWORD iInventoryBase = Read4Byte(Read4Byte(GetAddress("KO_PTR_DLG")) + GetAddress("KO_OFF_INVENTORY_BASE"));
+
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		TItemData pInventory;
+		memset(&pInventory, 0, sizeof(pInventory));
+
+		pInventory.iPos = i;
+
+		DWORD iItemBase = Read4Byte(iInventoryBase + (GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+
+		if (m_Bot->GetPlatformType() == PlatformType::USKO)
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64)) != 0)
+			{
+				pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x60)) + Read4Byte(Read4Byte(iItemBase + 0x64));
+				pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x68);
+				pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x6C);
+			}
+
+			vecItemList.push_back(pInventory);
+		}
+		else if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+		{
+			if (Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C)) != 0)
+			{
+				pInventory.iItemID = Read4Byte(Read4Byte(iItemBase + 0x68)) + Read4Byte(Read4Byte(iItemBase + 0x6C));
+				pInventory.iCount = (uint16_t)Read4Byte(iItemBase + 0x70);
+				pInventory.iDurability = (uint16_t)Read4Byte(iItemBase + 0x74);
+			}
+
+			vecItemList.push_back(pInventory);
+		}
+	}
+
+	return vecItemList.size() > 0;
 }
 
 int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
@@ -1300,7 +1341,6 @@ void Client::PushPhase(DWORD iAddress)
 	BYTE byCode[] =
 	{
 		0x60,
-		0xC6,0x81,0x0C,0x01,0x0,0x0,0x01,
 		0xFF,0x35,0x0,0x0,0x0,0x0,
 		0xBF,0,0,0,0,
 		0xFF,0xD7,
@@ -1310,10 +1350,10 @@ void Client::PushPhase(DWORD iAddress)
 		0xC2,0x04,0x0,
 	};
 
-	CopyBytes(byCode + 10, iAddress);
+	CopyBytes(byCode + 3, iAddress);
 
 	DWORD dwPushPhase = GetAddress(skCryptDec("KO_PTR_PUSH_PHASE"));
-	CopyBytes(byCode + 15, dwPushPhase);
+	CopyBytes(byCode + 8, dwPushPhase);
 
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
@@ -1485,7 +1525,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			}
 
 			SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
-			std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
+			//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
 		}
 
 		uint32_t iArrowCount = 0;
@@ -1561,7 +1601,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID)
 			}
 
 			SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
-			std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
+			//std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
 		}
 
 		if (pSkillData.iFlyingFX != 0)
@@ -1624,9 +1664,9 @@ void Client::SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< int32_t(-1)
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< uint32_t(0) << uint32_t(0) << uint32_t(0) << uint32_t(0)
 		<< int16_t(pSkillData.iReCastTime)
 		<< uint32_t(0);
@@ -1643,9 +1683,9 @@ void Client::SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t i
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< iTargetID
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< arrowIndex
 		<< uint32_t(0) << uint32_t(0) << int16_t(0);
 
@@ -1667,9 +1707,9 @@ void Client::SendStartSkillMagicAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32
 	else
 	{
 		pkt
-			<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-			<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-			<< uint32_t(v3TargetPosition.m_fY * 10.0f);
+			<< uint32_t(v3TargetPosition.m_fX)
+			<< int32_t(v3TargetPosition.m_fZ)
+			<< uint32_t(v3TargetPosition.m_fY);
 	}
 
 	if (pSkillData.iTarget == SkillTargetType::TARGET_PARTY)
@@ -1695,9 +1735,9 @@ void Client::SendStartSkillMagicAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< int32_t(-1)
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< uint32_t(0) << uint32_t(0) << uint32_t(0)
 		<< uint32_t(0) << uint32_t(0) << int16_t(0);
 
@@ -1713,9 +1753,9 @@ void Client::SendStartMagicAtTarget(TABLE_UPC_SKILL pSkillData, int32_t iTargetI
 		<< pSkillData.iID
 		<< m_PlayerMySelf.iID
 		<< iTargetID
-		<< uint32_t(v3TargetPosition.m_fX * 10.0f)
-		<< int32_t(v3TargetPosition.m_fZ * 10.0f)
-		<< uint32_t(v3TargetPosition.m_fY * 10.0f)
+		<< uint32_t(v3TargetPosition.m_fX)
+		<< int32_t(v3TargetPosition.m_fZ)
+		<< uint32_t(v3TargetPosition.m_fY)
 		<< int32_t(-101)
 		<< arrowIndex
 		<< uint32_t(0) << uint32_t(0) << int16_t(0) << int16_t(0) << int16_t(0) << int16_t(0);
@@ -1743,14 +1783,14 @@ void Client::SendMovePacket(Vector3 vecStartPosition, Vector3 vecTargetPosition,
 	Packet pkt = Packet(WIZ_MOVE);
 
 	pkt
-		<< uint16_t(vecStartPosition.m_fX)
-		<< uint16_t(vecStartPosition.m_fY)
-		<< int16_t(vecStartPosition.m_fZ)
+		<< uint16_t(vecStartPosition.m_fX * 10.0f)
+		<< uint16_t(vecStartPosition.m_fY * 10.0f)
+		<< int16_t(vecStartPosition.m_fZ * 10.0f)
 		<< iMoveSpeed
 		<< iMoveType
-		<< uint16_t(vecTargetPosition.m_fX)
-		<< uint16_t(vecTargetPosition.m_fY)
-		<< int16_t(vecTargetPosition.m_fZ);
+		<< uint16_t(vecTargetPosition.m_fX * 10.0f)
+		<< uint16_t(vecTargetPosition.m_fY * 10.0f)
+		<< int16_t(vecTargetPosition.m_fZ * 10.0f);
 
 	SendPacket(pkt);
 }
@@ -1899,6 +1939,8 @@ void Client::SetTarget(uint32_t iTargetBase)
 
 	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 	CloseHandle(hProcess);
+
+	//Write4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR"))) + GetAddress(skCryptDec("KO_OFF_MOB")), GetID(iTargetBase));
 }
 
 bool Client::UseItem(uint32_t iItemID)
@@ -2073,7 +2115,7 @@ bool Client::IsNeedRepair()
 		case 12:
 		case 13:
 		{
-			TInventory pInventory = GetInventoryItemSlot(i);
+			TItemData pInventory = GetInventoryItemSlot(i);
 
 			if (pInventory.iItemID == 0)
 				continue;
@@ -2112,7 +2154,7 @@ bool Client::IsNeedSupply()
 			if (!bSelected)
 				continue;
 
-			TInventory pInventoryItem = GetInventoryItem(iSupplyItemId);
+			TItemData pInventoryItem = GetInventoryItem(iSupplyItemId);
 
 			if (pInventoryItem.iItemID == 0)
 				return true;
@@ -2141,7 +2183,7 @@ bool Client::IsNeedSell()
 		{
 			int iPosition = 14 + (i - 1);
 
-			TInventory pInventory = GetInventoryItemSlot((uint8_t)iPosition);
+			TItemData pInventory = GetInventoryItemSlot((uint8_t)iPosition);
 
 			if (pInventory.iItemID == 0)
 				return false;
@@ -2388,7 +2430,34 @@ void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 	}
 }
 
+void Client::SendWarehouseOpen(uint32_t iNpcID)
+{
+	Packet pkt = Packet(WIZ_WAREHOUSE);
+
+	pkt
+		<< uint8_t(1)
+		<< iNpcID;
+
+	SendPacket(pkt);
+}
+
 void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount)
+{
+	Packet pkt = Packet(WIZ_WAREHOUSE);
+
+	pkt
+		<< uint8_t(2)
+		<< int32_t(iNpcID)
+		<< uint32_t(iItemID)
+		<< uint8_t(iPage)
+		<< uint8_t(iCurrentPosition)
+		<< uint8_t(iTargetPosition)
+		<< uint32_t(iCount);
+
+	SendPacket(pkt);
+}
+
+void Client::SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount)
 {
 	Packet pkt = Packet(WIZ_WAREHOUSE);
 
@@ -2402,6 +2471,44 @@ void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage,
 		<< uint32_t(iCount);
 
 	SendPacket(pkt);
+}
+
+int32_t Client::GetWarehouseItemCount(uint32_t iItemID)
+{
+	for (size_t i = 0; i < WAREHOUSE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tWarehouse[i];
+
+		if (pItem->iItemID == iItemID)
+		{
+			return pItem->iCount;
+		}
+	}
+
+	return 0;
+}
+
+int32_t Client::GetWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable)
+{
+	int iAvailableSlot = -1;
+
+	for (size_t i = 0; i < WAREHOUSE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tWarehouse[i];
+
+		if (iAvailableSlot == -1 
+			&& pItem->iItemID == 0)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+
+		if (pItem->iItemID == iItemID && iContable)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+	}
+
+	return iAvailableSlot;
 }
 
 void Client::SendUseGeniePotion(uint32_t iItemID)
@@ -2462,25 +2569,156 @@ void Client::SendPartyInsert(std::string szName)
 	SendPacket(pkt);
 }
 
-Vector3 Client::MoveTowards(Vector3 current, Vector3 target, float maxDistanceDelta)
+void Client::PatchObjectCollision(bool bEnable)
 {
-	float toVector_x = (target.m_fX - current.m_fX);
-	float toVector_y = (target.m_fY - current.m_fY);
-	float toVector_z = (target.m_fZ - current.m_fZ);
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
 
-	float sqdist = (toVector_x * toVector_x) + (toVector_y * toVector_y) + (toVector_z * toVector_z);
+	if (!hProcess)
+		return;
 
-	if ((sqdist == 0) || ((maxDistanceDelta >= 0) && (sqdist <= (maxDistanceDelta * maxDistanceDelta))))
-		return target;
+	if (bEnable)
+	{
+		BYTE byPatch[] =
+		{
+			0x75
+		};
 
-	float dist = sqrt(sqdist);
+		WriteProcessMemory(hProcess, (LPVOID*)GetAddress("KO_OBJECT_COLLISION_CHECK"), byPatch, sizeof(byPatch), 0);
+	}
+	else
+	{
+		BYTE byPatch[] =
+		{
+			0x74
+		};
 
-	float X = round(current.m_fX + ((toVector_x / dist) * maxDistanceDelta * 10.0f));
-	float Y = round(current.m_fY + ((toVector_y / dist) * maxDistanceDelta * 10.0f));
-	float Z = round(current.m_fZ + ((toVector_z / dist) * maxDistanceDelta * 10.0f));
-
-	return Vector3(X, Z, Y);
+		WriteProcessMemory(hProcess, (LPVOID*)GetAddress("KO_OBJECT_COLLISION_CHECK"), byPatch, sizeof(byPatch), 0);
+	}
 }
+
+void Client::SendRearrangeInventory()
+{
+	Packet pkt = Packet(WIZ_ITEM_MOVE);
+
+	pkt << uint8_t(2);
+
+	SendPacket(pkt);
+}
+
+void Client::SendOpenVipWarehouse(uint32_t iItemID)
+{
+	Packet pkt = Packet(WIZ_VIPWAREHOUSE);
+
+	pkt << uint8_t(1) << iItemID;
+
+	SendPacket(pkt);
+}
+
+void Client::SendVipWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint16_t iCount)
+{
+	Packet pkt = Packet(WIZ_VIPWAREHOUSE);
+
+	pkt
+		<< uint8_t(2)
+		<< int32_t(iNpcID)
+		<< uint32_t(iItemID)
+		<< uint8_t(iPage)
+		<< uint8_t(iCurrentPosition)
+		<< uint8_t(iTargetPosition)
+		<< uint16_t(iCount);
+
+	SendPacket(pkt);
+}
+
+int32_t Client::GetVipWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable)
+{
+	int iAvailableSlot = -1;
+
+	for (size_t i = 0; i < VIP_HAVE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tVipWarehouse[i];
+
+		if (iAvailableSlot == -1
+			&& pItem->iItemID == 0)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+
+		if (pItem->iItemID == iItemID && iContable)
+		{
+			iAvailableSlot = pItem->iPos;
+		}
+	}
+
+	return iAvailableSlot;
+}
+
+int32_t Client::GetVipWarehouseItemCount(uint32_t iItemID)
+{
+	for (size_t i = 0; i < VIP_HAVE_MAX; i++)
+	{
+		TItemData* pItem = &m_PlayerMySelf.tVipWarehouse[i];
+
+		if (pItem->iItemID == iItemID)
+		{
+			return pItem->iCount;
+		}
+	}
+
+	return 0;
+}
+
+void Client::SendQuestCompleted(uint32_t iQuestID)
+{
+	Packet pkt = Packet(WIZ_QUEST);
+
+	pkt
+		<< uint8_t(4)
+		<< int32_t(iQuestID);
+
+	SendPacket(pkt);
+}
+
+//CNKO: 0x708EC0
+//USKO: 0x737A60
+void Client::ToggleInventory()
+{
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD iDLG = GetAddress(skCryptDec("KO_PTR_DLG"));
+	CopyBytes(byCode + 3, iDLG);
+
+	DWORD iToggle = 0x737A60;
+	CopyBytes(byCode + 8, iToggle);
+
+	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_Bot->GetInjectedProcessId());
+
+	if (!hProcess)
+		return;
+
+	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
+	CloseHandle(hProcess);
+}
+
+void Client::SendRegenePacket()
+{
+	Packet pkt = Packet(WIZ_REGENE);
+
+	pkt
+		<< uint8_t(1);
+
+	SendPacket(pkt);
+}
+
+//6404de0f0000
 
 BYTE Client::ReadByte(DWORD dwAddress)
 {

@@ -22,6 +22,7 @@ public:
 	void StartHandler();
 	void StopHandler();
 	void Process();
+	void PatchSocket();
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
@@ -29,8 +30,6 @@ private:
 
 private:
 	virtual void OnReady();
-
-	void PatchClient();
 
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
@@ -112,17 +111,7 @@ public:
 	void LoadSkillData();
 
 private:
-	bool IsConfigurationLoaded() { return m_bConfigurationLoaded; };
-
-public:
-	void SetConfigurationLoaded(bool bValue) { m_bConfigurationLoaded = bValue; };
-
-private:
-	bool m_bConfigurationLoaded;
-
-private:
 	void AttackProcess();
-	void SpeedHackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();
 
@@ -143,6 +132,8 @@ private:
 
 	void SupplyProcess();
 
+	void LevelDownerProcess();
+
 private:
 	bool m_bWorking;
 	bool m_bMailSlotWorking;
@@ -154,7 +145,11 @@ private:
 public:
 	void SetRoute(std::vector<Route> vecRoute);
 	bool IsRouting() { return m_vecRoute.size() > 0; };
+	RouteStepType GetRouteStep() { return iRouteStep; };
 	void ClearRoute();
+
+protected:
+	RouteStepType iRouteStep;
 
 private:
 	std::vector<Route> m_vecRoute;
@@ -167,6 +162,9 @@ private:
 
 protected:
 	std::chrono::milliseconds m_msLastSelectedTargetTime;
+
+public:
+	void Test();
 };
 
 

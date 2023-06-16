@@ -40,7 +40,9 @@ public:
 	bool GetSkillExtension4Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>** mapDataOut);
 
 	bool GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut);
+	bool GetItemData(uint32_t iItemID, __TABLE_ITEM*& pItemData);
 	bool GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE_ITEM_EXTENSION>** mapDataOut);
+	bool GetItemExtensionData(uint32_t iItemID, uint8_t iExtensionID, __TABLE_ITEM_EXTENSION*& pOutItemExtensionData);
 	bool GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut);
 
 	bool GetMobTable(std::map<uint32_t, __TABLE_MOB_US>** mapDataOut);
@@ -89,7 +91,7 @@ public:
 
 	PlatformType GetPlatformType() { return m_ePlatformType; }
 
-private:
+public:
 	bool m_bClosed;
 	std::string m_szClientPath;
 	std::string m_szClientExe;
@@ -159,5 +161,16 @@ public:
 
 public:
 	static float TimeGet();
+
+public:
+	void Patch(HANDLE hProcess);
+
+public:
+	JSON GetInventoryFlags() { return m_jInventoryFlags; };
+	uint8_t GetInventoryItemFlag(uint32_t iItemID);
+	void UpdateInventoryItemFlag(JSON pInventoryFlags);
+
+protected:
+	JSON m_jInventoryFlags;
 };
 

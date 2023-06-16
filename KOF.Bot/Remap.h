@@ -106,16 +106,16 @@ public:
 		return true;
 	}
 
-	inline static bool PatchSection(HANDLE hProcess, PVOID regionBase, SIZE_T regionSize)
+	inline static bool PatchSection(HANDLE hProcess, PVOID regionBase, SIZE_T regionSize, DWORD newProtection)
 	{
-		PVOID EmptyAlloc = VirtualAlloc(NULL, regionSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		PVOID EmptyAlloc = VirtualAlloc(NULL, regionSize, MEM_COMMIT | MEM_RESERVE, newProtection);
 
 		if (EmptyAlloc == NULL)
 		{
 			return false;
 		}
 
-		if (RemapViewOfSection(hProcess, regionBase, regionSize, 0x40, EmptyAlloc) == false) 
+		if (RemapViewOfSection(hProcess, regionBase, regionSize, newProtection, EmptyAlloc) == false)
 		{
 			return false;
 		}
@@ -126,6 +126,21 @@ public:
 		}
 
 		return true;
+	}
+
+	inline static PIMAGE_SECTION_HEADER GetSectionByName(const char* name)
+	{
+		uint32_t modulebase = (uint32_t)GetModuleHandleA(0);
+		PIMAGE_NT_HEADERS nt = (PIMAGE_NT_HEADERS)(modulebase + ((PIMAGE_DOS_HEADER)modulebase)->e_lfanew);
+		PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(nt);
+
+		for (int i = 0; i < nt->FileHeader.NumberOfSections; ++i, ++section) 
+		{
+			if (!_stricmp((char*)section->Name, name))
+				return section;
+		}
+
+		return nullptr;
 	}
 };
 

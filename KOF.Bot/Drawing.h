@@ -12,12 +12,14 @@ public:
 
 private:
 	static bool bDrawRoutePlanner;
+	static bool bDrawInventory;
 
 	static void InitializeSceneData();
 
 public:
 	static std::string m_szMainWindowName;
 	static std::string m_szRoutePlannerWindowName;
+	static std::string m_szInventoryWindowName;
 
 public:
 	static void Initialize();
@@ -48,6 +50,9 @@ public:
 	static void DrawAutomatedCharacterSkillTree();
 
 	static void DrawMonsterListTree();
+
+	static void DrawInventory();
+	static void DrawInventoryArea();
 };
 
 #endif

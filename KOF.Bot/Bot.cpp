@@ -56,6 +56,8 @@ Bot::Bot()
 	m_iSelectedAccount = -1;
 
 	m_jSelectedAccount.clear();
+
+	m_jInventoryFlags.clear();
 }
 
 Bot::~Bot()
@@ -169,13 +171,15 @@ void Bot::Process()
 		{
 			if (ConnectPipeServer())
 			{
+#ifdef DEBUG
 				printf("Bot: Connected Pipe server\n");
+#endif
 
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
 
 				pkt << int32_t(m_mapAddress.size());
 
-				for (auto e : m_mapAddress)
+				for (auto &e : m_mapAddress)
 				{
 					pkt << e.first << e.second;
 				}
@@ -192,7 +196,7 @@ void Bot::LoadAccountList()
 {
 	try
 	{
-		m_szAccountListFilePath = skCryptDec(".\\data\\accounts.json");
+		m_szAccountListFilePath = skCryptDec("data\\accounts.json");
 
 		std::ifstream i(m_szAccountListFilePath.c_str());
 		m_jAccountList = JSON::parse(i);
@@ -392,12 +396,15 @@ void Bot::InitializeSupplyData()
 
 	try
 	{
-		std::ifstream i(
-			std::filesystem::current_path().string() 
-			+ skCryptDec("\\data\\") 
-			+ skCryptDec("supply.json"));
+		std::ifstream ifSupply(
+			skCryptDec("data\\supply.json"));
 
-		m_jSupplyList = JSON::parse(i);
+		m_jSupplyList = JSON::parse(ifSupply);
+
+		std::ifstream ifInventoryFlags(
+			skCryptDec("data\\inventoryflags.json"));
+
+		m_jInventoryFlags = JSON::parse(ifInventoryFlags);
 	}
 	catch (const std::exception& e)
 	{
@@ -422,30 +429,22 @@ void Bot::InitializePriestData()
 	try
 	{
 		std::ifstream iHealthBuffList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("health.json"));
+			skCryptDec("data\\health.json"));
 
 		m_jHealthBuffList = JSON::parse(iHealthBuffList);
 
 		std::ifstream iDefenceBuffList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("defence.json"));
+			skCryptDec("data\\defence.json"));
 
 		m_jDefenceBuffList = JSON::parse(iDefenceBuffList);
 
 		std::ifstream iMindBuffList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("mind.json"));
+			skCryptDec("data\\mind.json"));
 
 		m_jMindBuffList = JSON::parse(iMindBuffList);
 
 		std::ifstream iHealList(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("heal.json"));
+			skCryptDec("data\\heal.json"));
 
 		m_jHealList = JSON::parse(iHealList);
 	}
@@ -503,13 +502,55 @@ void Bot::OnLoaded()
 
 	BuildAdress();
 
-	PROCESS_INFORMATION injectedProcessInfo;
-	std::ostringstream strCommandLine;
-	strCommandLine << GetCurrentProcessId();
-
 #ifdef DEBUG
 	printf("Bot: Knight Online process starting\n");
 #endif
+
+#ifdef ENABLE_FIREWALL_RULES
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		std::string strConsoleInfo;
+		ConsoleCommand(skCryptDec("netsh advfirewall firewall show rule name=\"KOF Firewall\""), strConsoleInfo);
+
+		if (strConsoleInfo.find(skCryptDec("No rules match")) == std::string::npos)
+		{
+			ConsoleCommand(skCryptDec("netsh advfirewall firewall set rule name=\"KOF Firewall\" new enable=no"), strConsoleInfo);
+		}
+	}
+#endif
+
+#ifndef DISABLE_XIGNCODE
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		PROCESS_INFORMATION loaderProcessInfo;
+		std::ostringstream strLoaderCommandLine;
+		strLoaderCommandLine << m_szClientPath + "\\"  + m_szClientExe;
+
+		if (!StartProcess(
+			m_szClientPath + "\\XIGNCODE\\", "xldr_KnightOnline_NA_loader_win32.exe", strLoaderCommandLine.str(), loaderProcessInfo))
+		{
+#ifdef DEBUG
+			printf("Bot: Loader cannot started\n");
+#endif
+			Close();
+			return;
+		}
+
+		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+	}
+#endif
+
+	PROCESS_INFORMATION injectedProcessInfo;
+	std::ostringstream strCommandLine;
+
+	if (m_ePlatformType == PlatformType::USKO)
+	{
+		strCommandLine << GetCurrentProcessId();
+	}
+	else if (m_ePlatformType == PlatformType::KOKO)
+	{
+		strCommandLine << "ongate MVGHONG4 NDAYOK1EPZFQT1P6TIQA0YE7ZTD0IWN8LS1V10JLT1V185JX00OMLNQ0 2330316151 15100 0";
+	}
 
 	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
 	{
@@ -520,11 +561,14 @@ void Bot::OnLoaded()
 		return;
 	}
 
+	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
+
 #ifdef DEBUG
 	printf("Bot: Knight Online process started\n");
 #endif
 
-	if (m_ePlatformType == PlatformType::USKO)
+	if (m_ePlatformType == PlatformType::USKO 
+		|| m_ePlatformType == PlatformType::KOKO)
 	{
 		DWORD dwXignCodeEntryPoint = 0;
 
@@ -550,7 +594,7 @@ void Bot::OnLoaded()
 			Remap::PatchSection(
 				injectedProcessInfo.hProcess, 
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")), 
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")));
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
 
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
@@ -558,7 +602,7 @@ void Bot::OnLoaded()
 			Remap::PatchSection(
 				injectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")));
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
 		
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
@@ -566,52 +610,91 @@ void Bot::OnLoaded()
 			Remap::PatchSection(
 				injectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")));
+				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
-
-		HMODULE hModuleAdvapi = GetModuleHandle(skCryptDec("advapi32"));
-
-		if (hModuleAdvapi != 0)
-		{
-			LPVOID* pOpenServicePtr = (LPVOID*)GetProcAddress(hModuleAdvapi, skCryptDec("OpenServiceW"));
-
-			if (pOpenServicePtr != 0)
-			{
-				BYTE byPatch1[] =
-				{
-					0xC2, 0x0C, 0x00
-				};
-
-				WriteProcessMemory(injectedProcessInfo.hProcess, pOpenServicePtr, byPatch1, sizeof(byPatch1), 0);
 
 #ifdef DEBUG
-				printf("Bot: Knight Online Patched\n");
+		printf("Bot: Knight Online Patched\n");
 #endif
-			}
-		}
 
 #ifdef DISABLE_XIGNCODE
-		BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-		WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		if (m_ePlatformType == PlatformType::USKO)
+		{
+			BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
+			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		}
+		else if (m_ePlatformType == PlatformType::KOKO)
+		{
+			BYTE byPatch2[] = { 0xE9, 0x50, 0x07, 0x00, 0x00, 0x90 };
+			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		}
 #endif
-	}
-
-	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
 #ifdef DEBUG
-	printf("Bot: Bypass finished, Knight Online process resuming\n");
+		printf("Bot: Bypass finished, Knight Online process resuming\n");
 #endif
 
-	ResumeProcess(injectedProcessInfo.hProcess);
+		ResumeProcess(injectedProcessInfo.hProcess);
+	}
 
-	SendInjectionRequest(injectedProcessInfo.dwProcessId);
+	Patch(injectedProcessInfo.hProcess);
 
-	//Injection(injectedProcessInfo.dwProcessId, "C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Release\\Pipeline.dll");
+	Injection(injectedProcessInfo.dwProcessId, skCryptDec("KOF.dll"));
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
 #endif
+}
+
+void Bot::Patch(HANDLE hProcess)
+{
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	DWORD iPatchEntryPoint1 = 0;
+	while (iPatchEntryPoint1 == 0)
+		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), &iPatchEntryPoint1, 4, 0);
+
+	BYTE byPatch1[] = 
+	{ 
+		0x90, 
+		0x90, 
+		0x90, 
+		0x90, 
+		0x90 
+	};
+
+	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/*DWORD iPatchEntryPoint2 = 0;
+	while (iPatchEntryPoint2 == 0)
+		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
+
+	BYTE byPatch2[] =
+	{ 
+		0xE9, 0xC5, 0x00, 0x00, 0x00,
+		0x90 
+	};
+
+	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);*/
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	//DWORD iPatchEntryPoint3 = 0;
+	//while (iPatchEntryPoint3 == 0)
+	//	ReadProcessMemory(hProcess, (LPVOID)0xCFA26B, &iPatchEntryPoint3, 4, 0);
+
+	//BYTE byPatch3[] =
+	//{
+	//	0x90,
+	//	0x90,
+	//	0x90,
+	//	0x90,
+	//	0x90
+	//};
+
+	//WriteProcessMemory(hProcess, (LPVOID*)0xCFA26B, byPatch3, sizeof(byPatch3), 0);
 }
 
 void Bot::OnConfigurationLoaded()
@@ -632,6 +715,8 @@ void Bot::OnConfigurationLoaded()
 	printf("User configuration loaded\n");
 #endif
 
+	new std::thread([this]() { UI::Render(this); });
+
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
 #ifdef DEBUG
@@ -646,16 +731,6 @@ void Bot::OnConfigurationLoaded()
 			m_msLastConfigurationSave = msCurrentTime;
 		}
 	};
-
-	new std::thread([this]() 
-	{ 
-		WaitCondition(IsTableLoaded() == false);
-
-		m_ClientHandler->SetConfigurationLoaded(true);
-		m_ClientHandler->StartHandler();
-
-		new std::thread([this]() { UI::Render(this); });
-	});
 }
 
 Ini* Bot::GetAppConfiguration()
@@ -700,12 +775,52 @@ bool Bot::GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut)
 	return m_pTbl_Item->GetData(mapDataOut);
 }
 
+bool Bot::GetItemData(uint32_t iItemID, __TABLE_ITEM*& pOutItemData)
+{
+	if (m_pTbl_Item == nullptr)
+		return false;
+
+	std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+	if (!GetItemTable(&pItemTable))
+		return false;
+
+	uint32_t iItemBaseID = iItemID / 1000 * 1000;
+
+	auto pItemData = pItemTable->find(iItemBaseID);
+
+	if (pItemData == pItemTable->end())
+		return false;
+
+	pOutItemData = &(pItemData->second);
+
+	return true;
+}
+
 bool Bot::GetItemExtensionTable(uint8_t iExtensionID, std::map<uint32_t, __TABLE_ITEM_EXTENSION>** mapDataOut)
 {
 	if (m_pTbl_Item_Extension[iExtensionID] == nullptr)
 		return false;
 
 	return m_pTbl_Item_Extension[iExtensionID]->GetData(mapDataOut);
+}
+
+bool Bot::GetItemExtensionData(uint32_t iItemID, uint8_t iExtensionID, __TABLE_ITEM_EXTENSION*& pOutItemExtensionData)
+{
+	if (m_pTbl_Item_Extension[iExtensionID] == nullptr)
+		return false;
+
+	std::map<uint32_t, __TABLE_ITEM_EXTENSION>* pItemExtensionTable;
+	if (!GetItemExtensionTable(iExtensionID, &pItemExtensionTable))
+		return false;
+
+	auto pItemExtensionData = pItemExtensionTable->find(iItemID % 1000);
+
+	if (pItemExtensionData == pItemExtensionTable->end())
+		return false;
+
+	pOutItemExtensionData = &(pItemExtensionData->second);
+
+	return true;
 }
 
 bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
@@ -983,7 +1098,7 @@ void Bot::BuildAdress()
 
 	if (it != pAddressMap->end())
 	{
-		for (auto e : it->second)
+		for (auto &e : it->second)
 			m_mapAddress.insert(std::make_pair(e.first, std::strtoul(e.second.c_str(), NULL, 16)));
 	}
 
@@ -1017,10 +1132,12 @@ void Bot::SendPipeServer(Packet pkt)
 {
 	if (m_hPipe != INVALID_HANDLE_VALUE)
 	{
+		DWORD iNumberOfBytesWritten;
+
 		WriteFile(m_hPipe,
 			pkt.contents(),
 			pkt.size(),
-			0,
+			&iNumberOfBytesWritten,
 			NULL);
 	}
 }
@@ -1053,4 +1170,40 @@ float Bot::TimeGet()
 	}
 
 	return (float)timeGetTime();
+}
+
+uint8_t Bot::GetInventoryItemFlag(uint32_t iItemID)
+{
+	for (size_t i = 0; i < m_jInventoryFlags.size(); i++)
+	{
+		if (m_jInventoryFlags[i]["id"].get<uint32_t>() == iItemID)
+		{
+			return m_jInventoryFlags[i]["flag"].get<uint8_t>();
+		}
+	}
+
+	return INVENTORY_ITEM_FLAG_NONE;
+};
+
+void Bot::UpdateInventoryItemFlag(JSON pInventoryFlags)
+{
+	try
+	{
+		m_jInventoryFlags = pInventoryFlags;
+
+		std::ofstream o(
+			std::filesystem::current_path().string()
+			+ skCryptDec("\\data\\")
+			+ skCryptDec("inventoryflags.json"));
+
+		o << std::setw(4) << m_jInventoryFlags << std::endl;
+	}
+	catch (const std::exception& e)
+	{
+		DBG_UNREFERENCED_PARAMETER(e);
+
+#ifdef _DEBUG
+		printf("%s\n", e.what());
+#endif
+	}
 }

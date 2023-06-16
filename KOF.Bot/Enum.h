@@ -32,6 +32,7 @@ enum PlatformType
 	USKO,
 	CNKO,
 	JPKO,
+	KOKO,
 };
 
 enum ConfigurationRequestType
@@ -65,6 +66,7 @@ enum Pipe
 	PIPE_SELECT_CHARACTER_LEFT,
 	PIPE_SELECT_CHARACTER_RIGHT,
 	PIPE_SELECT_CHARACTER_ENTER,
+	PIPE_LEGAL_ITEM,
 };
 
 enum StateMove
@@ -493,4 +495,40 @@ enum ChatMode
 	N3_CHAT_CONTINUE,					//지속 공지
 	N3_CHAT_CONTINUE_DELETE,			//지속 공지 삭제
 	N3_CHAT_UNKNOWN = 0xffffffff
+};
+
+enum ItemAttribute 
+{
+	ITEM_ATTRIBUTE_GENERAL = 0,
+	ITEM_ATTRIBUTE_MAGIC = 1,
+	ITEM_ATTRIBUTE_LAIR = 2,
+	ITEM_ATTRIBUTE_CRAFT = 3,
+	ITEM_ATTRIBUTE_UNIQUE = 4,
+	ITEM_ATTRIBUTE_UPGRADE = 5,
+	ITEM_ATTRIBUTE_EVENT = 6,
+	ITEM_ATTRIBUTE_PET = 7,
+	ITEM_ATTRIBUTE_COSPRE = 8,
+	ITEM_ATTRIBUTE_MINERVA = 9,
+	ITEM_ATTRIBUTE_UPGRADE_REVERSE = 11,
+	ITEM_ATTRIBUTE_UNIQUE_REVERSE = 12,
+	ITEM_ATTRIBUTE_RED = 13,
+	ITEM_ATTRIBUTE_UNKNOWN = 0xffffffff
+};
+
+enum ItemRace
+{
+	RACE_TRADEABLE_IN_72HR = 69,  // These items can't be traded until 72 hours from the time of creation
+	RACE_NO_TRADE = 71,  // Cannot be traded
+	RACE_NO_TRADE_SOLD = 20,  // Cannot be traded or sold.
+	RACE_NO_TRADE_SOLD2 = 70,  // Cannot be traded or sold.
+	RACE_NO_TRADE_SOLD_STORE = 73,  // Cannot be traded, sold or stored
+};
+
+enum InventoryItemFlag
+{
+	INVENTORY_ITEM_FLAG_NONE,
+	INVENTORY_ITEM_FLAG_DELETE,
+	INVENTORY_ITEM_FLAG_SELL,
+	INVENTORY_ITEM_FLAG_INN,
+	INVENTORY_ITEM_FLAG_VIP,
 };

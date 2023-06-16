@@ -43,7 +43,8 @@ extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
 
 extern std::string CurlPost(std::string szUrl, JSON jData);
 
-extern void Injection(DWORD iTargetProcess, std::string szPath);
-extern void Injection(DWORD iTargetProcess, std::vector<uint8_t> vecBuff);
+extern bool Injection(DWORD iTargetProcess, std::string szPath);
+
+extern bool ConsoleCommand(const std::string & input, std::string & out);
 
 #endif //PCH_H
