@@ -163,4 +163,5 @@
 #define WIZ_TEST_PACKET			0xFF	// Test packet
 
 #define WIZ_XIGNCODE			0xA0
+#define WIZ_VOICECHAT			0xB5  //Voice Chat
 #define WIZ_CAPTCHA				0xC0

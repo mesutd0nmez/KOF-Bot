@@ -10,8 +10,6 @@ Bot::Bot()
 {
 	m_ClientHandler = nullptr;
 
-	m_dwInjectedProcessId = 0;
-
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
@@ -58,6 +56,8 @@ Bot::Bot()
 	m_jSelectedAccount.clear();
 
 	m_jInventoryFlags.clear();
+
+	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
 }
 
 Bot::~Bot()
@@ -65,8 +65,6 @@ Bot::~Bot()
 	Close();
 
 	m_ClientHandler = nullptr;
-
-	m_dwInjectedProcessId = 0;
 
 	m_bTableLoaded = false;
 
@@ -110,6 +108,8 @@ Bot::~Bot()
 	m_iSelectedAccount = -1;
 
 	m_jSelectedAccount.clear();
+
+	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -161,12 +161,6 @@ void Bot::Process()
 	}
 	else
 	{
-
-		if (m_ClientHandler)
-		{
-			m_ClientHandler->Process();
-		}
-
 		if (m_bPipeWorking == false)
 		{
 			if (ConnectPipeServer())
@@ -187,6 +181,26 @@ void Bot::Process()
 				SendPipeServer(pkt);
 
 				m_bPipeWorking = true;
+			}
+		}
+
+		if (m_ClientHandler)
+		{
+			m_ClientHandler->Process();
+		}
+
+		if (m_iniUserConfiguration)
+		{
+			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+			);
+
+			if ((m_msLastUserConfigurationSaveTime.count() + 30000) < msNow.count())
+			{
+				if (m_iniUserConfiguration->onSaveEvent)
+					m_iniUserConfiguration->onSaveEvent();
+
+				m_msLastUserConfigurationSaveTime = msNow;
 			}
 		}
 	}
@@ -474,19 +488,6 @@ void Bot::OnReady()
 	}
 }
 
-void Bot::OnPong()
-{
-#ifdef DEBUG
-	printf("Bot: OnPong\n");
-#endif
-
-	if (m_iniUserConfiguration)
-	{
-		if (m_iniUserConfiguration->onSaveEvent)
-			m_iniUserConfiguration->onSaveEvent();
-	}
-}
-
 void Bot::OnAuthenticated()
 {
 #ifdef DEBUG
@@ -540,10 +541,9 @@ void Bot::OnLoaded()
 	}
 #endif
 
-	PROCESS_INFORMATION injectedProcessInfo;
 	std::ostringstream strCommandLine;
 
-	if (m_ePlatformType == PlatformType::USKO)
+	if (m_ePlatformType == PlatformType::USKO || m_ePlatformType == PlatformType::CNKO)
 	{
 		strCommandLine << GetCurrentProcessId();
 	}
@@ -552,7 +552,7 @@ void Bot::OnLoaded()
 		strCommandLine << "ongate MVGHONG4 NDAYOK1EPZFQT1P6TIQA0YE7ZTD0IWN8LS1V10JLT1V185JX00OMLNQ0 2330316151 15100 0";
 	}
 
-	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), injectedProcessInfo))
+	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), m_InjectedProcessInfo))
 	{
 #ifdef DEBUG
 		printf("Bot: Process cannot started\n");
@@ -560,8 +560,6 @@ void Bot::OnLoaded()
 		Close();
 		return;
 	}
-
-	m_dwInjectedProcessId = injectedProcessInfo.dwProcessId;
 
 #ifdef DEBUG
 	printf("Bot: Knight Online process started\n");
@@ -577,13 +575,13 @@ void Bot::OnLoaded()
 #endif
 
 		while (dwXignCodeEntryPoint == 0)
-			ReadProcessMemory(injectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
+			ReadProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
 
 #ifdef DEBUG
 		printf("Bot: Entry point ready, Knight Online process suspending\n");
 #endif
 
-		SuspendProcess(injectedProcessInfo.hProcess);
+		SuspendProcess(m_InjectedProcessInfo.hProcess);
 
 #ifdef DEBUG
 		printf("Bot: Knight Online process suspended, bypass started\n");
@@ -592,7 +590,7 @@ void Bot::OnLoaded()
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS1")) > 0)
 		{
 			Remap::PatchSection(
-				injectedProcessInfo.hProcess, 
+				m_InjectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")), 
 				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
@@ -600,7 +598,7 @@ void Bot::OnLoaded()
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
 		{
 			Remap::PatchSection(
-				injectedProcessInfo.hProcess,
+				m_InjectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
 				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
@@ -608,7 +606,7 @@ void Bot::OnLoaded()
 		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
 		{
 			Remap::PatchSection(
-				injectedProcessInfo.hProcess,
+				m_InjectedProcessInfo.hProcess,
 				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
 				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
 		}
@@ -621,12 +619,12 @@ void Bot::OnLoaded()
 		if (m_ePlatformType == PlatformType::USKO)
 		{
 			BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 		}
 		else if (m_ePlatformType == PlatformType::KOKO)
 		{
 			BYTE byPatch2[] = { 0xE9, 0x50, 0x07, 0x00, 0x00, 0x90 };
-			WriteProcessMemory(injectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 		}
 #endif
 
@@ -634,12 +632,16 @@ void Bot::OnLoaded()
 		printf("Bot: Bypass finished, Knight Online process resuming\n");
 #endif
 
-		ResumeProcess(injectedProcessInfo.hProcess);
+		ResumeProcess(m_InjectedProcessInfo.hProcess);
 	}
 
-	Patch(injectedProcessInfo.hProcess);
+	Patch(m_InjectedProcessInfo.hProcess);
 
-	Injection(injectedProcessInfo.dwProcessId, skCryptDec("KOF.dll"));
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("KOF.dll"));
+
+	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll"));
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
@@ -667,7 +669,7 @@ void Bot::Patch(HANDLE hProcess)
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	/*DWORD iPatchEntryPoint2 = 0;
+	DWORD iPatchEntryPoint2 = 0;
 	while (iPatchEntryPoint2 == 0)
 		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
 
@@ -677,24 +679,8 @@ void Bot::Patch(HANDLE hProcess)
 		0x90 
 	};
 
-	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);*/
+	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-	//DWORD iPatchEntryPoint3 = 0;
-	//while (iPatchEntryPoint3 == 0)
-	//	ReadProcessMemory(hProcess, (LPVOID)0xCFA26B, &iPatchEntryPoint3, 4, 0);
-
-	//BYTE byPatch3[] =
-	//{
-	//	0x90,
-	//	0x90,
-	//	0x90,
-	//	0x90,
-	//	0x90
-	//};
-
-	//WriteProcessMemory(hProcess, (LPVOID*)0xCFA26B, byPatch3, sizeof(byPatch3), 0);
 }
 
 void Bot::OnConfigurationLoaded()
@@ -865,123 +851,143 @@ bool Bot::GetDisguiseRingTable(std::map<uint32_t, __TABLE_DISGUISE_RING>** mapDa
 
 BYTE Bot::ReadByte(DWORD dwAddress)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	/*HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
 	if (hProcess == nullptr)
-		return 0;
+		return 0;*/
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	BYTE nRet = Memory::ReadByte(hProcess, dwAddress);
 
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 	return nRet;
 }
 
 DWORD Bot::Read4Byte(DWORD dwAddress)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return 0;
+	//if (hProcess == nullptr)
+	//	return 0;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	DWORD nRet = Memory::Read4Byte(hProcess, dwAddress);
 
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 	return nRet;
 }
 
 float Bot::ReadFloat(DWORD dwAddress)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return 0.0f;
+	//if (hProcess == nullptr)
+	//	return 0.0f;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	float nRet = Memory::ReadFloat(hProcess, dwAddress);
 
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 	return nRet;
 }
 
 std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return "";
+	//if (hProcess == nullptr)
+	//	return "";
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	std::string nRet = Memory::ReadString(hProcess, dwAddress, nSize);
 
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 	return nRet;
 }
 
 std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
 	std::vector<BYTE> nRet;
-	if (hProcess == nullptr)
-		return nRet;
+	/*if (hProcess == nullptr)
+		return nRet;*/
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	nRet = Memory::ReadBytes(hProcess, dwAddress, nSize);
 
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 	return nRet;
 }
 
 void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return;
+	//if (hProcess == nullptr)
+	//	return;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	Memory::WriteByte(hProcess, dwAddress, byValue);
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 }
 
 void Bot::Write4Byte(DWORD dwAddress, int iValue)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return;
+	//if (hProcess == nullptr)
+	//	return;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	Memory::Write4Byte(hProcess, dwAddress, iValue);
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 }
 
 void Bot::WriteFloat(DWORD dwAddress, float fValue)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return;
+	//if (hProcess == nullptr)
+	//	return;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	Memory::WriteFloat(hProcess, dwAddress, fValue);
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 }
 
 void Bot::WriteString(DWORD dwAddress, std::string strValue)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return;
+	//if (hProcess == nullptr)
+	//	return;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	Memory::WriteString(hProcess, dwAddress, strValue);
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 }
 
 void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 {
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
-	if (hProcess == nullptr)
-		return;
+	//if (hProcess == nullptr)
+	//	return;
+
+	HANDLE hProcess = GetInjectedProcessHandle();
 
 	Memory::WriteBytes(hProcess, dwAddress, byValue);
-	CloseHandle(hProcess);
+	//CloseHandle(hProcess);
 }
 
 bool Bot::ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize)
@@ -992,33 +998,6 @@ bool Bot::ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize)
 bool Bot::ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress)
 {
 	return Memory::ExecuteRemoteCode(hProcess, pAddress);
-}
-
-bool Bot::IsInjectedProcessLost()
-{
-	if (GetInjectedProcessId() == 0)
-		return true;
-
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	if (hProcess == nullptr)
-		return true;
-
-	DWORD iExitCode = 0;
-	if (GetExitCodeProcess(hProcess, &iExitCode) == FALSE)
-	{
-		CloseHandle(hProcess);
-		return true;
-	}
-
-	if (iExitCode != STILL_ACTIVE)
-	{
-		CloseHandle(hProcess);
-		return true;
-	}
-
-	CloseHandle(hProcess);
-	return false;
 }
 
 bool Bot::GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecShopWindow)
@@ -1206,4 +1185,39 @@ void Bot::UpdateInventoryItemFlag(JSON pInventoryFlags)
 		printf("%s\n", e.what());
 #endif
 	}
+}
+
+bool Bot::IsInjectedProcessLost()
+{
+	if (GetInjectedProcessId() == 0)
+	{
+		return true;
+	}
+
+	DWORD iExitCode = 0;
+	if (GetExitCodeProcess(GetInjectedProcessHandle(), &iExitCode) == FALSE)
+	{
+		return true;
+	}
+
+	if (iExitCode != STILL_ACTIVE)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+HANDLE Bot::GetInjectedProcessHandle()
+{
+	DWORD dwFlags;
+
+	if (GetHandleInformation(m_InjectedProcessInfo.hProcess, &dwFlags))
+	{
+		return m_InjectedProcessInfo.hProcess;
+	}
+
+	m_InjectedProcessInfo.hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
+
+	return m_InjectedProcessInfo.hProcess;
 }

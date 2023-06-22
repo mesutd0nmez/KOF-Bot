@@ -58,7 +58,6 @@ public:
 
 private:
 	void OnReady();
-	void OnPong();
 	void OnAuthenticated();
 	void OnLoaded();
 	void OnConfigurationLoaded();
@@ -82,9 +81,6 @@ private:
 	std::string m_szAccountListFilePath;
 
 public:
-	DWORD GetInjectedProcessId() { return m_dwInjectedProcessId; };
-
-public:
 	bool IsClosed() { return m_bClosed; }
 	bool IsInjectedProcessLost();
 	bool IsTableLoaded() { return m_bTableLoaded; }
@@ -95,7 +91,6 @@ public:
 	bool m_bClosed;
 	std::string m_szClientPath;
 	std::string m_szClientExe;
-	DWORD m_dwInjectedProcessId;
 
 	bool m_bTableLoaded;
 	std::chrono::milliseconds m_msLastConfigurationSave;
@@ -172,5 +167,15 @@ public:
 
 protected:
 	JSON m_jInventoryFlags;
+
+public:
+	DWORD GetInjectedProcessId() { return m_InjectedProcessInfo.dwProcessId; };
+	HANDLE GetInjectedProcessHandle();
+
+private:
+	PROCESS_INFORMATION m_InjectedProcessInfo;
+
+private:
+	std::chrono::milliseconds m_msLastUserConfigurationSaveTime;
 };
 

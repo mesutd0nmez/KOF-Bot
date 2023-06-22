@@ -16,6 +16,31 @@ static const int INVENTORY_MBAG1 = INVENTORY_MBAG;
 static const int INVENTORY_MBAG2 = INVENTORY_MBAG + MBAG_MAX;       // 51 + 12 = 63
 static const int INVENTORY_TOTAL = INVENTORY_MBAG2 + MBAG_MAX;      // 63 + 12 = 75
 
+struct Vector2 
+{
+	Vector2(float fX, float fY) : m_fX(fX), m_fY(fY) {};
+
+	float m_fX;
+	float m_fY;
+
+	Vector2 GetEndPoint(const Vector2& endPoint, const float distance) 
+	{
+		Vector2 v(endPoint.m_fX - m_fX, endPoint.m_fY - m_fY);
+		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fY * v.m_fY);
+		Vector2 u(v.m_fX / norm, v.m_fY / norm);
+		Vector2 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fY - distance * u.m_fY);
+		return newEndPoint;
+	}
+
+	bool operator == (const Vector2& vec)
+	{
+		if (m_fX == vec.m_fX && m_fY == vec.m_fY)
+			return true;
+
+		return false;
+	}
+};
+
 struct Vector3
 {
 	Vector3(float fX, float fZ, float fY) : m_fX(fX), m_fZ(fZ), m_fY(fY) {};
@@ -307,6 +332,9 @@ typedef struct SNpc
 typedef struct SLoot
 {
 	int32_t			iNpcID;
+	float			fNpcX;
+	float			fNpcZ;
+	float			fNpcY;
 	uint32_t		iBundleID;
 	uint8_t			iItemCount;
 	std::chrono::milliseconds	msDropTime;

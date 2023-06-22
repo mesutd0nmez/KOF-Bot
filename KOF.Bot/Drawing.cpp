@@ -89,6 +89,11 @@ void Drawing::InitializeSceneData()
 
 void Drawing::Draw()
 {
+    bool bTableLoaded = Drawing::Bot->IsTableLoaded();
+
+    if (!bTableLoaded)
+        ImGui::BeginDisabled();
+
 	if (isActive())
 	{
         InitializeSceneData();
@@ -122,6 +127,9 @@ void Drawing::Draw()
 
     DrawRoutePlanner();
     DrawInventory();
+
+    if (!bTableLoaded)
+        ImGui::EndDisabled();
 }
 
 void Drawing::DrawRoutePlanner()
@@ -232,7 +240,8 @@ void Drawing::DrawRoutePlannerArea()
                     pOffsetPosition.x + std::ceil(m_vecRoute[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageWidth)),
                     pOffsetPosition.y + std::ceil(m_pWorldData->iMapImageHeight - (m_vecRoute[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMapImageHeight))));
 
-                if (m_vecRoute[i - 1].eStepType != RouteStepType::STEP_TOWN)
+                if (m_vecRoute[i - 1].eStepType != RouteStepType::STEP_TOWN 
+                    && m_vecRoute[i - 1].eStepType != RouteStepType::STEP_GATE)
                 {
                     ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 2.0f);
                 }
@@ -263,24 +272,38 @@ void Drawing::DrawRoutePlannerArea()
                 }
                 break;
 
-                case RouteStepType::STEP_SUPPLY:
+                case RouteStepType::STEP_SUNDRIES:
                 {
-                    std::string szSupplyPoint = skCryptDec("Supply Point");
-                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(75, 0, 130, 255), szSupplyPoint.c_str());
+                    std::string szSupplyPoint = skCryptDec("Sundries Point");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szSupplyPoint.c_str());
+                }
+                break;
+
+                case RouteStepType::STEP_POTION:
+                {
+                    std::string szSupplyPoint = skCryptDec("Potion Point");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szSupplyPoint.c_str());
                 }
                 break;
 
                 case RouteStepType::STEP_INN:
                 {
                     std::string szInnPoint = skCryptDec("Inn Point");
-                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(128, 0, 0, 255), szInnPoint.c_str());
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szInnPoint.c_str());
                 }
                 break;
 
                 case RouteStepType::STEP_GENIE:
                 {
                     std::string szGeniePoint = skCryptDec("Genie Point");
-                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(210, 105, 30, 255), szGeniePoint.c_str());
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szGeniePoint.c_str());
+                }
+                break;
+
+                case RouteStepType::STEP_GATE:
+                {
+                    std::string szGatePoint = skCryptDec("Gate Point");
+                    ImGui::GetWindowDrawList()->AddText(nextPosition, IM_COL32(255, 69, 0, 255), szGatePoint.c_str());
                 }
                 break;
             }
@@ -470,11 +493,19 @@ void Drawing::DrawRoutePlannerArea()
                     }
                 }
 
-                if (ImGui::Button(skCryptDec("Supply Point"), ImVec2(174.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Sundries Point"), ImVec2(174.0f, 0.0f)))
                 {
                     if (iRouteCount > 0)
                     {
-                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_SUPPLY;
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_SUNDRIES;
+                    }
+                }
+
+                if (ImGui::Button(skCryptDec("Potion Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_POTION;
                     }
                 }
 
@@ -493,6 +524,36 @@ void Drawing::DrawRoutePlannerArea()
                         m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_GENIE;
                     }
                 }
+
+                if (!m_pClient->IsMage() && !m_pClient->IsPriest())
+                    ImGui::BeginDisabled();
+
+                if (ImGui::Button(skCryptDec("Gate Point"), ImVec2(174.0f, 0.0f)))
+                {
+                    if (iRouteCount > 0)
+                    {
+                        m_vecRoute[m_vecRoute.size() - 1].eStepType = RouteStepType::STEP_GATE;
+
+                        if (bEnableAutoRoute)
+                        {
+                            std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+                            if (m_pClient->GetAvailableSkill(&vecAvailableSkills))
+                            {
+                                auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+                                    [](const TABLE_UPC_SKILL& a) { return a.iBaseId == 109015 || a.iBaseId == 111700; });
+
+                                if (it != vecAvailableSkills->end()
+                                    && m_pClient->GetMp() >= it->iExhaustMSP)
+                                {
+                                    m_pClient->UseSkillWithPacket(*it, m_pClient->GetID());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!m_pClient->IsMage() && !m_pClient->IsPriest())
+                    ImGui::EndDisabled();
 
                 if (iRouteCount == 0)
                     ImGui::EndDisabled();
@@ -998,7 +1059,8 @@ void Drawing::DrawGameController()
                                         pOffsetPosition.x + std::ceil(pPlan->second[i - 1].fX / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageWidth)),
                                         pOffsetPosition.y + std::ceil(m_pWorldData->iMiniMapImageHeight - (pPlan->second[i - 1].fY / (float)(m_pWorldData->fMapLength / m_pWorldData->iMiniMapImageHeight))));
 
-                                    if (pPlan->second[i - 1].eStepType != RouteStepType::STEP_TOWN)
+                                    if (pPlan->second[i - 1].eStepType != RouteStepType::STEP_TOWN 
+                                        && pPlan->second[i - 1].eStepType != RouteStepType::STEP_GATE)
                                     {
                                         ImGui::GetWindowDrawList()->AddLine(prevPosition, nextPosition, IM_COL32(0, 255, 0, 255), 2.0f);
                                     }        
@@ -1196,7 +1258,6 @@ void Drawing::DrawGameController()
 
                 DrawMainTransformationArea();
                 DrawMainListenerArea();
-                DrawMainSettingsArea();
 
                 ImGui::EndTabItem();
             }
@@ -1311,12 +1372,6 @@ void Drawing::DrawGameController()
                         ImGui::PopItemWidth();
 
                         bool bBasicAttack = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-                        bool bBasicAttackWithPacket = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), false);
-
-                        if (bBasicAttackWithPacket)
-                        {
-                            ImGui::BeginDisabled();
-                        }
 
                         if (ImGui::Checkbox(skCryptDec("##BasicAttackCheckbox"), &bBasicAttack))
                             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttack"), bBasicAttack ? 1 : 0);
@@ -1324,11 +1379,6 @@ void Drawing::DrawGameController()
                         ImGui::SameLine();
 
                         ImGui::Text(skCryptDec("Basic Attack Legal (R)"));
-
-                        if (bBasicAttackWithPacket)
-                        {
-                            ImGui::EndDisabled();
-                        }
 
                         ImGui::SameLine();
 
@@ -1340,23 +1390,6 @@ void Drawing::DrawGameController()
                         ImGui::SameLine();
 
                         ImGui::Text(skCryptDec("Move To Target"));
-
-                        if (bBasicAttack)
-                        {
-                            ImGui::BeginDisabled();
-                        }
-
-                        if (ImGui::Checkbox(skCryptDec("##BasicAttackWithPacket"), &bBasicAttackWithPacket))
-                            m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), bBasicAttackWithPacket ? 1 : 0);
-
-                        ImGui::SameLine();
-
-                        ImGui::Text(skCryptDec("Basic Attack With Packet (R)"));
-
-                        if (bBasicAttack)
-                        {
-                            ImGui::EndDisabled();
-                        }
 
                         bool bTargetSizeEnable = m_pUserConfiguration->GetBool(skCryptDec("Target"), skCryptDec("SizeEnable"), false);
 
@@ -1391,6 +1424,7 @@ void Drawing::DrawGameController()
                         }
                     }
 
+#ifdef DEVELOPER_ONLY
                     ImGui::Spacing();
                     {
                         ImGui::TextUnformatted(skCryptDec("Level Downer"));
@@ -1460,6 +1494,7 @@ void Drawing::DrawGameController()
                         }
                         
                     };
+#endif
 
                     ImGui::Spacing();
                     {
@@ -1474,7 +1509,7 @@ void Drawing::DrawGameController()
             {
                 ImGui::Spacing();
                 {
-                    ImGui::TextUnformatted(skCryptDec("Features"));
+                    ImGui::TextUnformatted(skCryptDec("Settings"));
                     ImGui::Separator();
 
                     ImGui::Spacing();
@@ -1505,13 +1540,22 @@ void Drawing::DrawGameController()
                         ImGui::Text(skCryptDec("Use Skill With Packet"));
                         ImGui::PopStyleColor();
 
-                    }
+                        if (!bUseSkillWithPacket)
+                            ImGui::BeginDisabled();
 
-                    ImGui::TextUnformatted(skCryptDec("Settings"));
-                    ImGui::Separator();
+                        bool bOnlyAttackSkillUseWithPacket = m_pUserConfiguration->GetBool(skCryptDec("Skill"), skCryptDec("OnlyAttackSkillUseWithPacket"), false);
 
-                    ImGui::Spacing();
-                    {
+                        if (ImGui::Checkbox(skCryptDec("##OnlyAttackSkillUseWithPacket"), &bOnlyAttackSkillUseWithPacket))
+                        {
+                            m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("OnlyAttackSkillUseWithPacket"), bOnlyAttackSkillUseWithPacket ? 1 : 0);
+                        }
+
+                        ImGui::SameLine();
+                        ImGui::Text(skCryptDec("Only Attack Skill Use With Packet"));
+
+                        if (!bUseSkillWithPacket)
+                            ImGui::EndDisabled();
+
                         bool bUseHighLevelSkillFirst = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("UseHighLevelSkillsFirst"), true);
 
                         if (ImGui::Checkbox(skCryptDec("##UseHighLevelSkillsFirst"), &bUseHighLevelSkillFirst))
@@ -1537,6 +1581,16 @@ void Drawing::DrawGameController()
                 ImGui::Spacing();
                 {
                     DrawMainSupplyArea();
+
+                    ImGui::EndTabItem();
+                }
+            }
+
+            if (ImGui::BeginTabItem(skCryptDec("Settings")))
+            {
+                ImGui::Spacing();
+                {
+                    DrawMainSettingsArea();
 
                     ImGui::EndTabItem();
                 }
@@ -1861,9 +1915,10 @@ void Drawing::DrawMainDeveloperOnlyArea()
     }
 #endif
 }
+
 void Drawing::DrawMainSupplyArea()
 {
-    ImGui::TextUnformatted(skCryptDec("Supply Management"));
+    ImGui::TextUnformatted(skCryptDec("Supply & Repair Management"));
     ImGui::Separator();
 
     ImGui::Spacing();
@@ -1875,7 +1930,7 @@ void Drawing::DrawMainSupplyArea()
 
         ImGui::SameLine();
 
-        ImGui::Text(skCryptDec("Auto Repair"));
+        ImGui::Text(skCryptDec("Auto Repair (NPC)"));
 
         ImGui::SameLine();
 
@@ -1888,10 +1943,23 @@ void Drawing::DrawMainSupplyArea()
 
         ImGui::Text(skCryptDec("Auto Supply"));
 
+        bool bAutoRepairMagicHammer = m_pUserConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), false);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoRepairMagicHammer"), &bAutoRepairMagicHammer))
+        {
+            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), bAutoRepairMagicHammer ? 1 : 0);
+        }     
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Repair (Magic Hammer)"));
+
         bool bAutoSellSlotRange = m_pUserConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
 
         if (ImGui::Checkbox(skCryptDec("##AutoSellSlotRange"), &bAutoSellSlotRange))
+        { 
             m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), bAutoSellSlotRange ? 1 : 0);
+        }    
 
         ImGui::SameLine();
 
@@ -1927,6 +1995,15 @@ void Drawing::DrawMainSupplyArea()
             }
         }
         ImGui::PopItemWidth();
+
+        bool bAutoSellByFlag = m_pUserConfiguration->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
+
+        if (ImGui::Checkbox(skCryptDec("##AutoSellByFlag"), &bAutoSellByFlag))
+            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), bAutoSellByFlag ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Auto Sell By Inventory Flag"));
     }
 
     ImGui::Spacing();
@@ -2415,44 +2492,57 @@ void Drawing::DrawMainListenerArea()
 
 void Drawing::DrawMainSettingsArea()
 {
+    ImGui::TextUnformatted(skCryptDec("Settings"));
+    ImGui::Separator();
+
     ImGui::Spacing();
     {
-        ImGui::TextUnformatted(skCryptDec("Settings"));
-        ImGui::Separator();
+        bool bStopBotIfDead = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), true);
 
-        ImGui::Spacing();
-        {
-            bool bStopBotIfDead = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), false);
+        if (ImGui::Checkbox(skCryptDec("##StopBotIfDead"), &bStopBotIfDead))
+            m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), bStopBotIfDead ? 1 : 0);
 
-            if (ImGui::Checkbox(skCryptDec("##StopBotIfDead"), &bStopBotIfDead))
-                m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfDead"), bStopBotIfDead ? 1 : 0);
+        ImGui::SameLine();
 
-            ImGui::SameLine();
+        ImGui::Text(skCryptDec("Stop bot if character dead"));
 
-            ImGui::Text(skCryptDec("Stop bot if character dead"));
+        bool bStopBotIfTeleported = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), false);
 
-            bool bStopBotIfTeleported = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), false);
+        if (ImGui::Checkbox(skCryptDec("##StopBotIfTeleported"), &bStopBotIfTeleported))
+            m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), bStopBotIfTeleported ? 1 : 0);
 
-            if (ImGui::Checkbox(skCryptDec("##StopBotIfTeleported"), &bStopBotIfTeleported))
-                m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StopBotIfTeleported"), bStopBotIfTeleported ? 1 : 0);
+        ImGui::SameLine();
 
-            ImGui::SameLine();
+        ImGui::Text(skCryptDec("Stop bot if character teleported"));
 
-            ImGui::Text(skCryptDec("Stop bot if character teleported"));
+        bool bStartGenieIfUserInRegion = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), false);
 
-            bool bStartGenieIfUserInRegion = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), false);
+        if (ImGui::Checkbox(skCryptDec("##StartGenieIfUserInRegion"), &bStartGenieIfUserInRegion))
+            m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), bStartGenieIfUserInRegion ? 1 : 0);
 
-            if (ImGui::Checkbox(skCryptDec("##StartGenieIfUserInRegion"), &bStartGenieIfUserInRegion))
-                m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), bStartGenieIfUserInRegion ? 1 : 0);
+        ImGui::SameLine();
 
-            ImGui::SameLine();
+        ImGui::Text(skCryptDec("Start genie if user in region (3 min delay)"));
 
-            ImGui::Text(skCryptDec("Start genie if user in region (5 min delay)"));
-        }
+        bool bSendTownIfBanNotice = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("SendTownIfBanNotice"), false);
+
+        if (ImGui::Checkbox(skCryptDec("##SendTownIfBanNotice"), &bSendTownIfBanNotice))
+            m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("SendTownIfBanNotice"), bSendTownIfBanNotice ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Send character to town if ban notice exist"));
+
+        /*  bool bSendTownIfThereIsGMNearby = m_pUserConfiguration->GetBool(skCryptDec("Settings"), skCryptDec("bSendTownIfThereIsGMNearby"), false);
+
+         if (ImGui::Checkbox(skCryptDec("##bSendTownIfThereIsGMNearby"), &bSendTownIfThereIsGMNearby))
+             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("bSendTownIfThereIsGMNearby"), bSendTownIfThereIsGMNearby ? 1 : 0);
+
+         ImGui::SameLine();
+
+         ImGui::Text(skCryptDec("Send town if there is a GM nearby"));*/
     }
 }
-
-#define _S(_LITERAL)    (const char*)u8##_LITERAL
 
 void Drawing::DrawAutomatedAttackSkillTree()
 {

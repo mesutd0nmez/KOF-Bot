@@ -134,6 +134,8 @@ private:
 
 	void LevelDownerProcess();
 
+	void MagicHammerProcess();
+
 private:
 	bool m_bWorking;
 	bool m_bMailSlotWorking;
@@ -165,6 +167,9 @@ protected:
 
 public:
 	void Test();
+
+public:
+	int GetRegionUserCount(bool bExceptPartyMember = false);
 };
 
 
