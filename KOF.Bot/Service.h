@@ -21,7 +21,6 @@ public:
 
 private:
 	virtual void OnReady() = 0;
-	virtual void OnPong() = 0;
 	virtual void OnAuthenticated() = 0;
 	virtual void OnLoaded() = 0;
 	virtual void OnConfigurationLoaded() = 0;
@@ -32,7 +31,6 @@ protected:
 private:
 	void SendReady();
 	void SendPointerRequest();
-	void SendPong();
 
 private:
 	void HandlePacket(Packet& pkt);

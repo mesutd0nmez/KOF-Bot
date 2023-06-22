@@ -179,18 +179,6 @@ void Service::HandlePacket(Packet& pkt)
         }
         break;
 
-        case PacketHeader::PING:
-        {
-            uint32_t iLastPingTime;
-
-            pkt.DByte();
-            pkt >> iLastPingTime;
-
-            SendPong();
-            OnPong();
-        }
-        break;
-
        /* case PacketHeader::INJECTION:
         {
             if (m_iId == -1) return;
@@ -283,16 +271,6 @@ void Service::SendPointerRequest()
     pkt 
         << uint8_t(AppType::BOT)
         << uint8_t(m_ePlatformType);
-
-    Send(pkt);
-}
-
-void Service::SendPong()
-{
-    Packet pkt = Packet(PacketHeader::PING);
-
-    pkt.DByte();
-    pkt << uint32_t(time(0));
 
     Send(pkt);
 }

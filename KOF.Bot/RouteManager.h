@@ -5,9 +5,11 @@ enum RouteStepType
     STEP_NONE,
     STEP_MOVE,
     STEP_TOWN,
-    STEP_SUPPLY,
+    STEP_SUNDRIES,
     STEP_INN,
     STEP_GENIE,
+    STEP_GATE,
+    STEP_POTION,
 };
 
 struct Route

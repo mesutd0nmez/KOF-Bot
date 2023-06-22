@@ -1,14 +1,16 @@
 #pragma once
 
-//#define DEBUG
+#define DEBUG
 //#define PRINT_RECV_PACKET
-//#define PRINT_SEND_PACKET
+#define PRINT_SEND_PACKET
 
 //#define DISABLE_XIGNCODE
 
 #define DEVELOPER_ONLY
 #define SPECIAL_FEATURES
+#define ENABLE_CAPTCHA_SOLVER
 
+#define DISABLE_USKO_AUTO_SERVER_SELECT
 //#define NO_INITIALIZE_CLIENT_HANDLER
 //#define DISABLE_AUTO_LOGIN
 
@@ -19,7 +21,7 @@
 #define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #define DEVELOPMENT_EXE "KnightOnLine.exe"
 #define DEVELOPMENT_PLATFORM 0
-#define DEVELOPMENT_ACCOUNT_INDEX 4
+#define DEVELOPMENT_ACCOUNT_INDEX 5
 
 //#define DEVELOPMENT_PATH "C:\\CNKO"
 //#define DEVELOPMENT_EXE "KnightOnLine.exe"

@@ -47,8 +47,10 @@ public:
 	void SetAuthority(uint8_t iAuthority);
 
 	Vector3 GetPosition();
+	Vector2 GetPosition2D();
 	Vector3 GetMovePosition();
 	Vector3 GetTargetPosition();
+	Vector2 GetTargetPosition2D();
 
 	int32_t GetTarget();
 	uint32_t GetTargetBase();
@@ -142,7 +144,12 @@ protected:
 	void PushPhase(DWORD dwAddress);
 	void WriteLoginInformation(std::string szAccountId, std::string szPassword);
 	void ConnectLoginServer(bool bDisconnect = false);
+	void LoadServerList();
+	void SelectServer(uint8_t iIndex);
+	void ShowChannel();
+	void SelectChannel(uint8_t iIndex);
 	void ConnectGameServer(BYTE byServerId);
+	void ConnectServer();
 
 	void SelectCharacterSkip();
 	void SelectCharacterLeft();
@@ -168,6 +175,7 @@ public:
 	void PatchDeathEffect(bool bValue);
 	void SendTownPacket();
 	void SetMovePosition(Vector3 v3MovePosition);
+	void SetMovePosition(Vector2 v2MovePosition);
 
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
 	void SendShoppingMall(ShoppingMallType eType);

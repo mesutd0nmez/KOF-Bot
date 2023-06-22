@@ -38,9 +38,9 @@ public:
 	static void DrawMainAutoLootArea();
 	static void DrawMainSupplyArea();
 	static void DrawMainDeveloperOnlyArea();
+	static void DrawMainSettingsArea();
 	static void DrawMainTransformationArea();
 	static void DrawMainListenerArea();
-	static void DrawMainSettingsArea();
 	static void DrawMainRogueArea();
 	static void DrawMainPriestArea();
 
