@@ -23,8 +23,7 @@ Bot::Bot()
 	}
 
 	m_pTbl_Npc = nullptr;
-	m_pTbl_Mob_US = nullptr;
-	m_pTbl_Mob_CN = nullptr;
+	m_pTbl_Mob = nullptr;
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
@@ -80,8 +79,7 @@ Bot::~Bot()
 	}
 
 	m_pTbl_Npc = nullptr;
-	m_pTbl_Mob_US = nullptr;
-	m_pTbl_Mob_CN = nullptr;
+	m_pTbl_Mob = nullptr;
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
@@ -279,11 +277,8 @@ void Bot::Release()
 	if (m_pTbl_Npc)
 		m_pTbl_Npc->Release();
 
-	if (m_pTbl_Mob_US)
-		m_pTbl_Mob_US->Release();
-
-	if (m_pTbl_Mob_CN)
-		m_pTbl_Mob_CN->Release();
+	if (m_pTbl_Mob)
+		m_pTbl_Mob->Release();
 
 	if (m_pTbl_ItemSell)
 		m_pTbl_ItemSell->Release();
@@ -368,27 +363,13 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
-	if (m_ePlatformType == PlatformType::USKO 
-		|| m_ePlatformType == PlatformType::STKO)
-	{
-		m_pTbl_Mob_US = new Table<__TABLE_MOB_US>();
-		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
-		m_pTbl_Mob_US->Load(szPath);
+	m_pTbl_Mob = new Table<__TABLE_MOB>();
+	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
+	m_pTbl_Mob->Load(szPath);
 
 #ifdef DEBUG
-		printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob_US->GetDataSize());
+	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
 #endif
-	}
-	else if (m_ePlatformType == PlatformType::CNKO)
-	{
-		m_pTbl_Mob_CN = new Table<__TABLE_MOB_CN>();
-		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
-		m_pTbl_Mob_CN->Load(szPath);
-
-#ifdef DEBUG
-		printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob_CN->GetDataSize());
-#endif
-	}
 
 	m_pTbl_ItemSell = new Table<__TABLE_ITEM_SELL>();
 	m_pTbl_ItemSell->Load(m_szClientPath + skCryptDec("\\Data\\itemsell_table.tbl"));
@@ -867,20 +848,12 @@ bool Bot::GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut)
 	return m_pTbl_Npc->GetData(mapDataOut);
 }
 
-bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_US>** mapDataOut)
+bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB>** mapDataOut)
 {
-	if (m_pTbl_Mob_US == nullptr)
+	if (m_pTbl_Mob == nullptr)
 		return false;
 
-	return m_pTbl_Mob_US->GetData(mapDataOut);
-}
-
-bool Bot::GetMobTable(std::map<uint32_t, __TABLE_MOB_CN>** mapDataOut)
-{
-	if (m_pTbl_Mob_CN == nullptr)
-		return false;
-
-	return m_pTbl_Mob_CN->GetData(mapDataOut);
+	return m_pTbl_Mob->GetData(mapDataOut);
 }
 
 bool Bot::GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut)
@@ -1192,15 +1165,23 @@ bool Bot::IsInjectedProcessLost()
 
 HANDLE Bot::GetInjectedProcessHandle()
 {
-	DWORD dwFlags;
-
-	if (GetHandleInformation(m_InjectedProcessInfo.hProcess, &dwFlags))
+	if (m_InjectedProcessInfo.hProcess != NULL 
+		&& m_InjectedProcessInfo.hProcess != INVALID_HANDLE_VALUE)
 	{
-		return m_InjectedProcessInfo.hProcess;
+		DWORD dwFlags;
+
+		if (GetHandleInformation(m_InjectedProcessInfo.hProcess, &dwFlags))
+		{
+			return m_InjectedProcessInfo.hProcess;
+		}
+		else
+		{
+			CloseHandle(m_InjectedProcessInfo.hProcess);
+			m_InjectedProcessInfo.hProcess = NULL;
+		}
 	}
 
 	m_InjectedProcessInfo.hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
 	return m_InjectedProcessInfo.hProcess;
 }
 

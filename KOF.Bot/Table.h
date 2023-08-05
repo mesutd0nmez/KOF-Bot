@@ -356,14 +356,13 @@ protected:
             return false;
         }
 
-        int iSize = vecOffsets[iColumnCount];
-
-        if (sizeof(Type) != iSize ||
-            DT_DWORD != m_DataType[0])
-        {
-            m_DataType.clear();
-            return false;
-        }
+        //int iSize = vecOffsets[iColumnCount];
+        //if (sizeof(Type) != iSize ||
+        //    DT_DWORD != m_DataType[0])
+        //{
+        //    m_DataType.clear();
+        //    return false;
+        //}
 
         size_t iRowCount = buffer.read<int32_t>();
 

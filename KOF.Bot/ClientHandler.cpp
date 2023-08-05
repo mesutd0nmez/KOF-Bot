@@ -166,37 +166,28 @@ void ClientHandler::OnReady()
 #ifndef DISABLE_AUTO_LOGIN
 	new std::thread([&]()
 	{
-		WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO")))) == 0)
-
 		if (m_Bot->m_iSelectedAccount != -1 && m_Bot->m_jAccountList.size() > 0)
 		{
-			new std::thread([&]()
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+			PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
+
+			WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
+
+			m_Bot->m_jSelectedAccount = m_Bot->m_jAccountList.at(m_Bot->m_iSelectedAccount);
+
+			if (m_Bot->m_ePlatformType != PlatformType::STKO)
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				std::string szAccountIdAttribute = skCryptDec("accountId");
+				std::string szPasswordAttribute = skCryptDec("password");
 
-				PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
+				SetLoginInformation(
+					m_Bot->m_jSelectedAccount[szAccountIdAttribute.c_str()].get<std::string>(),
+					m_Bot->m_jSelectedAccount[szPasswordAttribute.c_str()].get<std::string>());
 
-				WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
-				WaitCondition(m_Bot->m_bPipeWorking == false);
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				
-				m_Bot->m_jSelectedAccount = m_Bot->m_jAccountList.at(m_Bot->m_iSelectedAccount);
-
-				if (m_Bot->m_ePlatformType != PlatformType::STKO)
-				{
-					std::string szAccountIdAttribute = skCryptDec("accountId");
-					std::string szPasswordAttribute = skCryptDec("password");
-
-					SetLoginInformation(
-						m_Bot->m_jSelectedAccount[szAccountIdAttribute.c_str()].get<std::string>(),
-						m_Bot->m_jSelectedAccount[szPasswordAttribute.c_str()].get<std::string>());
-
-					WriteLoginInformation(m_szAccountId, m_szPassword);
-					ConnectLoginServer();
-				}
-								
-			});
+				WriteLoginInformation(m_szAccountId, m_szPassword);
+				ConnectLoginServer();
+			}
 		}
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(3000));
@@ -911,51 +902,35 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				printf("RecvProcess::LS_SERVERLIST: %d Server loaded\n", byServerCount);
 #endif
 
-				if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+				if ((m_Bot->m_iSelectedAccount != -1
+					&& m_Bot->m_jAccountList.size() > 0
+					&& m_Bot->m_jSelectedAccount.size() > 0))
 				{
-					if (m_Bot->m_iSelectedAccount != -1
-						&& m_Bot->m_jAccountList.size() > 0
-						&& m_Bot->m_jSelectedAccount.size() > 0)
-					{
-						new std::thread([this]()
-						{
-#ifdef DEBUG
-							printf("RecvProcess::LS_SERVERLIST: Connecting to server: %d\n", 1);
-#endif
-							std::this_thread::sleep_for(std::chrono::milliseconds(500));
-							std::string szServerIndexAttribute = skCryptDec("serverIndex");
-							ConnectGameServer(m_Bot->m_jSelectedAccount[szServerIndexAttribute.c_str()].get<int32_t>() - 1);
-						});
-					}
-				}
-				else if (m_Bot->GetPlatformType() == PlatformType::USKO 
-					|| m_Bot->GetPlatformType() == PlatformType::STKO)
-				{
-					if ((m_Bot->m_iSelectedAccount != -1
-						&& m_Bot->m_jAccountList.size() > 0
-						&& m_Bot->m_jSelectedAccount.size() > 0))
-					{
 #ifndef DISABLE_USKO_AUTO_SERVER_SELECT
-						new std::thread([this]()
-							{
+					new std::thread([this]()
+					{
 #ifdef DEBUG
-								printf("RecvProcess::LS_SERVERLIST: Connecting to server: %d\n", 1);								
+						printf("RecvProcess::LS_SERVERLIST: Connecting to server\n");
 #endif
-								std::string szServerIndexAttribute = skCryptDec("serverIndex");
-								std::string szChannelIndexAttribute = skCryptDec("channelIndex");
+						std::string szServerIndexAttribute = skCryptDec("serverIndex");
+						std::string szChannelIndexAttribute = skCryptDec("channelIndex");
 
-								LoadServerList();
-								std::this_thread::sleep_for(std::chrono::milliseconds(100));
-								SelectServer(m_Bot->m_jSelectedAccount[szServerIndexAttribute.c_str()].get<int32_t>() - 1);
-								std::this_thread::sleep_for(std::chrono::milliseconds(100));
-								ShowChannel();
-								std::this_thread::sleep_for(std::chrono::milliseconds(100));
-								SelectChannel(m_Bot->m_jSelectedAccount[szChannelIndexAttribute.c_str()].get<int32_t>() - 1);
-								std::this_thread::sleep_for(std::chrono::milliseconds(100));
-								ConnectServer();
-							});
+						if (m_Bot->GetPlatformType() != PlatformType::CNKO)
+						{
+							LoadServerList();
+						}
+
+						SelectServer(m_Bot->m_jSelectedAccount[szServerIndexAttribute.c_str()].get<int32_t>() - 1);
+
+						if (m_Bot->GetPlatformType() != PlatformType::CNKO)
+						{
+							ShowChannel();
+							SelectChannel(m_Bot->m_jSelectedAccount[szChannelIndexAttribute.c_str()].get<int32_t>() - 1);
+						}
+
+						ConnectServer();
+					});
 #endif
-					}
 				}
 			}
 		}
@@ -967,7 +942,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			pkt >> byResult;
 
-			//Packet End: 0C 02 00
 			bool bLoaded =
 				pkt[pkt.size() - 3] == 0x0C &&
 				pkt[pkt.size() - 2] == 0x02 &&
@@ -979,45 +953,34 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Character list loaded\n");
 #endif
 
-				if (m_Bot->GetPlatformType() == PlatformType::USKO 
-					|| m_Bot->GetPlatformType() == PlatformType::CNKO 
-					|| m_Bot->GetPlatformType() == PlatformType::STKO)
+				if ((m_Bot->m_iSelectedAccount != -1
+					&& m_Bot->m_jAccountList.size() > 0
+					&& m_Bot->m_jSelectedAccount.size() > 0))
 				{
-					if ((m_Bot->m_iSelectedAccount != -1
-						&& m_Bot->m_jAccountList.size() > 0 
-						&& m_Bot->m_jSelectedAccount.size() > 0) 
-						|| m_Bot->GetPlatformType() == PlatformType::STKO)
+					new std::thread([this]()
 					{
-						new std::thread([this]()
-						{
 #ifdef DEBUG
-							printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
+						printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
 #endif
 
-							std::this_thread::sleep_for(std::chrono::milliseconds(500));
+						SelectCharacterSkip();
 
-							SelectCharacterSkip();
+						std::string szCharacterIndexAttribute = skCryptDec("characterIndex");
 
-							std::string szCharacterIndexAttribute = skCryptDec("characterIndex");
+						int32_t iCharacterIndex = m_Bot->m_jSelectedAccount[szCharacterIndexAttribute.c_str()].get<int32_t>() - 1;
 
-							int32_t iCharacterIndex = m_Bot->m_jSelectedAccount[szCharacterIndexAttribute.c_str()].get<int32_t>() - 1;
-
-							if (iCharacterIndex > 0)
+						if (iCharacterIndex > 0)
+						{
+							for (int32_t i = 0; i < iCharacterIndex; i++)
 							{
-								for (int32_t i = 0; i < iCharacterIndex; i++)
-								{
-									std::this_thread::sleep_for(std::chrono::milliseconds(100));
-									SelectCharacterLeft();
-									std::this_thread::sleep_for(std::chrono::milliseconds(100));
-									SelectCharacterSkip();
-								}
+								SelectCharacterLeft();
+								SelectCharacterSkip();
 							}
+						}
 
-							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+						SelectCharacter();
 
-							SelectCharacter();
-						});
-					}
+					});
 				}
 			}
 		}
@@ -7469,29 +7432,31 @@ void ClientHandler::LevelDownerProcess()
 
 void ClientHandler::Test1()
 {
-	SendNpcEvent(51216);
+	//SendNpcEvent(51216);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-	SendQuestUnknown1(7481);
+	SendQuestUnknown1(7516);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-	SendQuestUnknown1(7482);
+	SendQuestUnknown1(7518);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-	SendQuestUnknown1(7483);
+	SendQuestUnknown1(7521);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-	SendQuestUnknown1(7484);
+	SendQuestUnknown1(7520);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-	SendQuestUnknown1(7485);
+	SendQuestUnknown1(7517);
 
-	
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+	SendQuestUnknown1(7519);
 
 
 	/*if (m_bVipWarehouseInitialized

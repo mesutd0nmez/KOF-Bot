@@ -2998,28 +2998,13 @@ void Drawing::DrawMonsterListTree()
                     szNpcName = pNpcInfo->second.szText;
             }
 
-            if (Drawing::Bot->GetPlatformType() == PlatformType::USKO 
-                || Drawing::Bot->GetPlatformType() == PlatformType::STKO)
+            std::map<uint32_t, __TABLE_MOB>* pMobTable;
+            if (Drawing::Bot->GetMobTable(&pMobTable))
             {
-                std::map<uint32_t, __TABLE_MOB_US>* pMobTable;
-                if (Drawing::Bot->GetMobTable(&pMobTable))
-                {
-                    auto pMobInfo = pMobTable->find(x.iProtoID);
+                auto pMobInfo = pMobTable->find(x.iProtoID);
 
-                    if (pMobInfo != pMobTable->end())
-                        szNpcName = pMobInfo->second.szText;
-                }
-            }
-            else if (Drawing::Bot->GetPlatformType() == PlatformType::CNKO)
-            {
-                std::map<uint32_t, __TABLE_MOB_CN>* pMobTable;
-                if (Drawing::Bot->GetMobTable(&pMobTable))
-                {
-                    auto pMobInfo = pMobTable->find(x.iProtoID);
-
-                    if (pMobInfo != pMobTable->end())
-                        szNpcName = pMobInfo->second.szText;
-                }
+                if (pMobInfo != pMobTable->end())
+                    szNpcName = pMobInfo->second.szText;
             }
 
             if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
