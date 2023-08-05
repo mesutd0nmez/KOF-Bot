@@ -8,6 +8,7 @@
 #define LS_SERVERLIST			0xF5
 #define LS_NEWS					0xF6
 #define LS_UNKF7				0xF7
+#define LS_OTP					0xFA
 #define LS_OTP_UNKNOWN			0xFB
 
 #define WIZ_LOGIN				0x01	// Account Login

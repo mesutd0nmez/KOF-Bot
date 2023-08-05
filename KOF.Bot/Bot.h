@@ -142,6 +142,7 @@ public:
 
 public:
 	BYTE ReadByte(DWORD dwAddress);
+	WORD Read2Byte(DWORD dwAddress);
 	DWORD Read4Byte(DWORD dwAddress);
 	float ReadFloat(DWORD dwAddress);
 	std::string ReadString(DWORD dwAddress, size_t nSize);
@@ -177,5 +178,14 @@ private:
 
 private:
 	std::chrono::milliseconds m_msLastUserConfigurationSaveTime;
+
+private:
+	HMODULE m_hModuleAnyOTP;
+	std::wstring GetAnyOTPHardwareID();
+	void InitializeAnyOTPService();
+	typedef int(__stdcall* GenerateOTP)(int, LPCWSTR, LPCWSTR, int*);
+
+public:
+	std::wstring ReadAnyOTPCode(std::string szOTPPassword, std::string szHardwareID);
 };
 

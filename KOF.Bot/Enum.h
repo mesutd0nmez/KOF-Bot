@@ -32,6 +32,7 @@ enum PlatformType
 	CNKO,
 	JPKO,
 	KOKO,
+	STKO,
 };
 
 enum ConfigurationRequestType
@@ -70,6 +71,7 @@ enum Pipe
 	PIPE_SHOW_CHANNEL,
 	PIPE_SELECT_CHANNEL,
 	PIPE_CONNECT_SERVER,
+	PIPE_SAVE_CPU
 };
 
 enum StateMove
@@ -546,6 +548,7 @@ enum InventoryItemFlag
 	INVENTORY_ITEM_FLAG_SELL,
 	INVENTORY_ITEM_FLAG_INN,
 	INVENTORY_ITEM_FLAG_VIP,
+	INVENTORY_ITEM_FLAG_EQUIP,
 };
 
 enum ItemPosition 

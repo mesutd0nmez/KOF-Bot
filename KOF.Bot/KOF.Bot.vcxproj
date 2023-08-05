@@ -33,6 +33,7 @@
     <ClInclude Include="Injection.h" />
     <ClInclude Include="Json.h" />
     <ClInclude Include="Memory.h" />
+    <ClInclude Include="Password.h" />
     <ClInclude Include="Remap.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RouteManager.h" />
@@ -49,7 +50,7 @@
     <ClInclude Include="TcpSocket.h" />
     <ClInclude Include="Trim.h" />
     <ClInclude Include="UI.h" />
-    <ClInclude Include="HardwareId.h" />
+    <ClInclude Include="HardwareInformation.h" />
     <ClInclude Include="World.h" />
   </ItemGroup>
   <ItemGroup>
