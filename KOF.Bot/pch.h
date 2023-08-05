@@ -10,6 +10,7 @@
 // add headers that you want to pre-compile here
 #include "framework.h"
 
+#include "Singleton.h"
 #include "SkCrypter.h"
 #include "Define.h"
 #include "Enum.h"
@@ -25,6 +26,21 @@ using JSON = nlohmann::json;
 #define WaitCondition(condition) \
 	while(condition) \
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+#define WaitConditionWithTimeout(condition, timeout_ms) \
+{ \
+	auto start_time = std::chrono::steady_clock::now(); \
+	while(condition) \
+	{ \
+		std::this_thread::sleep_for(std::chrono::milliseconds(100)); \
+		auto current_time = std::chrono::steady_clock::now(); \
+		auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count(); \
+		if (elapsed_time >= timeout_ms) \
+		{ \
+			break; \
+		} \
+	} \
+} 
 
 typedef LONG(NTAPI* NtSuspendProcess)(IN HANDLE ProcessHandle);
 typedef LONG(NTAPI* NtResumeProcess)(IN HANDLE ProcessHandle);

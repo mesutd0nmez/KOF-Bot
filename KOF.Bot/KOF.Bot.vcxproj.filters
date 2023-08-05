@@ -123,7 +123,7 @@
     <ClInclude Include="Json.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="HardwareId.h">
+    <ClInclude Include="HardwareInformation.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="World.h">
@@ -140,6 +140,9 @@
     </ClInclude>
     <ClInclude Include="Injection.h">
       <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Password.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

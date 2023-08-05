@@ -121,7 +121,6 @@ private:
 	void PotionProcess();
 	void CharacterProcess();
 
-	void TransformationProcess();
 	void RogueCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false);
 	void PriestCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false, uint16_t iMaxHp = 0, uint16_t iHp = 0);
 
@@ -135,6 +134,12 @@ private:
 	void LevelDownerProcess();
 
 	void MagicHammerProcess();
+	void SpeedHackProcess();
+
+	void AutomationProcess();
+	void PartyProcess();
+
+	void VipWarehouseProcess();
 
 private:
 	bool m_bWorking;
@@ -147,11 +152,11 @@ private:
 public:
 	void SetRoute(std::vector<Route> vecRoute);
 	bool IsRouting() { return m_vecRoute.size() > 0; };
-	RouteStepType GetRouteStep() { return iRouteStep; };
+	RouteStepType GetRouteStep() { return m_iRouteStep; };
 	void ClearRoute();
 
 protected:
-	RouteStepType iRouteStep;
+	RouteStepType m_iRouteStep;
 
 private:
 	std::vector<Route> m_vecRoute;
@@ -166,10 +171,15 @@ protected:
 	std::chrono::milliseconds m_msLastSelectedTargetTime;
 
 public:
-	void Test();
+	void Test1();
+	void Test2();
+	void Test3();
 
 public:
 	int GetRegionUserCount(bool bExceptPartyMember = false);
+
+protected:
+	uint8_t m_iOTPRetryCount;
 };
 
 

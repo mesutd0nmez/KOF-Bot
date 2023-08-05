@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Service.h"
-#include "HardwareID.h"
+#include "HardwareInformation.h"
 
 Service::Service()
 {
@@ -206,24 +206,22 @@ void Service::SendReady()
 
 void Service::SendLogin(std::string szToken)
 {
-    HardwareId HWID{};
-
     Packet pkt = Packet(PacketHeader::LOGIN);
 
     pkt.DByte();
     pkt
         << uint8_t(LoginType::TOKEN)
         << szToken.c_str()
-        << to_string(HWID.System.Name)
-        << to_string(HWID.CPU.ProcessorId)
-        << to_string(HWID.SMBIOS.SerialNumber);
+        << to_string(m_hardwareInfo.System.Name)
+        << to_string(m_hardwareInfo.CPU.ProcessorId)
+        << to_string(m_hardwareInfo.SMBIOS.SerialNumber);
 
     std::string szHddSerial;
-    for (size_t i = 0; i < HWID.Disk.size(); i++)
+    for (size_t i = 0; i < m_hardwareInfo.Disk.size(); i++)
     {
-        HardwareId::DiskObject& Disk{ HWID.Disk.at(i) };
+        HardwareInformation::DiskObject& Disk{ m_hardwareInfo.Disk.at(i) };
 
-        if (Disk.IsBootDrive && (HWID.Disk.at(i).MediaType == 3 || HWID.Disk.at(i).MediaType == 4))
+        if (Disk.IsBootDrive)
         {
             if (i == 0)
                 szHddSerial += to_string(Disk.SerialNumber);
@@ -234,13 +232,13 @@ void Service::SendLogin(std::string szToken)
 
     pkt
         << szHddSerial
-        << to_string(HWID.Registry.ComputerHardwareId)
-        << to_string(HWID.System.OSSerialNumber);
+        << to_string(m_hardwareInfo.Registry.ComputerHardwareId)
+        << to_string(m_hardwareInfo.System.OSSerialNumber);
 
     std::string szPartNumber;
-    for (size_t i = 0; i < HWID.PhysicalMemory.size(); i++)
+    for (size_t i = 0; i < m_hardwareInfo.PhysicalMemory.size(); i++)
     {
-        HardwareId::PhysicalMemoryObject& Memory{ HWID.PhysicalMemory.at(i) };
+        HardwareInformation::PhysicalMemoryObject& Memory{ m_hardwareInfo.PhysicalMemory.at(i) };
 
         if (i == 0)
             szPartNumber += to_string(Memory.PartNumber);
@@ -252,12 +250,12 @@ void Service::SendLogin(std::string szToken)
         << szPartNumber;
 
     std::string szGPUs;
-    for (size_t i = 0; i < HWID.GPU.size(); i++)
+    for (size_t i = 0; i < m_hardwareInfo.GPU.size(); i++)
     {
         if (i == 0)
-            szGPUs += to_string(HWID.GPU.at(i).Name);
+            szGPUs += to_string(m_hardwareInfo.GPU.at(i).Name);
         else
-            szGPUs += "||" + to_string(HWID.GPU.at(i).Name);
+            szGPUs += "||" + to_string(m_hardwareInfo.GPU.at(i).Name);
     }
 
     pkt << szGPUs;

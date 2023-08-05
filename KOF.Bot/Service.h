@@ -3,6 +3,7 @@
 #include "Enum.h"
 #include "Socket.h"
 #include "Ini.h"
+#include "HardwareInformation.h"
 
 class Service : Socket
 {
@@ -60,5 +61,7 @@ public:
 protected:
 	uint32_t m_iAccountTypeFlag;
 
+protected:
+	HardwareInformation m_hardwareInfo;
 };
 

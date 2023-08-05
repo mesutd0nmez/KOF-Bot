@@ -16,31 +16,6 @@ static const int INVENTORY_MBAG1 = INVENTORY_MBAG;
 static const int INVENTORY_MBAG2 = INVENTORY_MBAG + MBAG_MAX;       // 51 + 12 = 63
 static const int INVENTORY_TOTAL = INVENTORY_MBAG2 + MBAG_MAX;      // 63 + 12 = 75
 
-struct Vector2 
-{
-	Vector2(float fX, float fY) : m_fX(fX), m_fY(fY) {};
-
-	float m_fX;
-	float m_fY;
-
-	Vector2 GetEndPoint(const Vector2& endPoint, const float distance) 
-	{
-		Vector2 v(endPoint.m_fX - m_fX, endPoint.m_fY - m_fY);
-		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fY * v.m_fY);
-		Vector2 u(v.m_fX / norm, v.m_fY / norm);
-		Vector2 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fY - distance * u.m_fY);
-		return newEndPoint;
-	}
-
-	bool operator == (const Vector2& vec)
-	{
-		if (m_fX == vec.m_fX && m_fY == vec.m_fY)
-			return true;
-
-		return false;
-	}
-};
-
 struct Vector3
 {
 	Vector3(float fX, float fZ, float fY) : m_fX(fX), m_fZ(fZ), m_fY(fY) {};
@@ -48,50 +23,6 @@ struct Vector3
 	float m_fX;
 	float m_fZ;
 	float m_fY;
-
-	Vector3 GetEndPoint(const Vector3& endPoint, const float distance) const
-	{
-		Vector3 v(endPoint.m_fX - m_fX, endPoint.m_fZ - m_fZ, endPoint.m_fY - m_fY);
-		float norm = std::sqrt(v.m_fX * v.m_fX + v.m_fZ * v.m_fZ + v.m_fY * v.m_fY);
-		Vector3 u(v.m_fX / norm, v.m_fZ / norm, v.m_fY / norm);
-		Vector3 newEndPoint(endPoint.m_fX - distance * u.m_fX, endPoint.m_fZ - distance * u.m_fZ, endPoint.m_fY - distance * u.m_fY);
-		return newEndPoint;
-	}
-
-	Vector3 MoveTowards(Vector3 target, float maxDistanceDelta) const
-	{
-		Vector3 vectorToTarget = { target.m_fX - m_fX, target.m_fZ - m_fZ, target.m_fY - m_fY };
-
-		float distance = std::sqrt(vectorToTarget.m_fX * vectorToTarget.m_fX +
-			vectorToTarget.m_fZ * vectorToTarget.m_fZ +
-			vectorToTarget.m_fY * vectorToTarget.m_fY);
-
-		if (distance <= maxDistanceDelta || distance == 0.0f) 
-		{
-			return target;
-		}
-
-		float scaleFactor = maxDistanceDelta / distance;
-
-		return { m_fX + vectorToTarget.m_fX * scaleFactor,
-				m_fZ + vectorToTarget.m_fZ * scaleFactor,
-				m_fY + vectorToTarget.m_fY * scaleFactor };
-	}
-
-	std::vector<Vector3> MoveTowardsSteps(const Vector3& start, const Vector3& target, float maxDistanceDelta)
-	{
-		std::vector<Vector3> steps;
-		Vector3 currentPosition = start;
-
-		while (currentPosition != target)
-		{
-			Vector3 newPosition = currentPosition.MoveTowards(target, maxDistanceDelta);
-			steps.push_back(newPosition);
-			currentPosition = newPosition;
-		}
-
-		return steps;
-	}
 
 	bool operator == (const Vector3& vec)
 	{
@@ -204,6 +135,7 @@ struct EntityInfo
 typedef struct SItemData
 {
 	int32_t				iPos;
+	uint32_t			iBase;
 	uint32_t			iItemID;
 	uint16_t			iDurability;
 	uint16_t			iCount;
@@ -392,6 +324,16 @@ typedef struct __TABLE_UPC_SKILL
 	uint32_t			iBaseId;			//34
 	uint8_t				byUnknown8;			//35
 	uint8_t				byUnknown9;			//36
+	int32_t				iUnknown10;			//37
+
+
+	bool IsDeBuff()
+	{
+		if (iTarget == TARGET_ENEMY_ONLY && dw1stTableType == 4)
+			return true;
+
+		return false;
+	}
 
 } TABLE_UPC_SKILL;
 

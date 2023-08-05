@@ -199,6 +199,12 @@ void Ini::Save(const char* lpFilename)
 	}
 }
 
+void Ini::Reset()
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+	m_configMap.clear();
+}
+
 std::string Ini::Dump()
 {
 	std::stringstream f;

@@ -36,6 +36,7 @@ public:
 	bool Load(const char* lpFileName = nullptr);
 	bool Load(std::string szData);
 	void Save(const char* lpFileName = nullptr);
+	void Reset();
 
 	std::string Dump();
 

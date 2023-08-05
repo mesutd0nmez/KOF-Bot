@@ -37,6 +37,7 @@ public:
 	bool IsAttackable(DWORD iBase);
 	bool IsDisconnect();
 	bool IsDeath(DWORD iBase = 0);
+	bool IsStunned(DWORD iBase = 0);
 	float GetX(DWORD iBase = 0);
 	float GetZ(DWORD iBase = 0);
 	float GetY(DWORD iBase = 0);
@@ -47,10 +48,8 @@ public:
 	void SetAuthority(uint8_t iAuthority);
 
 	Vector3 GetPosition();
-	Vector2 GetPosition2D();
 	Vector3 GetMovePosition();
 	Vector3 GetTargetPosition();
-	Vector2 GetTargetPosition2D();
 
 	int32_t GetTarget();
 	uint32_t GetTargetBase();
@@ -134,12 +133,13 @@ protected:
 public:
 	void StopMove();
 
-	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
+	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool bWaitCastTime = true);
 
 protected:
 	bool IsEnemy(DWORD iBase);
 	void StepCharacterForward(bool bStart);
 	void BasicAttack();
+	void BasicAttackWithPacket(float fBasicAttackInterval);
 
 	void PushPhase(DWORD dwAddress);
 	void WriteLoginInformation(std::string szAccountId, std::string szPassword);
@@ -160,8 +160,11 @@ protected:
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 
+public:
+	void SetSaveCPUSleepTime(int32_t iValue);
+
 protected:
-	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bAttacking = false, bool bBasicAttack = false);
+	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bWaitCastTime = true);
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -175,7 +178,6 @@ public:
 	void PatchDeathEffect(bool bValue);
 	void SendTownPacket();
 	void SetMovePosition(Vector3 v3MovePosition);
-	void SetMovePosition(Vector2 v2MovePosition);
 
 	void SendItemMovePacket(uint8_t iType, uint8_t iDirection, uint32_t iItemID, uint8_t iCurrentPosition, uint8_t iTargetPosition);
 	void SendShoppingMall(ShoppingMallType eType);
@@ -232,6 +234,7 @@ public:
 
 protected:
 	BYTE ReadByte(DWORD dwAddress);
+	WORD Read2Byte(DWORD dwAddress);
 	DWORD Read4Byte(DWORD dwAddress);
 	float ReadFloat(DWORD dwAddress);
 	std::string ReadString(DWORD dwAddress, size_t nSize);
@@ -290,12 +293,50 @@ public:
 	int32_t GetVipWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
 	int32_t GetVipWarehouseItemCount(uint32_t iItemID);
 
+	bool GetVipWarehouseItemList(std::vector<TItemData>& vecItemList);
+	bool GetVipWarehouseInventoryItemList(std::vector<TItemData>& vecItemList);
+
+	void VipWarehouseGetIn(int32_t iTargetPosition);
+	void VipWarehouseGetOut(int32_t iTargetPosition);
+
+	void CountableDialogChangeCount(uint32_t iCount);
+	void AcceptCountableDialog();
+	
 public:
 	void SendQuestCompleted(uint32_t iQuestID);
+	void SendQuestUnknown1(uint32_t iQuestID);
+	void SendQuestUnknown2(uint32_t iQuestID);
 
 public:
-	void ToggleInventory();
+	void OpenVipWarehouse();
+	void CloseVipWarehouse();
+	bool IsVipWarehouseOpen();
+	bool IsTransactionDialogOpen();
+	bool IsWarehouseOpen();
 
 public:
 	void SendRegenePacket();
+
+public:
+	void SendOTPPacket(std::string szAccountId, std::string szPassword, std::string szCode);
+
+public:
+	void SetCharacterSpeed(float fSpeed);
+	float GetCharacterSpeed();
+	void PatchSpeedHack(bool bEnable);
+
+protected:
+	uint8_t m_iFlashCount;
+
+protected:
+	bool m_bVipWarehouseInitialized;
+	bool m_bVipWarehouseEnabled;
+	bool m_bVipWarehouseLoaded;
+
+public:
+	bool IsInventoryFull();
+	bool IsVipWarehouseFull();
+
+public:
+	void SendSelectMessage(uint8_t iMenuIndex, std::string szLuaName, bool bAccept = false);
 };

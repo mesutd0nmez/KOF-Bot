@@ -16,6 +16,12 @@ public:
         ReadProcessMemory(hProcess, (LPVOID)dwAddress, &nValue, 1, 0);
         return nValue;
     }
+    inline static DWORD Read2Byte(HANDLE hProcess, DWORD dwAddress)
+    {
+        WORD nValue = 0;
+        ReadProcessMemory(hProcess, (LPVOID)dwAddress, &nValue, 2, 0);
+        return nValue;
+    }
 
     inline static DWORD Read4Byte(HANDLE hProcess, DWORD dwAddress)
     {
@@ -118,6 +124,7 @@ public:
         GetExitCodeThread(hThread, &iExitCode);
 
         CloseHandle(hThread);
+   
         VirtualFreeEx(hProcess, pAddress, 0, MEM_RELEASE);
 
         return true;

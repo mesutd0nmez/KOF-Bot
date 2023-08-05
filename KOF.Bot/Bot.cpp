@@ -5,6 +5,7 @@
 #include "Memory.h"
 #include "Remap.h"
 #include "Drawing.h"
+#include "HardwareInformation.h"
 
 Bot::Bot()
 {
@@ -124,6 +125,22 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 {
 #ifdef DEBUG
 	printf("Bot: Initialize\n");
+#endif
+
+#ifdef DEBUG
+	printf("Bot: AnyOTP Service Initialize\n");
+#endif
+
+	InitializeAnyOTPService();
+
+#ifdef DEBUG
+	printf("Bot: Loading Hardware Information\n");
+#endif
+
+	m_hardwareInfo.LoadHardwareInformation();
+
+#ifdef DEBUG
+	printf("Bot: Hardware Information Loaded\n");
 #endif
 
 #ifdef DEBUG
@@ -301,6 +318,12 @@ void Bot::InitializeStaticData()
 			szPlatformPrefix = "jp";
 		}
 		break;
+
+		case PlatformType::STKO:
+		{
+			szPlatformPrefix = "st";
+		}
+		break;
 	}
 
 	char szPath[255];
@@ -345,7 +368,8 @@ void Bot::InitializeStaticData()
 	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
 #endif
 
-	if (m_ePlatformType == PlatformType::USKO)
+	if (m_ePlatformType == PlatformType::USKO 
+		|| m_ePlatformType == PlatformType::STKO)
 	{
 		m_pTbl_Mob_US = new Table<__TABLE_MOB_US>();
 		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
@@ -539,11 +563,31 @@ void Bot::OnLoaded()
 
 		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
 	}
+	else if (m_ePlatformType == PlatformType::STKO)
+	{
+		PROCESS_INFORMATION loaderProcessInfo;
+		std::ostringstream strLoaderCommandLine;
+		strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
+
+		if (!StartProcess(
+			m_szClientPath + "\\XIGNCODE\\", "xldr_KnightOnline_GB_loader_win32.exe", strLoaderCommandLine.str(), loaderProcessInfo))
+		{
+#ifdef DEBUG
+			printf("Bot: Loader cannot started\n");
+#endif
+			Close();
+			return;
+		}
+
+		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+	}
 #endif
 
 	std::ostringstream strCommandLine;
 
-	if (m_ePlatformType == PlatformType::USKO || m_ePlatformType == PlatformType::CNKO)
+	if (m_ePlatformType == PlatformType::USKO 
+		|| m_ePlatformType == PlatformType::CNKO 
+		|| m_ePlatformType == PlatformType::STKO)
 	{
 		strCommandLine << GetCurrentProcessId();
 	}
@@ -566,7 +610,8 @@ void Bot::OnLoaded()
 #endif
 
 	if (m_ePlatformType == PlatformType::USKO 
-		|| m_ePlatformType == PlatformType::KOKO)
+		|| m_ePlatformType == PlatformType::KOKO
+		|| m_ePlatformType == PlatformType::STKO)
 	{
 		DWORD dwXignCodeEntryPoint = 0;
 
@@ -626,6 +671,11 @@ void Bot::OnLoaded()
 			BYTE byPatch2[] = { 0xE9, 0x50, 0x07, 0x00, 0x00, 0x90 };
 			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 		}
+		else if (m_ePlatformType == PlatformType::STKO)
+		{
+			BYTE byPatch2[] = { 0xE9, 0x09, 0x03, 0x00, 0x00, 0x90 };
+			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+		}
 #endif
 
 #ifdef DEBUG
@@ -641,7 +691,7 @@ void Bot::OnLoaded()
 
 	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("KOF.dll"));
 
-	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\Administrator\\Documents\\Github\\Pipeline\\Debug\\Pipeline.dll"));
+	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\trkys\\OneDrive\\Belgeler\\GitHub\\Pipeline\\Debug\\Pipeline.dll"));
 
 #ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
@@ -851,143 +901,75 @@ bool Bot::GetDisguiseRingTable(std::map<uint32_t, __TABLE_DISGUISE_RING>** mapDa
 
 BYTE Bot::ReadByte(DWORD dwAddress)
 {
-	/*HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	if (hProcess == nullptr)
-		return 0;*/
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	BYTE nRet = Memory::ReadByte(hProcess, dwAddress);
+	return nRet;
+}
 
-	//CloseHandle(hProcess);
+WORD Bot::Read2Byte(DWORD dwAddress)
+{
+	HANDLE hProcess = GetInjectedProcessHandle();
+	WORD nRet = Memory::ReadByte(hProcess, dwAddress);
 	return nRet;
 }
 
 DWORD Bot::Read4Byte(DWORD dwAddress)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return 0;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	DWORD nRet = Memory::Read4Byte(hProcess, dwAddress);
-
-	//CloseHandle(hProcess);
 	return nRet;
 }
 
 float Bot::ReadFloat(DWORD dwAddress)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return 0.0f;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	float nRet = Memory::ReadFloat(hProcess, dwAddress);
-
-	//CloseHandle(hProcess);
 	return nRet;
 }
 
 std::string Bot::ReadString(DWORD dwAddress, size_t nSize)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return "";
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	std::string nRet = Memory::ReadString(hProcess, dwAddress, nSize);
-
-	//CloseHandle(hProcess);
 	return nRet;
 }
 
 std::vector<BYTE> Bot::ReadBytes(DWORD dwAddress, size_t nSize)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
 	std::vector<BYTE> nRet;
-	/*if (hProcess == nullptr)
-		return nRet;*/
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	nRet = Memory::ReadBytes(hProcess, dwAddress, nSize);
-
-	//CloseHandle(hProcess);
 	return nRet;
 }
 
 void Bot::WriteByte(DWORD dwAddress, BYTE byValue)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	Memory::WriteByte(hProcess, dwAddress, byValue);
-	//CloseHandle(hProcess);
 }
 
 void Bot::Write4Byte(DWORD dwAddress, int iValue)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	Memory::Write4Byte(hProcess, dwAddress, iValue);
-	//CloseHandle(hProcess);
 }
 
 void Bot::WriteFloat(DWORD dwAddress, float fValue)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	Memory::WriteFloat(hProcess, dwAddress, fValue);
-	//CloseHandle(hProcess);
 }
 
 void Bot::WriteString(DWORD dwAddress, std::string strValue)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	Memory::WriteString(hProcess, dwAddress, strValue);
-	//CloseHandle(hProcess);
 }
 
 void Bot::WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue)
 {
-	//HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
-
-	//if (hProcess == nullptr)
-	//	return;
-
 	HANDLE hProcess = GetInjectedProcessHandle();
-
 	Memory::WriteBytes(hProcess, dwAddress, byValue);
-	//CloseHandle(hProcess);
 }
 
 bool Bot::ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize)
@@ -1220,4 +1202,86 @@ HANDLE Bot::GetInjectedProcessHandle()
 	m_InjectedProcessInfo.hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetInjectedProcessId());
 
 	return m_InjectedProcessInfo.hProcess;
+}
+
+std::wstring Bot::GetAnyOTPHardwareID()
+{
+	std::wstring szOTPHardwareID = L"";
+
+	for (size_t i = 0; i < m_hardwareInfo.Disk.size(); i++)
+	{
+		HardwareInformation::DiskObject& Disk{ m_hardwareInfo.Disk.at(i) };
+
+		if (!Disk.IsBootDrive)
+			continue;
+
+		std::wstring szPNPDeviceID = Disk.PNPDeviceID;
+
+		if (Disk.Signature == 0)
+		{
+			szOTPHardwareID = L"0000" + szPNPDeviceID.substr(szPNPDeviceID.length() - 16);
+		}
+		else
+		{
+			std::wstringstream sstream;
+			sstream << std::hex << Disk.Signature;
+			std::wstring hexStr = sstream.str();
+
+			szOTPHardwareID = hexStr.substr(0, 4) + szPNPDeviceID.substr(szPNPDeviceID.length() - 16);
+		}
+	}
+
+	return szOTPHardwareID;
+}
+
+void Bot::InitializeAnyOTPService()
+{
+	m_hModuleAnyOTP = LoadLibraryExW(skCryptDec(L"AnyOTPBiz.dll"), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+
+	if (m_hModuleAnyOTP == NULL)
+	{
+#ifdef _DEBUG
+		printf("Bot:: DLL Not Loaded\n");
+#endif
+		return;
+	}
+
+#ifdef _DEBUG
+	printf("Bot: AnyOTP Library Loaded\n");
+#endif
+}
+
+std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareID)
+{
+	std::wstring szCode = L"";
+	std::wstring szOTPPassword(szPassword.begin(), szPassword.end());
+	std::wstring szOTPHardwareID = GetAnyOTPHardwareID();
+
+	if (szHardwareID.size() > 0)
+	{
+		std::wstring szCustomOTPHardwareID(szHardwareID.begin(), szHardwareID.end());
+		szOTPHardwareID = szCustomOTPHardwareID;
+	}
+
+	auto pGenerateOTPAddress = (LPVOID)((DWORD)(m_hModuleAnyOTP)+0x6327);
+	GenerateOTP pGenerateOTP = reinterpret_cast<GenerateOTP>(pGenerateOTPAddress);
+
+	int iCodeAddress;
+	pGenerateOTP(0, szOTPHardwareID.c_str(), szOTPPassword.c_str(), &iCodeAddress);
+
+	const int bufferSize = 6 * 2;
+	WCHAR buffer[bufferSize] = { 0 };
+
+	SIZE_T bytesRead;
+	if (!ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<LPVOID>(iCodeAddress), buffer, bufferSize, &bytesRead))
+	{
+#ifdef _DEBUG
+		printf("Bot: ReadProcessMemory Failed\n");
+#endif
+		return szCode;
+	}
+
+	szCode = buffer;
+
+	return szCode;
 }
