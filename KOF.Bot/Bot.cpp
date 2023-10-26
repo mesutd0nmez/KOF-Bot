@@ -4,7 +4,6 @@
 #include "UI.h"
 #include "Memory.h"
 #include "Remap.h"
-#include "Drawing.h"
 #include "HardwareInformation.h"
 
 Bot::Bot()
@@ -512,19 +511,6 @@ void Bot::OnLoaded()
 	printf("Bot: Knight Online process starting\n");
 #endif
 
-#ifdef ENABLE_FIREWALL_RULES
-	if (m_ePlatformType == PlatformType::USKO)
-	{
-		std::string strConsoleInfo;
-		ConsoleCommand(skCryptDec("netsh advfirewall firewall show rule name=\"KOF Firewall\""), strConsoleInfo);
-
-		if (strConsoleInfo.find(skCryptDec("No rules match")) == std::string::npos)
-		{
-			ConsoleCommand(skCryptDec("netsh advfirewall firewall set rule name=\"KOF Firewall\" new enable=no"), strConsoleInfo);
-		}
-	}
-#endif
-
 #ifndef DISABLE_XIGNCODE
 	if (m_ePlatformType == PlatformType::USKO)
 	{
@@ -674,10 +660,8 @@ void Bot::OnLoaded()
 
 	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\trkys\\OneDrive\\Belgeler\\GitHub\\Pipeline\\Debug\\Pipeline.dll"));
 
-#ifndef NO_INITIALIZE_CLIENT_HANDLER
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
-#endif
 }
 
 void Bot::Patch(HANDLE hProcess)
@@ -1176,7 +1160,7 @@ HANDLE Bot::GetInjectedProcessHandle()
 		}
 		else
 		{
-			CloseHandle(m_InjectedProcessInfo.hProcess);
+			//CloseHandle(m_InjectedProcessInfo.hProcess);
 			m_InjectedProcessInfo.hProcess = NULL;
 		}
 	}

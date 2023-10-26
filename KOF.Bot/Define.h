@@ -1,33 +1,32 @@
 #pragma once
 
 #define DEBUG
-//#define PRINT_RECV_PACKET
-#define PRINT_SEND_PACKET
 
-//#define DISABLE_XIGNCODE
+//#define UI_HAZAR
+#define UI_DEFAULT
 
 #define DEVELOPER_ONLY
-#define SPECIAL_FEATURES
-#define ENABLE_CAPTCHA_SOLVER
-#define ENABLE_AUTO_OTP
 
-//#define DISABLE_USKO_AUTO_SERVER_SELECT
-//#define NO_INITIALIZE_CLIENT_HANDLER
-//#define DISABLE_AUTO_LOGIN
+//#define PRINT_RECV_PACKET
+//#define PRINT_SEND_PACKET
+//#define DISABLE_XIGNCODE
 
-//#define ENABLE_FIREWALL_RULES
+/////// FEATURES ///////
 
-#define SET_DEBUG_CLIENT_INFORMATION
+//#define FEATURE_LEVEL_DOWNER
+//#define FEATURE_TOURNAMENT_SKILLS
 
-//#define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
-//#define DEVELOPMENT_EXE "KnightOnLine.exe"
-//#define DEVELOPMENT_PLATFORM 0
-//#define DEVELOPMENT_ACCOUNT_INDEX 6
+///////////////////////////////////////////
 
-#define DEVELOPMENT_PATH "C:\\CNKO"
+#define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #define DEVELOPMENT_EXE "KnightOnLine.exe"
-#define DEVELOPMENT_PLATFORM 1
-#define DEVELOPMENT_ACCOUNT_INDEX 9
+#define DEVELOPMENT_PLATFORM 0
+#define DEVELOPMENT_ACCOUNT_INDEX 7
+
+//#define DEVELOPMENT_PATH "C:\\CNKO"
+//#define DEVELOPMENT_EXE "KnightOnLine.exe"
+//#define DEVELOPMENT_PLATFORM 1
+//#define DEVELOPMENT_ACCOUNT_INDEX 9
 
 //#define DEVELOPMENT_PATH "C:\\Ongate\\KnightOnline"
 //#define DEVELOPMENT_EXE "knightonline.exe"

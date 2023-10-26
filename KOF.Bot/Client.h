@@ -106,18 +106,18 @@ protected:
 protected:
 	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
 
-	std::recursive_mutex m_mutexAvailableSkill;
+	std::shared_mutex m_mutexAvailableSkill;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
-	std::recursive_mutex m_mutexNpc;
+	std::shared_mutex m_mutexNpc;
 	std::vector<TNpc> m_vecNpc;
 
-	std::recursive_mutex m_mutexPlayer;
+	std::shared_mutex m_mutexPlayer;
 	std::vector<TPlayer> m_vecPlayer;
 
 protected:
-	std::recursive_mutex m_mutexLootList;
+	std::shared_mutex m_mutexLootList;
 	std::vector<TLoot> m_vecLootList;
 	bool m_bIsMovingToLoot;
 
@@ -139,7 +139,7 @@ protected:
 	bool IsEnemy(DWORD iBase);
 	void StepCharacterForward(bool bStart);
 	void BasicAttack();
-	void BasicAttackWithPacket(float fBasicAttackInterval);
+	void BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval);
 
 	void PushPhase(DWORD dwAddress);
 	void WriteLoginInformation(std::string szAccountId, std::string szPassword);
@@ -261,7 +261,7 @@ public:
 	void UpdateSkillSuccessRate(bool bDisableCasting);
 
 protected:
-	std::recursive_mutex m_mutexPartyMembers;
+	std::shared_mutex m_mutexPartyMembers;
 	std::vector<PartyMember> m_vecPartyMembers;
 
 protected:

@@ -18,6 +18,7 @@
 #include <thread>
 #include <map>
 #include <mutex>
+#include <shared_mutex>
 #include <set>
 #include <shellapi.h>
 #include <limits>

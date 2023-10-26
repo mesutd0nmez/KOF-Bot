@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "UI.h"
-#include "Drawing.h"
 #include "Bot.h"
 #include "ClientHandler.h"
 
@@ -28,7 +27,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 #endif
 
-#ifdef SET_DEBUG_CLIENT_INFORMATION
+#ifdef DEBUG
     std::string szClientPath = DEVELOPMENT_PATH;
     std::string szClientExe = DEVELOPMENT_EXE;
     PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;

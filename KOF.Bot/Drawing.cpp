@@ -6,9 +6,7 @@
 #include "UI.h"
 #include "RouteManager.h"
 
-std::string Drawing::m_szMainWindowName = "";
-std::string Drawing::m_szRoutePlannerWindowName = "";
-std::string Drawing::m_szInventoryWindowName = "";
+#ifdef UI_DEFAULT
 
 Bot* Drawing::Bot = nullptr;
 bool Drawing::bDraw = true;
@@ -100,7 +98,7 @@ void Drawing::Draw()
 
         ImVec2 ScreenRes { 0, 0 };
         ImVec2 WindowPos { 0, 0 };
-        ImVec2 WindowSize { 658, 700 };
+        ImVec2 WindowSize { 658, 800 };
 
         if (m_bInitPos == false)
         {
@@ -117,7 +115,7 @@ void Drawing::Draw()
         ImGui::SetNextWindowBgAlpha(1.0f);
 
         ImGuiWindowFlags WindowFlags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize;
-		ImGui::Begin(m_szMainWindowName.c_str(), &bDraw, WindowFlags);
+		ImGui::Begin(UI::m_szMainWindowName.c_str(), &bDraw, WindowFlags);
 		{
             DrawGameController();
 		}
@@ -153,7 +151,7 @@ void Drawing::DrawRoutePlanner()
         ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
         ImGui::SetNextWindowSize(vWindowSize);
         ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin(m_szRoutePlannerWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
+        ImGui::Begin(UI::m_szRoutePlannerWindowName.c_str(), &Drawing::bDrawRoutePlanner, WindowFlags);
         {
             DrawRoutePlannerArea();
         }
@@ -613,7 +611,7 @@ void Drawing::DrawInventory()
 
         ImVec2 vec2InitialPos = { m_fScreenWidth, m_fScreenHeight };
 
-        ImVec2 vWindowSize = { 1030, 600 };
+        ImVec2 vWindowSize = { 1030, 620 };
 
         vec2InitialPos.x -= vWindowSize.x / 2;
         vec2InitialPos.y -= vWindowSize.y / 2;
@@ -621,7 +619,7 @@ void Drawing::DrawInventory()
         ImGui::SetNextWindowPos(vec2InitialPos, ImGuiCond_Once);
         ImGui::SetNextWindowSize(vWindowSize);
         ImGui::SetNextWindowBgAlpha(1.0f);
-        ImGui::Begin(m_szRoutePlannerWindowName.c_str(), &Drawing::bDrawInventory, WindowFlags);
+        ImGui::Begin(UI::m_szRoutePlannerWindowName.c_str(), &Drawing::bDrawInventory, WindowFlags);
         {
             DrawInventoryArea();
         }
@@ -632,7 +630,7 @@ void Drawing::DrawInventory()
 
 void Drawing::DrawInventoryArea()
 {
-    ImGui::BeginChild(skCryptDec("Inventory.Child"), ImVec2(817.0f, 560.0f), true);
+    ImGui::BeginChild(skCryptDec("Inventory.Child"), ImVec2(817.0f, 580.0f), true);
     {
         std::vector<TItemData> vecItemList;
         std::map<uint32_t, __TABLE_ITEM>* pItemTable;
@@ -968,7 +966,7 @@ void Drawing::RightText(std::string strValue)
 
 void Drawing::DrawGameController()
 {
-    ImGui::BeginChild(1, ImVec2(283, 663), true);
+    ImGui::BeginChild(1, ImVec2(283, 760), true);
     {
         /*ImGui::TextUnformatted(m_pClient->GetName().c_str());
         ImGui::SameLine();
@@ -1027,7 +1025,7 @@ void Drawing::DrawGameController()
                         );
                     }
 
-                    std::lock_guard<std::recursive_mutex> lockPlayer(m_pClient->m_mutexPlayer);
+                    std::shared_lock<std::shared_mutex> lockPlayer(m_pClient->m_mutexPlayer);
                     for (const TPlayer& pPlayer : m_pClient->m_vecPlayer)
                     {
                         ImVec2 pNpcPosition = ImVec2(
@@ -1037,7 +1035,7 @@ void Drawing::DrawGameController()
                         ImGui::GetWindowDrawList()->AddCircle(pNpcPosition, 1.0f, IM_COL32(0, 0, 255, 255), 0, 3.0f);
                     }
 
-                    std::lock_guard<std::recursive_mutex> lockNpc(m_pClient->m_mutexNpc);
+                    std::shared_lock<std::shared_mutex> lockNpc(m_pClient->m_mutexNpc);
                     for (const TNpc& pMob : m_pClient->m_vecNpc)
                     {
                         if (pMob.iMonsterOrNpc == 1)
@@ -1283,7 +1281,7 @@ void Drawing::DrawGameController()
                 m_pUserConfiguration->Reset();
             }
 
-            if (ImGui::Button(skCryptDec("Test 1"), ImVec2(129.0f, 0.0f)))
+            /*if (ImGui::Button(skCryptDec("Test 1"), ImVec2(129.0f, 0.0f)))
             {
                 m_pClient->Test1();
             }
@@ -1293,13 +1291,13 @@ void Drawing::DrawGameController()
             if (ImGui::Button(skCryptDec("Test 2"), ImVec2(129.0f, 0.0f)))
             {
                 m_pClient->Test2();
-            }
+            }*/
         }
 
         ImGui::Spacing();
         {
             auto windowHeight = ImGui::GetWindowSize().y;
-            auto fHeight = 30.0f;
+            auto fHeight = 35.0f;
             ImGui::SetCursorPosY((windowHeight - fHeight) * 0.97f);
 
             ImGui::TextUnformatted(skCryptDec("Automation"));
@@ -1342,7 +1340,7 @@ void Drawing::DrawGameController()
 
     ImGui::SameLine();
 
-    ImGui::BeginChild(2, ImVec2(350, 663), true);
+    ImGui::BeginChild(2, ImVec2(350, 760), true);
     {
         if (ImGui::BeginTabBar(skCryptDec("##KOF.Toolbar"), ImGuiTabBarFlags_None))
         {
@@ -1363,7 +1361,6 @@ void Drawing::DrawGameController()
                 }
 
                 DrawMainTransformationArea();
-                DrawMainListenerArea();
 
                 ImGui::EndTabItem();
             }
@@ -1377,7 +1374,7 @@ void Drawing::DrawGameController()
 
                     ImGui::Spacing();
                     {
-                        bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
+                        bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), false);
 
                         if (ImGui::Checkbox(skCryptDec("##AutoTargetCheckbox"), &bAutoTarget))
                             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), bAutoTarget ? 1 : 0);
@@ -1406,7 +1403,7 @@ void Drawing::DrawGameController()
 
                         ImGui::PopItemWidth();
 
-                        bool bTargetSelectedWaitItDieForNew = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("TargetSelectedWaitItDieForNew"), true);
+                        bool bTargetSelectedWaitItDieForNew = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("TargetSelectedWaitItDieForNew"), false);
 
                         if (ImGui::Checkbox(skCryptDec("##TargetSelectedWaitItDieForNew"), &bTargetSelectedWaitItDieForNew))
                             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("TargetSelectedWaitItDieForNew"), bTargetSelectedWaitItDieForNew ? 1 : 0);
@@ -1475,7 +1472,7 @@ void Drawing::DrawGameController()
 
                         ImGui::PopItemWidth();
 
-                        bool bBasicAttack = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
+                        bool bBasicAttack = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), false);
 
                         if (ImGui::Checkbox(skCryptDec("##BasicAttackCheckbox"), &bBasicAttack))
                             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttack"), bBasicAttack ? 1 : 0);
@@ -1541,7 +1538,7 @@ void Drawing::DrawGameController()
                         }
                     }
 
-#ifdef DEVELOPER_ONLY
+#ifdef FEATURE_LEVEL_DOWNER
                     ImGui::Spacing();
                     {
                         ImGui::TextUnformatted(skCryptDec("Level Downer"));
@@ -1708,6 +1705,7 @@ void Drawing::DrawGameController()
                 ImGui::Spacing();
                 {
                     DrawMainSettingsArea();
+
 
                     ImGui::EndTabItem();
                 }
@@ -1879,6 +1877,7 @@ void Drawing::DrawMainFeaturesArea()
             ImGui::PopItemWidth();  
 
             bool bSaveCPUEnable = m_pUserConfiguration->GetBool(skCryptDec("Feature"), skCryptDec("SaveCPU"), false);
+            int iSaveCPUValue = m_pUserConfiguration->GetInt(skCryptDec("Feature"), skCryptDec("SaveCPUValue"), 1);
 
             if (ImGui::Checkbox(skCryptDec("##SaveCPUCheckbox"), &bSaveCPUEnable))
             {
@@ -1888,6 +1887,10 @@ void Drawing::DrawMainFeaturesArea()
                 {
                     m_pClient->SetSaveCPUSleepTime(0);
                 }
+                else
+                {
+                    m_pClient->SetSaveCPUSleepTime(iSaveCPUValue);
+                }
             }
 
             ImGui::SameLine();
@@ -1895,8 +1898,6 @@ void Drawing::DrawMainFeaturesArea()
             ImGui::Text(skCryptDec("Save CPU"));
 
             ImGui::SameLine();
-
-            int iSaveCPUValue = m_pUserConfiguration->GetInt(skCryptDec("Feature"), skCryptDec("SaveCPUValue"), 1);
 
             ImGui::PushItemWidth(125);
 
@@ -1987,6 +1988,22 @@ void Drawing::DrawMainAutoLootArea()
 
         ImGui::PopItemWidth();
     }
+
+    ImGui::Spacing();
+    {
+        ImGui::Text(skCryptDec("Wait While Open Loot"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(100);
+
+        int iWaitWhileOpenTime = m_pUserConfiguration->GetInt(skCryptDec("AutoLoot"), skCryptDec("WaitWhileOpenLoot"), 1100);
+
+        if (ImGui::DragInt(skCryptDec("##LootMinPrice"), &iWaitWhileOpenTime, 1, 0, INT_MAX))
+            m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("WaitWhileOpenLoot"), iWaitWhileOpenTime);
+
+        ImGui::PopItemWidth();
+    }
 }
 
 void Drawing::DrawMainDeveloperOnlyArea()
@@ -2022,17 +2039,6 @@ void Drawing::DrawMainDeveloperOnlyArea()
         ImGui::TextUnformatted(skCryptDec("Fake Item"));
         ImGui::Separator();
 
-        if (ImGui::Button(skCryptDec("Dagger (+1) -> Oreads (Peri)"), ImVec2(300.0f, 0.0f)))
-        {
-            auto iDagger = m_pClient->GetInventoryItem(110110001); // +1 Dagger 
-
-            if (iDagger.iItemID != 0)
-            {
-                m_pClient->SendItemMovePacket(1, ITEM_INVEN_INVEN, iDagger.iItemID, iDagger.iPos - 14, 35);
-                m_pClient->SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-            }
-        }
-
         if (ImGui::Button(skCryptDec("Inn Hostess (1) -> MBag Left"), ImVec2(300.0f, 0.0f)))
         {
             std::vector<TNpc> tmpVecNpc = m_pClient->m_vecNpc;
@@ -2056,32 +2062,6 @@ void Drawing::DrawMainDeveloperOnlyArea()
             if (findedNpc != tmpVecNpc.end())
             {
                 m_pClient->SendWarehouseGetOut(findedNpc->iID, 110110001, 0, 1, 68, 1);
-            }
-        }
-
-        ImGui::TextUnformatted(skCryptDec("Use skill with ID"));
-        ImGui::Separator();
-
-        ImGui::DragInt(skCryptDec("##UseSkillID"), &m_iSkillID, 1, 0, 10);
-
-        if (ImGui::Button(skCryptDec("Use Skill"), ImVec2(300.0f, 0.0f)))
-        {
-            std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
-            if (Drawing::Bot->GetSkillTable(&pSkillTable))
-            {
-                auto pSkillData = pSkillTable->find(m_iSkillID);
-
-                if (pSkillData != pSkillTable->end())
-                {
-                    if (m_pClient->GetTarget())
-                    {
-                        m_pClient->UseSkillWithPacket(pSkillData->second, m_pClient->GetTarget());
-                    }
-                    else
-                    {
-                        m_pClient->UseSkillWithPacket(pSkillData->second, m_pClient->GetID());
-                    }            
-                }
             }
         }
     }
@@ -2822,6 +2802,8 @@ void Drawing::DrawMainSettingsArea()
 
         ImGui::PopItemWidth();
     }
+
+    DrawMainListenerArea();
 }
 
 void Drawing::DrawAutomatedAttackSkillTree()
@@ -2933,7 +2915,7 @@ void Drawing::DrawMonsterListTree()
 {
     bool bRangeLimit = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
     int iRangeLimitValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
-    bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), true);
+    bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), false);
 
     ImGui::TextUnformatted(skCryptDec("Select attackable target"));
     ImGui::Separator();
@@ -2956,7 +2938,7 @@ void Drawing::DrawMonsterListTree()
             vecTargetList.push_back(pNpcData);
         }
 
-        std::lock_guard<std::recursive_mutex> lock(m_pClient->m_mutexNpc);
+        std::shared_lock<std::shared_mutex> lock(m_pClient->m_mutexNpc);
         for (const auto& x : m_pClient->m_vecNpc)
         {
             if (x.iMonsterOrNpc != 1)
@@ -3026,3 +3008,5 @@ void Drawing::DrawMonsterListTree()
     if (bAutoTarget)
         ImGui::EndDisabled();
 }
+
+#endif
