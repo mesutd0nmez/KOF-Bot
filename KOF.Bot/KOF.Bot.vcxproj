@@ -28,6 +28,8 @@
     <ClInclude Include="Cryption.h" />
     <ClInclude Include="Define.h" />
     <ClInclude Include="Drawing.h" />
+    <ClInclude Include="Drawing_Blank.h" />
+    <ClInclude Include="Drawing_Hazar.h" />
     <ClInclude Include="Enum.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Injection.h" />
@@ -58,6 +60,8 @@
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="ClientHandler.cpp" />
     <ClCompile Include="Drawing.cpp" />
+    <ClCompile Include="Drawing_Blank.cpp" />
+    <ClCompile Include="Drawing_Hazar.cpp" />
     <ClCompile Include="RouteManager.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Ini.cpp" />

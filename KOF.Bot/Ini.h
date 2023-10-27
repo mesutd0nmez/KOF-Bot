@@ -14,9 +14,6 @@ public:
 	std::function<void()> onSaveEvent;
 
 private:
-	std::mutex m_mutexMap;
-
-private:
 	bool m_isMemory;
 	std::string m_szFileName;
 	// Defines key/value pairs within sections
@@ -27,7 +24,7 @@ private:
 
 	ConfigMap m_configMap;
 
-	std::recursive_mutex m_mutex;
+	std::mutex m_mutex;
 
 public:
 	Ini();

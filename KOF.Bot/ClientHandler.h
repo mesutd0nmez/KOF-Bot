@@ -111,6 +111,7 @@ public:
 	void LoadSkillData();
 
 private:
+	void BasicAttackPacketProcess();
 	void AttackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();
@@ -140,6 +141,8 @@ private:
 	void PartyProcess();
 
 	void VipWarehouseProcess();
+
+	void RegionProcess();
 
 private:
 	bool m_bWorking;

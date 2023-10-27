@@ -6,377 +6,377 @@
 
 Ini::Ini()
 {
-	m_isMemory = true;
+    m_isMemory = true;
 }
 
 Ini::Ini(const char* lpFilename)
 {
-	m_szFileName = lpFilename;
-	m_isMemory = false;
+    m_szFileName = lpFilename;
+    m_isMemory = false;
 
-	Load(lpFilename);
+    Load(lpFilename);
 }
 
 bool Ini::Load(const char* lpFilename)
 {
-	m_szFileName = lpFilename;
-	m_isMemory = false;
-	const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
-	std::ifstream file(fn);
-	if (!file)
-	{
+    m_szFileName = lpFilename;
+    m_isMemory = false;
+    const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
+    std::ifstream file(fn);
+    if (!file)
+    {
 #ifdef DEBUG
-		printf("Warning: %s does not exist, will use configured defaults.\n", fn);
+        printf("Warning: %s does not exist, will use configured defaults.\n", fn);
 #endif
-		return false;
-	}
+        return false;
+    }
 
-	std::string currentSection;
+    std::string currentSection;
 
-	// If an invalid section is hit
-	// Ensure that we don't place key/value pairs
-	// from the invalid section into the previously loaded section.
-	bool bSkipNextSection = false;
+    // If an invalid section is hit
+    // Ensure that we don't place key/value pairs
+    // from the invalid section into the previously loaded section.
+    bool bSkipNextSection = false;
 
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex);  // Use std::mutex for exclusive access
 
-	while (!file.eof())
-	{
-		std::string line;
-		getline(file, line);
+    while (!file.eof())
+    {
+        std::string line;
+        getline(file, line);
 
-		rtrim(line);
-		if (line.empty())
-			continue;
+        rtrim(line);
+        if (line.empty())
+            continue;
 
-		// Check for value strings first
-		// It's faster than checking for a section
-		// at the expense of of not being able to use '=' in section names.
-		// As this is uncommon behaviour, this is a suitable trade-off.
-		size_t keySeparatorPos = line.find(INI_KEY_SEPARATOR);
-		if (keySeparatorPos != std::string::npos)
-		{
-			if (bSkipNextSection)
-				continue;
+        // Check for value strings first
+        // It's faster than checking for a section
+        // at the expense of not being able to use '=' in section names.
+        // As this is uncommon behavior, this is a suitable trade-off.
+        size_t keySeparatorPos = line.find(INI_KEY_SEPARATOR);
+        if (keySeparatorPos != std::string::npos)
+        {
+            if (bSkipNextSection)
+                continue;
 
-			std::string key = line.substr(0, keySeparatorPos),
-				value = line.substr(keySeparatorPos + 1);
+            std::string key = line.substr(0, keySeparatorPos),
+                value = line.substr(keySeparatorPos + 1);
 
-			// Clean up key/value to allow for 'key = value'
-			rtrim(key);   /* remove trailing whitespace from keys */
-			ltrim(value); /* remove preleading whitespace from values */
+            // Clean up key/value to allow for 'key = value'
+            rtrim(key);   /* remove trailing whitespace from keys */
+            ltrim(value); /* remove preleading whitespace from values */
 
-			ConfigMap::iterator itr = m_configMap.find(currentSection);
-			if (itr == m_configMap.end())
-			{
-				m_configMap.insert(std::make_pair(currentSection, ConfigEntryMap()));
-				itr = m_configMap.find(currentSection);
-			}
+            ConfigMap::iterator itr = m_configMap.find(currentSection);
+            if (itr == m_configMap.end())
+            {
+                m_configMap.insert(std::make_pair(currentSection, ConfigEntryMap()));
+                itr = m_configMap.find(currentSection);
+            }
 
-			itr->second[key] = value;
-			continue;
-		}
+            itr->second[key] = value;
+            continue;
+        }
 
-		// Not a value, so assume it's a section
-		size_t sectionStart = line.find_first_of(INI_SECTION_START),
-			sectionEnd = line.find_last_of(INI_SECTION_END);
+        // Not a value, so assume it's a section
+        size_t sectionStart = line.find_first_of(INI_SECTION_START),
+            sectionEnd = line.find_last_of(INI_SECTION_END);
 
-		if (sectionStart == std::string::npos
-			|| sectionEnd == std::string::npos
-			|| sectionStart > sectionEnd)
-		{
-			/* invalid section */
-			bSkipNextSection = true;
-			continue;
-		}
+        if (sectionStart == std::string::npos
+            || sectionEnd == std::string::npos
+            || sectionStart > sectionEnd)
+        {
+            /* invalid section */
+            bSkipNextSection = true;
+            continue;
+        }
 
-		currentSection = line.substr(sectionStart + 1, sectionEnd - 1);
-		bSkipNextSection = false;
-	}
+        currentSection = line.substr(sectionStart + 1, sectionEnd - 1);
+        bSkipNextSection = false;
+    }
 
-	file.close();
-	return true;
+    file.close();
+    return true;
 }
 
 bool Ini::Load(std::string szData)
 {
-	m_isMemory = true;
+    m_isMemory = true;
 
-	std::istringstream iss(szData);
-	std::istream& file = iss;
+    std::istringstream iss(szData);
+    std::istream& file = iss;
 
-	std::string currentSection;
+    std::string currentSection;
 
-	// If an invalid section is hit
-	// Ensure that we don't place key/value pairs
-	// from the invalid section into the previously loaded section.
-	bool bSkipNextSection = false;
+    // If an invalid section is hit
+    // Ensure that we don't place key/value pairs
+    // from the invalid section into the previously loaded section.
+    bool bSkipNextSection = false;
 
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex);
 
-	while (!file.eof())
-	{
-		std::string line;
-		getline(file, line);
+    while (!file.eof())
+    {
+        std::string line;
+        getline(file, line);
 
-		rtrim(line);
-		if (line.empty())
-			continue;
+        rtrim(line);
+        if (line.empty())
+            continue;
 
-		// Check for value strings first
-		// It's faster than checking for a section
-		// at the expense of of not being able to use '=' in section names.
-		// As this is uncommon behaviour, this is a suitable trade-off.
-		size_t keySeparatorPos = line.find(INI_KEY_SEPARATOR);
-		if (keySeparatorPos != std::string::npos)
-		{
-			if (bSkipNextSection)
-				continue;
+        // Check for value strings first
+        // It's faster than checking for a section
+        // at the expense of not being able to use '=' in section names.
+        // As this is uncommon behavior, this is a suitable trade-off.
+        size_t keySeparatorPos = line.find(INI_KEY_SEPARATOR);
+        if (keySeparatorPos != std::string::npos)
+        {
+            if (bSkipNextSection)
+                continue;
 
-			std::string key = line.substr(0, keySeparatorPos),
-				value = line.substr(keySeparatorPos + 1);
+            std::string key = line.substr(0, keySeparatorPos),
+                value = line.substr(keySeparatorPos + 1);
 
-			// Clean up key/value to allow for 'key = value'
-			rtrim(key);   /* remove trailing whitespace from keys */
-			ltrim(value); /* remove preleading whitespace from values */
+            // Clean up key/value to allow for 'key = value'
+            rtrim(key);   /* remove trailing whitespace from keys */
+            ltrim(value); /* remove preleading whitespace from values */
 
-			ConfigMap::iterator itr = m_configMap.find(currentSection);
-			if (itr == m_configMap.end())
-			{
-				m_configMap.insert(std::make_pair(currentSection, ConfigEntryMap()));
-				itr = m_configMap.find(currentSection);
-			}
+            ConfigMap::iterator itr = m_configMap.find(currentSection);
+            if (itr == m_configMap.end())
+            {
+                m_configMap.insert(std::make_pair(currentSection, ConfigEntryMap()));
+                itr = m_configMap.find(currentSection);
+            }
 
-			itr->second[key] = value;
-			continue;
-		}
+            itr->second[key] = value;
+            continue;
+        }
 
-		// Not a value, so assume it's a section
-		size_t sectionStart = line.find_first_of(INI_SECTION_START),
-			sectionEnd = line.find_last_of(INI_SECTION_END);
+        // Not a value, so assume it's a section
+        size_t sectionStart = line.find_first_of(INI_SECTION_START),
+            sectionEnd = line.find_last_of(INI_SECTION_END);
 
-		if (sectionStart == std::string::npos
-			|| sectionEnd == std::string::npos
-			|| sectionStart > sectionEnd)
-		{
-			/* invalid section */
-			bSkipNextSection = true;
-			continue;
-		}
+        if (sectionStart == std::string::npos
+            || sectionEnd == std::string::npos
+            || sectionStart > sectionEnd)
+        {
+            /* invalid section */
+            bSkipNextSection = true;
+            continue;
+        }
 
-		currentSection = line.substr(sectionStart + 1, sectionEnd - 1);
-		bSkipNextSection = false;
-	}
+        currentSection = line.substr(sectionStart + 1, sectionEnd - 1);
+        bSkipNextSection = false;
+    }
 
-	return true;
+    return true;
 }
 
 void Ini::Save(const char* lpFilename)
 {
-	if (onSaveEvent)
-		onSaveEvent();
+    if (onSaveEvent)
+        onSaveEvent();
 
-	if (!m_isMemory)
-	{
-		const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
-		FILE* fp = fopen(fn, "w");
+    if (!m_isMemory)
+    {
+        const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
+        FILE* fp = fopen(fn, "w");
 
-		std::lock_guard<std::recursive_mutex> lock(m_mutex);
-		for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
-		{
-			// Start the section
-			fprintf(fp, "[%s]" INI_NEWLINE, sectionItr->first.c_str());
+        std::unique_lock<std::mutex> lock(m_mutex);
 
-			// Now list out all the key/value pairs
-			for (auto keyItr = sectionItr->second.begin(); keyItr != sectionItr->second.end(); keyItr++)
-				fprintf(fp, "%s=%s" INI_NEWLINE, keyItr->first.c_str(), keyItr->second.c_str());
+        for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
+        {
+            // Start the section
+            fprintf(fp, "[%s]" INI_NEWLINE, sectionItr->first.c_str());
 
-			// Use a trailing newline to finish the section, to make it easier to read
-			fprintf(fp, INI_NEWLINE);
-		}
+            // Now list out all the key/value pairs
+            for (auto keyItr = sectionItr->second.begin(); keyItr != sectionItr->second.end(); keyItr++)
+                fprintf(fp, "%s=%s" INI_NEWLINE, keyItr->first.c_str(), keyItr->second.c_str());
 
-		fclose(fp);
-	}
+            // Use a trailing newline to finish the section, to make it easier to read
+            fprintf(fp, INI_NEWLINE);
+        }
+
+        fclose(fp);
+    }
 }
 
 void Ini::Reset()
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	m_configMap.clear();
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_configMap.clear();
 }
 
 std::string Ini::Dump()
 {
-	std::stringstream f;
+    std::stringstream f;
 
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
-	{
-		f << "[" << sectionItr->first.c_str() << "]" << INI_NEWLINE;
+    std::unique_lock<std::mutex> lock(m_mutex);
 
-		for (auto keyItr = sectionItr->second.begin(); keyItr != sectionItr->second.end(); keyItr++)
-			f << keyItr->first.c_str() << "=" << keyItr->second.c_str() << INI_NEWLINE;
+    for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
+    {
+        f << "[" << sectionItr->first.c_str() << "]" << INI_NEWLINE;
 
-		f << INI_NEWLINE;
-	}
+        for (auto keyItr = sectionItr->second.begin(); keyItr != sectionItr->second.end(); keyItr++)
+            f << keyItr->first.c_str() << "=" << keyItr->second.c_str() << INI_NEWLINE;
 
-	return f.str().c_str();
+        f << INI_NEWLINE;
+    }
+
+    return f.str().c_str();
 }
 
 int Ini::GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault)
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+    std::unique_lock<std::mutex> lock(m_mutex);
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
-	if (sectionItr != m_configMap.end())
-	{
-		ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
+    if (sectionItr != m_configMap.end())
+    {
+        ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
 
-		if (keyItr != sectionItr->second.end())
-			return atoi(keyItr->second.c_str());
-	}
-	else
-	{
-		m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        if (keyItr != sectionItr->second.end())
+            return atoi(keyItr->second.c_str());
+    }
+    else
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
 
-		sectionItr = m_configMap.find(lpAppName);
+        char tmpDefault[INI_BUFFER] = "";
+        _snprintf(tmpDefault, INI_BUFFER, "%d", nDefault);
+        sectionItr->second[lpKeyName] = tmpDefault;
+    }
 
-		char tmpDefault[INI_BUFFER] = "";
-		_snprintf(tmpDefault, INI_BUFFER, "%d", nDefault);
-
-		sectionItr->second[lpKeyName] = tmpDefault;
-	}
-
-	return nDefault;
+    return nDefault;
 }
 
 std::vector<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+    std::unique_lock<std::mutex> lock(m_mutex);
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
-	if (sectionItr != m_configMap.end())
-	{
-		ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
+    if (sectionItr != m_configMap.end())
+    {
+        ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
 
-		if (keyItr != sectionItr->second.end())
-		{
-			std::vector<int> v;
-			std::stringstream ss(keyItr->second.c_str());
+        if (keyItr != sectionItr->second.end())
+        {
+            std::vector<int> v;
+            std::stringstream ss(keyItr->second.c_str());
 
-			for (int i; ss >> i;)
-			{
-				v.push_back(i);
+            for (int i; ss >> i;)
+            {
+                v.push_back(i);
 
-				if (ss.peek() == ',')
-					ss.ignore();
-			}
+                if (ss.peek() == ',')
+                    ss.ignore();
+            }
 
-			return v;
-		}
-	}
-	else
-	{
-		m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+            return v;
+        }
+    }
+    else
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
 
-		sectionItr = m_configMap.find(lpAppName);
+        std::string ret;
 
-		std::string ret;
+        for (const int& s : nDefault)
+        {
+            if (!ret.empty())
+                ret += ",";
 
-		for (const int& s : nDefault)
-		{
-			if (!ret.empty())
-				ret += ",";
+            ret += std::to_string(s);
+        }
 
-			ret += std::to_string(s);
-		}
+        sectionItr->second[lpKeyName] = ret.c_str();
+    }
 
-		sectionItr->second[lpKeyName] = ret.c_str();
-	}
-
-	return nDefault;
+    return nDefault;
 }
 
 int Ini::SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault)
 {
-	char tmpDefault[INI_BUFFER];
-	_snprintf(tmpDefault, INI_BUFFER, "%d", nDefault);
-	SetString(lpAppName, lpKeyName, tmpDefault);
-	return nDefault;
+    char tmpDefault[INI_BUFFER];
+    _snprintf(tmpDefault, INI_BUFFER, "%d", nDefault);
+    SetString(lpAppName, lpKeyName, tmpDefault);
+    return nDefault;
 }
 
 std::vector<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
 {
-	std::string ret;
+    {
+        std::string ret;
 
-	for (const int& s : nDefault)
-	{
-		if (!ret.empty())
-			ret += ",";
+        for (const int& s : nDefault)
+        {
+            if (!ret.empty())
+                ret += ",";
 
-		ret += std::to_string(s);
-	}
+            ret += std::to_string(s);
+        }
 
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        std::unique_lock<std::mutex> lock(m_mutex); 
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+        sectionItr->second[lpKeyName] = ret.c_str();
+    }
 
-	ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
-	sectionItr->second[lpKeyName] = ret.c_str();
+    Save();
 
-	Save();
-
-	return nDefault;
+    return nDefault;
 }
 
 bool Ini::GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefault)
 {
-	return GetInt(lpAppName, lpKeyName, bDefault) == 1;
+    return GetInt(lpAppName, lpKeyName, bDefault) == 1;
 }
 
 void Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings /*= true*/)
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+    std::unique_lock<std::mutex> lock(m_mutex);
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
-	if (sectionItr != m_configMap.end())
-	{
-		ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
+    if (sectionItr != m_configMap.end())
+    {
+        ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
 
-		if (keyItr != sectionItr->second.end())
-		{
-			lpOutString = keyItr->second;
-			return;
-		}
-	}
-	else
-	{
-		m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        if (keyItr != sectionItr->second.end())
+        {
+            lpOutString = keyItr->second;
+            return;
+        }
+    }
+    else
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
+        sectionItr->second[lpKeyName] = lpDefault;
+    }
 
-		sectionItr = m_configMap.find(lpAppName);
-		sectionItr->second[lpKeyName] = lpDefault;
-	}
-
-	lpOutString = lpDefault;
+    lpOutString = lpDefault;
 }
 
 std::string Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, bool bAllowEmptyStrings /*= true*/)
 {
-	std::string lpOutString;
-	GetString(lpAppName, lpKeyName, lpDefault, lpOutString, bAllowEmptyStrings);
-	return lpOutString;
+    std::string lpOutString;
+    GetString(lpAppName, lpKeyName, lpDefault, lpOutString, bAllowEmptyStrings);
+    return lpOutString;
 }
 
 const char* Ini::SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault)
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutex);
-	ConfigMap::iterator itr = m_configMap.find(lpAppName);
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        ConfigMap::iterator itr = m_configMap.find(lpAppName);
 
-	m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        itr = m_configMap.find(lpAppName);
+        itr->second[lpKeyName] = lpDefault;
+    }
 
-	itr = m_configMap.find(lpAppName);
-	itr->second[lpKeyName] = lpDefault;
+    Save();
 
-	Save();
-
-	return lpDefault;
+    return lpDefault;
 }

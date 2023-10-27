@@ -45,8 +45,7 @@ public:
 	bool GetItemExtensionData(uint32_t iItemID, uint8_t iExtensionID, __TABLE_ITEM_EXTENSION*& pOutItemExtensionData);
 	bool GetNpcTable(std::map<uint32_t, __TABLE_NPC>** mapDataOut);
 
-	bool GetMobTable(std::map<uint32_t, __TABLE_MOB_US>** mapDataOut);
-	bool GetMobTable(std::map<uint32_t, __TABLE_MOB_CN>** mapDataOut);
+	bool GetMobTable(std::map<uint32_t, __TABLE_MOB>** mapDataOut);
 
 	bool GetItemSellTable(std::map<uint32_t, __TABLE_ITEM_SELL>** mapDataOut);
 	bool GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecShopWindow);
@@ -71,9 +70,7 @@ private:
 	Table<__TABLE_ITEM>* m_pTbl_Item;
 	Table<__TABLE_ITEM_EXTENSION>* m_pTbl_Item_Extension[45];
 	Table<__TABLE_NPC>* m_pTbl_Npc;
-
-	Table<__TABLE_MOB_US>* m_pTbl_Mob_US;
-	Table<__TABLE_MOB_CN>* m_pTbl_Mob_CN;
+	Table<__TABLE_MOB>* m_pTbl_Mob;
 
 	Table<__TABLE_ITEM_SELL>* m_pTbl_ItemSell;
 	Table<__TABLE_DISGUISE_RING>* m_pTbl_Disguise_Ring;

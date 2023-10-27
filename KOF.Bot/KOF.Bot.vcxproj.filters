@@ -144,6 +144,12 @@
     <ClInclude Include="Password.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Drawing_Hazar.h">
+      <Filter>Source Files\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Drawing_Blank.h">
+      <Filter>Source Files\UI</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -181,6 +187,12 @@
     </ClCompile>
     <ClCompile Include="RouteManager.cpp">
       <Filter>Source Files\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Drawing_Hazar.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Drawing_Blank.cpp">
+      <Filter>Source Files\UI</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

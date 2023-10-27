@@ -251,6 +251,7 @@ bool Client::IsAttackable(DWORD iBase)
 		return false;
 
 	DWORD iNation = GetNation(iBase);
+	DWORD iMeNation = GetNation();
 
 	if (iTargetID >= 5000)
 	{
@@ -263,11 +264,11 @@ bool Client::IsAttackable(DWORD iBase)
 			return false;
 	}
 
-	/*DWORD iHp = GetHp(iBase);
-	DWORD iMaxHp = GetMaxHp(iBase);*/
+	DWORD iHp = GetHp(iBase);
+	DWORD iMaxHp = GetMaxHp(iBase);
 	DWORD iState = GetActionState(iBase);
 
-	if ((iState == PSA_DYING || iState == PSA_DEATH)/* || (iMaxHp != 0 && iHp == 0)*/)
+	if ((iState == PSA_DYING || iState == PSA_DEATH) || (iMaxHp != 0 && iHp <= 0))
 		return false;
 
 	return true;
@@ -340,6 +341,8 @@ bool Client::IsDeath(DWORD iBase)
 
 bool Client::IsStunned(DWORD iBase)
 {
+	return false;
+
 	if (iBase == 0)
 		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
 
@@ -737,7 +740,7 @@ bool Client::IsBlinking(int32_t iTargetID)
 	}
 	else
 	{
-		std::lock_guard<std::recursive_mutex> lock(m_mutexPlayer);
+		std::shared_lock<std::shared_mutex> lock(m_mutexPlayer);
 		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[&](const TPlayer& a) { return a.iID == iTargetID; });
 
@@ -1253,13 +1256,8 @@ void Client::BasicAttack()
 	m_msLastBasicAttackTime = msCurrentTime;
 }
 
-void Client::BasicAttackWithPacket(float fBasicAttackInterval)
+void Client::BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval)
 {
-	DWORD iTargetBase = GetTargetBase();
-
-	if (iTargetBase == 0)
-		return;
-
 	float fTime = Bot::TimeGet();
 	float fAttackInterval = fBasicAttackInterval;
 
@@ -1269,11 +1267,14 @@ void Client::BasicAttackWithPacket(float fBasicAttackInterval)
 	float fTargetRadius = GetRadius(iTargetBase) * GetScaleZ(iTargetBase);
 	float fMySelfRadius = GetRadius() * GetScaleZ();
 
+	float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
+
+	if (fDistanceExceptRadius > 8.0f)
+		return;
+
 	if (fTime > m_fAttackTimeRecent + fAttackInterval)
 	{
-		float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
-		SendBasicAttackPacket(GetTarget(), fBasicAttackInterval, fDistanceExceptRadius);
-
+		SendBasicAttackPacket(GetTarget(), fAttackInterval, fDistanceExceptRadius);
 		m_fAttackTimeRecent = fTime;
 	}
 }
@@ -1383,6 +1384,9 @@ void Client::WriteLoginInformation(std::string szAccountId, std::string szPasswo
 
 	WriteString(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT")), szAccountId.c_str());
 	Write4Byte(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH")), szAccountId.size());
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
 	WriteString(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT")), szPassword.c_str());
 	Write4Byte(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH")), szPassword.size());
 }
@@ -1909,13 +1913,11 @@ void Client::SendBasicAttackPacket(int32_t iTargetID, float fInterval, float fDi
 {
 	Packet pkt = Packet(WIZ_ATTACK);
 
-	fInterval += 0.1f;
-
 	pkt
 		<< uint8_t(1) << uint8_t(1)
 		<< iTargetID
-		<< uint16_t((int)(fInterval * 100))
-		<< uint16_t((int)(fDistance * 10))
+		<< uint16_t((fInterval * 100))
+		<< int16_t((fDistance))
 		<< uint8_t(0) << uint8_t(0);
 
 	SendPacket(pkt);
@@ -1985,7 +1987,7 @@ void Client::SendTargetHpRequest(int32_t bTargetID, bool bBroadcast)
 	SendPacket(pkt);
 }
 
-void Client::SetTarget(uint32_t iTargetBase)
+void Client::SetTarget(uint32_t iTarget)
 {
 	BYTE byCode[] =
 	{
@@ -2002,7 +2004,7 @@ void Client::SetTarget(uint32_t iTargetBase)
 
 	DWORD iDlg = GetAddress(skCryptDec("KO_PTR_DLG"));
 	CopyBytes(byCode + 2, iDlg);
-	CopyBytes(byCode + 9, iTargetBase);
+	CopyBytes(byCode + 9, iTarget); // Target Base
 
 	DWORD iSelectMob = GetAddress(skCryptDec("KO_SELECT_MOB"));
 	CopyBytes(byCode + 15, iSelectMob);
@@ -2179,25 +2181,25 @@ bool Client::IsNeedRepair()
 	{
 		switch (i)
 		{
-		case 1:
-		case 4:
-		case 6:
-		case 8:
-		case 10:
-		case 12:
-		case 13:
-		{
-			TItemData pInventory = GetInventoryItemSlot(i);
+			case 1:
+			case 4:
+			case 6:
+			case 8:
+			case 10:
+			case 12:
+			case 13:
+			{
+				TItemData pInventory = GetInventoryItemSlot(i);
 
-			if (pInventory.iItemID == 0)
-				continue;
+				if (pInventory.iItemID == 0)
+					continue;
 
-			if (pInventory.iDurability != 0)
-				continue;
+				if (pInventory.iDurability != 0)
+					continue;
 
-			return true;
-		}
-		break;
+				return true;
+			}
+			break;
 		}
 	}
 
@@ -2524,7 +2526,7 @@ bool Client::GetPartyMember(int32_t iID, Party& pPartyMember)
 
 void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 {
-	std::lock_guard<std::recursive_mutex> lock(m_mutexAvailableSkill);
+	std::shared_lock<std::shared_mutex> lock(m_mutexAvailableSkill);
 	for (auto& e : m_vecAvailableSkill)
 	{
 		DWORD iSkillBase = GetSkillBase(e.iID);

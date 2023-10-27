@@ -3,6 +3,8 @@
 
 #include "Bot.h"
 
+#ifdef UI_DEFAULT
+
 class Drawing
 {
 public:
@@ -15,11 +17,6 @@ private:
 	static bool bDrawInventory;
 
 	static void InitializeSceneData();
-
-public:
-	static std::string m_szMainWindowName;
-	static std::string m_szRoutePlannerWindowName;
-	static std::string m_szInventoryWindowName;
 
 public:
 	static void Initialize();
@@ -54,5 +51,7 @@ public:
 	static void DrawInventory();
 	static void DrawInventoryArea();
 };
+
+#endif
 
 #endif
