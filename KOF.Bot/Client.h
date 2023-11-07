@@ -35,6 +35,7 @@ public:
 	float GetScaleZ(DWORD iBase = 0);
 	float GetScaleY(DWORD iBase = 0);
 	bool IsAttackable(DWORD iBase);
+	uint8_t GetServerId();
 	bool IsDisconnect();
 	bool IsDeath(DWORD iBase = 0);
 	bool IsStunned(DWORD iBase = 0);
@@ -206,7 +207,7 @@ protected:
 	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemSell> vecItemList);
 	void SendItemRepair(uint8_t iDirection, uint8_t iInventoryPosition, int32_t iNpcId, int32_t iItemId);
 
-protected:
+public:
 	void RefreshCaptcha();
 	void SendCaptcha(std::string szCode);
 
@@ -339,4 +340,8 @@ public:
 
 public:
 	void SendSelectMessage(uint8_t iMenuIndex, std::string szLuaName, bool bAccept = false);
+
+
+public:
+	std::chrono::milliseconds m_msLastDisconnectTime;
 };

@@ -22,9 +22,11 @@ public:
 
 private:
 	virtual void OnReady() = 0;
+	virtual void OnPong() = 0;
 	virtual void OnAuthenticated() = 0;
 	virtual void OnLoaded() = 0;
 	virtual void OnConfigurationLoaded() = 0;
+	virtual void OnCaptchaResponse(bool bStatus, std::string szResult) = 0;
 
 protected:
 	void SendLogin(std::string szToken);
@@ -41,6 +43,7 @@ private:
 
 protected:
 	void SendInjectionRequest(uint32_t iProcessId);
+	void SendPong();
 
 protected:
 	Ini* m_iniPointer;
@@ -63,5 +66,8 @@ protected:
 
 protected:
 	HardwareInformation m_hardwareInfo;
+
+public:
+	void SendCaptcha(std::string szImageBase64);
 };
 

@@ -4,6 +4,9 @@
 #ifdef UI_HAZAR
 #include "Drawing_Hazar.h"
 #endif
+#ifdef UI_COMMON
+#include "Drawing_Common.h"
+#endif
 #ifdef UI_DEFAULT
 #include "Drawing.h"
 #endif
@@ -42,6 +45,7 @@ private:
 	static void StyleColorsHazar();
 	static void StyleColorsDarkGreenBlue();
 	static void StyleColorsWhite();
+
 };
 
 #endif

@@ -18,6 +18,8 @@ enum PacketHeader
 	CONFIGURATION,
 	POINTER,
 	INJECTION,
+	PING,
+	CAPTCHA
 };
 
 enum LoginType

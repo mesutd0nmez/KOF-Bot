@@ -57,6 +57,9 @@ Bot::Bot()
 	m_jInventoryFlags.clear();
 
 	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
+
+	m_hModuleAnyOTP = nullptr;
+	m_InjectedProcessInfo = PROCESS_INFORMATION();
 }
 
 Bot::~Bot()
@@ -108,6 +111,9 @@ Bot::~Bot()
 	m_jSelectedAccount.clear();
 
 	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
+
+	m_hModuleAnyOTP = nullptr;
+	m_InjectedProcessInfo = PROCESS_INFORMATION();
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -201,6 +207,63 @@ void Bot::Process()
 		if (m_ClientHandler)
 		{
 			m_ClientHandler->Process();
+
+			if (m_iSelectedAccount != -1)
+			{
+				if (m_ClientHandler->IsDisconnect())
+				{
+					if (m_ClientHandler->m_msLastDisconnectTime == std::chrono::milliseconds(0))
+					{
+#ifdef DEBUG
+						printf("Bot: Disconnected, Auto Login Process Starting In 60 Seconds\n");
+#endif
+
+						m_ClientHandler->m_msLastDisconnectTime = duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						);
+					}
+					else
+					{
+						std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+							std::chrono::system_clock::now().time_since_epoch()
+						);
+
+						if ((m_ClientHandler->m_msLastDisconnectTime.count() + 60000) < msNow.count())
+						{
+#ifdef DEBUG
+							printf("Bot: Auto Login Process Started\n");
+#endif
+							std::ostringstream strBotCommandLine;
+							strBotCommandLine
+								<< m_szClientPath
+								<< " "
+								<< m_szClientExe
+								<< " "
+								<< std::to_string(m_ePlatformType)
+								<< " "
+								<< std::to_string(m_iSelectedAccount)
+								<< " "
+								<< std::to_string(1);
+
+							PROCESS_INFORMATION botProcessInfo;
+							StartProcess(std::filesystem::current_path().string(), skCryptDec("data\\bin\\chrome.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
+
+							Close();
+						}
+					}
+				}
+				else
+				{
+					if (m_ClientHandler->m_msLastDisconnectTime != std::chrono::milliseconds(0))
+					{
+#ifdef DEBUG
+						printf("Bot: Auto Login Process Stopped, Connection Return Back\n");
+#endif
+					}
+
+					m_ClientHandler->m_msLastDisconnectTime = std::chrono::milliseconds(0);
+				}
+			}
 		}
 
 		if (m_iniUserConfiguration)
@@ -492,6 +555,13 @@ void Bot::OnReady()
 	}
 }
 
+void Bot::OnPong()
+{
+#ifdef DEBUG
+	printf("Bot: OnPong\n");
+#endif
+}
+
 void Bot::OnAuthenticated()
 {
 #ifdef DEBUG
@@ -654,15 +724,32 @@ void Bot::OnLoaded()
 
 	Patch(m_InjectedProcessInfo.hProcess);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+	std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
-	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("KOF.dll"));
+	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("Adapter.dll"));
 
 	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\trkys\\OneDrive\\Belgeler\\GitHub\\Pipeline\\Debug\\Pipeline.dll"));
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
 }
+
+void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
+{
+#ifdef DEBUG
+	printf("Bot: OnCaptchaResponse: %d - %s\n", bStatus ? 1 : 0, szResult.c_str());
+#endif
+
+	if (!bStatus)
+	{
+		m_ClientHandler->RefreshCaptcha();
+	}
+	else
+	{
+		m_ClientHandler->SendCaptcha(szResult);
+	}
+}
+
 
 void Bot::Patch(HANDLE hProcess)
 {
@@ -728,7 +815,7 @@ void Bot::OnConfigurationLoaded()
 
 		if ((msCurrentTime - m_msLastConfigurationSave) > std::chrono::milliseconds(1000))
 		{
-			SendSaveUserConfiguration(1, GetClientHandler()->GetName());
+			SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
 			m_msLastConfigurationSave = msCurrentTime;
 		}
 	};

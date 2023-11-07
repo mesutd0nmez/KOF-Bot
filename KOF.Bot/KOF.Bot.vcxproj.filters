@@ -150,6 +150,9 @@
     <ClInclude Include="Drawing_Blank.h">
       <Filter>Source Files\UI</Filter>
     </ClInclude>
+    <ClInclude Include="Drawing_Common.h">
+      <Filter>Source Files\UI</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -192,6 +195,9 @@
       <Filter>Source Files\UI</Filter>
     </ClCompile>
     <ClCompile Include="Drawing_Blank.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Drawing_Common.cpp">
       <Filter>Source Files\UI</Filter>
     </ClCompile>
   </ItemGroup>

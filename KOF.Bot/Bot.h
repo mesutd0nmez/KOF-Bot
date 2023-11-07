@@ -57,9 +57,11 @@ public:
 
 private:
 	void OnReady();
+	void OnPong();
 	void OnAuthenticated();
 	void OnLoaded();
 	void OnConfigurationLoaded();
+	void OnCaptchaResponse(bool bStatus, std::string szResult);
 
 private:
 	ClientHandler* m_ClientHandler;
