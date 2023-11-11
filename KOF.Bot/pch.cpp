@@ -239,7 +239,7 @@ bool KillProcessesByFileName(const char* fileName)
 	if (hSnapshot == INVALID_HANDLE_VALUE) 
 	{
 #ifdef DEBUG
-		std::cerr << "Error creating process snapshot" << std::endl;
+		std::cerr << "Bot: Error creating process snapshot" << std::endl;
 #endif
 		return false;
 	}
@@ -260,13 +260,13 @@ bool KillProcessesByFileName(const char* fileName)
 					if (TerminateProcess(hProcess, 0)) 
 					{
 #ifdef DEBUG
-						std::cout << "Terminated process ID: " << pe.th32ProcessID << std::endl;
+						std::cout << "Bot: Terminated process ID: " << pe.th32ProcessID << std::endl;
 #endif
 					}
 					else 
 					{
 #ifdef DEBUG
-						std::cerr << "Failed to terminate process ID: " << pe.th32ProcessID << std::endl;
+						std::cerr << "Bot: Failed to terminate process ID: " << pe.th32ProcessID << std::endl;
 #endif
 					}
 
@@ -275,7 +275,7 @@ bool KillProcessesByFileName(const char* fileName)
 				else 
 				{
 #ifdef DEBUG
-					std::cerr << "Failed to open process for termination" << std::endl;
+					std::cerr << "Bot: Failed to open process for termination" << std::endl;
 #endif
 				}
 			}
@@ -286,4 +286,30 @@ bool KillProcessesByFileName(const char* fileName)
 	CloseHandle(hSnapshot);
 
 	return true;
+}
+
+std::string GenerateUniqueString(int iLength) 
+{
+	const std::string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+	auto now = std::chrono::system_clock::now();
+	auto time = std::chrono::system_clock::to_time_t(now);
+
+	std::stringstream ss;
+	ss << std::put_time(std::localtime(&time), "%Y%m%d%H%M%S");
+
+	std::random_device rd;
+	std::mt19937 generator(rd());
+	std::uniform_int_distribution<int> distribution(0, alphabet.length() - 1);
+
+	std::string uniqueString = ss.str();
+
+	while (uniqueString.length() < iLength)
+	{
+		uniqueString += alphabet[distribution(generator)];
+	}
+
+	uniqueString = uniqueString.substr(0, iLength);
+
+	return uniqueString;
 }

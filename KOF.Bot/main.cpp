@@ -70,6 +70,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         bForceCloseClient = std::stoi(szArglist[5]) == 1 ? true : false;
     }
 
+    //TODO: Implement later
+    bForceCloseClient = true;
+
     if (bForceCloseClient)
     {
 #ifdef DEBUG
@@ -99,11 +102,14 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     }
 
     m_Bot = new Bot();
-
     m_Bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
+
+    UI::Initialize(m_Bot);
 
     while (true)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
         if (m_Bot->IsClosed())
             break;
 
@@ -114,9 +120,16 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
             break;
 
         m_Bot->Process();
+
+        if (m_Bot->GetUserConfiguration() != nullptr) 
+        {
+            UI::Render();
+        }
     }
 
     TerminateMyProcess(m_Bot->GetInjectedProcessId(), -1);
+
+    UI::Clear();
 
 #ifdef DEBUG
     fclose(stdout);

@@ -50,6 +50,8 @@ void Client::Clear()
 	m_bVipWarehouseEnabled = false;
 
 	m_msLastDisconnectTime = std::chrono::milliseconds(0);
+
+	m_bSkillCasting = false;
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -343,7 +345,7 @@ bool Client::IsDeath(DWORD iBase)
 	if (iActionState == PSA_DYING || iActionState == PSA_DEATH)
 		return true;
 
-	return GetHp(iBase) <= 0;
+	return false;
 }
 
 bool Client::IsStunned(DWORD iBase)
@@ -543,24 +545,24 @@ uint32_t Client::GetProperHeal()
 	return -1;
 }
 
-std::chrono::milliseconds Client::GetSkillUseTime(int32_t iSkillID)
+float Client::GetSkillNextUseTime(int32_t iSkillID)
 {
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it != m_mapSkillUseTime.end())
 		return it->second;
 
-	return (std::chrono::milliseconds)0;
+	return 0.0f;
 }
 
-void Client::SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime)
+void Client::SetSkillNextUseTime(int32_t iSkillID, float fSkillUseTime)
 {
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it == m_mapSkillUseTime.end())
-		m_mapSkillUseTime.insert(std::pair(iSkillID, iSkillUseTime));
+		m_mapSkillUseTime.insert(std::pair(iSkillID, fSkillUseTime));
 	else
-		it->second = iSkillUseTime;
+		it->second = fSkillUseTime;
 }
 
 Vector3 Client::GetPosition()
@@ -745,7 +747,6 @@ bool Client::IsBlinking(int32_t iTargetID)
 	}
 	else
 	{
-		std::shared_lock<std::shared_mutex> lock(m_mutexPlayer);
 		auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[&](const TPlayer& a) { return a.iID == iTargetID; });
 
@@ -1221,34 +1222,9 @@ void Client::StepCharacterForward(bool bStart)
 	ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
 
-void Client::BasicAttack()
+void Client::BasicAttack(DWORD iTargetBase)
 {
-	DWORD iMobBase = GetEntityBase(GetTarget());
-
-	if (iMobBase == 0)
-		return;
-
-	if (!IsAttackable(iMobBase))
-		return;
-
-	bool bBasicAttack = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("BasicAttack"), true);
-	bool bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", false);
-	int iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", 1000);
-
-	if (bAttackSpeed)
-	{
-		if (iAttackSpeedValue == 0)
-			iAttackSpeedValue = 1;
-	}
-	else
-		iAttackSpeedValue = 1000;
-
-	std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(
-		std::chrono::system_clock::now().time_since_epoch()
-	);
-
-	if (m_msLastBasicAttackTime > std::chrono::milliseconds(0) 
-		&& (msCurrentTime - m_msLastBasicAttackTime) < std::chrono::milliseconds(iAttackSpeedValue))
+	if (!IsAttackable(iTargetBase))
 		return;
 
 	Packet pkt = Packet(PIPE_BASIC_ATTACK);
@@ -1256,15 +1232,15 @@ void Client::BasicAttack()
 	pkt << uint8_t(1);
 
 	m_Bot->SendPipeServer(pkt);
-	m_Bot->SendPipeServer(pkt);
+	//m_Bot->SendPipeServer(pkt);
 
-	m_msLastBasicAttackTime = msCurrentTime;
+	m_fAttackTimeRecent = Bot::TimeGet();
 }
 
-void Client::BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval)
+void Client::BasicAttackWithPacket(DWORD iTargetBase, float fAttackInterval)
 {
-	float fTime = Bot::TimeGet();
-	float fAttackInterval = fBasicAttackInterval;
+	if (!IsAttackable(iTargetBase))
+		return;
 
 	Vector3 v3TargetPosition = GetTargetPosition();
 	float fDistance = GetDistance(v3TargetPosition);
@@ -1274,14 +1250,12 @@ void Client::BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval
 
 	float fDistanceExceptRadius = fDistance - ((fMySelfRadius + fTargetRadius) / 2.0f);
 
-	if (fDistanceExceptRadius > 8.0f)
+	if (fDistanceExceptRadius > 10.0f)
 		return;
 
-	if (fTime > m_fAttackTimeRecent + fAttackInterval)
-	{
-		SendBasicAttackPacket(GetTarget(), fAttackInterval, fDistanceExceptRadius);
-		m_fAttackTimeRecent = fTime;
-	}
+	SendBasicAttackPacket(GetTarget(), fAttackInterval, fDistanceExceptRadius);
+
+	m_fAttackTimeRecent = Bot::TimeGet();
 }
 
 DWORD Client::GetSkillBase(uint32_t iSkillID)
@@ -1557,127 +1531,142 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 
 	switch (pSkillData.iTarget)
 	{
-	case SkillTargetType::TARGET_SELF:
-	case SkillTargetType::TARGET_FRIEND_WITHME:
-	case SkillTargetType::TARGET_FRIEND_ONLY:
-	case SkillTargetType::TARGET_PARTY:
-	case SkillTargetType::TARGET_NPC_ONLY:
-	case SkillTargetType::TARGET_ENEMY_ONLY:
-	case SkillTargetType::TARGET_ALL:
-	case 9: // For God Mode
-	case SkillTargetType::TARGET_AREA_FRIEND:
-	case SkillTargetType::TARGET_AREA_ALL:
-	case SkillTargetType::TARGET_DEAD_FRIEND_ONLY:
-	{
-		if (pSkillData.iReCastTime != 0)
+		case SkillTargetType::TARGET_SELF:
+		case SkillTargetType::TARGET_FRIEND_WITHME:
+		case SkillTargetType::TARGET_FRIEND_ONLY:
+		case SkillTargetType::TARGET_PARTY:
+		case SkillTargetType::TARGET_NPC_ONLY:
+		case SkillTargetType::TARGET_ENEMY_ONLY:
+		case SkillTargetType::TARGET_ALL:
+		case 9: // For God Mode
+		case SkillTargetType::TARGET_AREA_FRIEND:
+		case SkillTargetType::TARGET_AREA_ALL:
+		case SkillTargetType::TARGET_DEAD_FRIEND_ONLY:
 		{
-			if (m_PlayerMySelf.iMoveType != 0)
+			if (pSkillData.iReCastTime > 0)
 			{
-				SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
-				//StopMove();
+				m_bSkillCasting = true;
+
+				if (m_PlayerMySelf.iMoveType != 0)
+				{
+					SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
+				}
+
+				SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
+
+				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iReCastTime * 100.0f) / 1000.0f));
+
+				if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
+				{
+					std::this_thread::sleep_for(std::chrono::milliseconds((((pSkillData.iReCastTime * 100) * 75) / 100)));
+				}
+
+				m_bSkillCasting = false;
 			}
 
-			SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
+			uint32_t iArrowCount = 0;
 
-			if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
+			std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>* pSkillExtension2;
+			if (m_Bot->GetSkillExtension2Table(&pSkillExtension2))
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds((pSkillData.iReCastTime * 100)));
+				auto pSkillExtension2Data = pSkillExtension2->find(pSkillData.iID);
+
+				if (pSkillExtension2Data != pSkillExtension2->end())
+					iArrowCount = pSkillExtension2Data->second.iArrowCount;
+			}
+
+			if ((iArrowCount == 0 && pSkillData.iFlyingFX != 0) || iArrowCount == 1)
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
+
+			if (iArrowCount > 1)
+			{
+				SendStartFlyingAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), 1);
+
+				float fDistance = GetDistance(v3TargetPosition);
+
+				switch (iArrowCount)
+				{
+				case 3:
+				{
+					iArrowCount = 1;
+
+					if (fDistance <= 5.0f)
+						iArrowCount = 3;
+					else if (fDistance < 16.0f)
+						iArrowCount = 2;
+				};
+				break;
+
+				case 5:
+				{
+					iArrowCount = 1;
+
+					if (fDistance <= 5.0f)
+						iArrowCount = 5;
+					else if (fDistance <= 6.0f)
+						iArrowCount = 4;
+					else if (fDistance <= 8.0f)
+						iArrowCount = 3;
+					else if (fDistance < 16.0f)
+						iArrowCount = 2;
+				}
+				break;
+				}
+
+				for (uint32_t i = 0; i < iArrowCount; i++)
+				{
+					SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), (i + 1));
+					SendStartMagicAtTarget(pSkillData, iTargetID, v3TargetPosition, (i + 1));
+				}
+			}
+			else
+				SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
+
+			if (pSkillData.iCooldown > 0)
+			{
+				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
 			}
 		}
+		break;
 
-		uint32_t iArrowCount = 0;
-
-		std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>* pSkillExtension2;
-		if (m_Bot->GetSkillExtension2Table(&pSkillExtension2))
+		case SkillTargetType::TARGET_AREA:
+		case SkillTargetType::TARGET_PARTY_ALL:
+		case SkillTargetType::TARGET_AREA_ENEMY:
 		{
-			auto pSkillExtension2Data = pSkillExtension2->find(pSkillData.iID);
-
-			if (pSkillExtension2Data != pSkillExtension2->end())
-				iArrowCount = pSkillExtension2Data->second.iArrowCount;
-		}
-
-		if ((iArrowCount == 0 && pSkillData.iFlyingFX != 0) || iArrowCount == 1)
-			SendStartFlyingAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
-
-		if (iArrowCount > 1)
-		{
-			SendStartFlyingAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), 1);
-
-			float fDistance = GetDistance(v3TargetPosition);
-
-			switch (iArrowCount)
+			if (pSkillData.iReCastTime > 0)
 			{
-			case 3:
-			{
-				iArrowCount = 1;
+				m_bSkillCasting = true;
 
-				if (fDistance <= 5.0f)
-					iArrowCount = 3;
-				else if (fDistance < 16.0f)
-					iArrowCount = 2;
-			};
-			break;
+				if (m_PlayerMySelf.iMoveType != 0)
+				{
+					SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
+				}
 
-			case 5:
-			{
-				iArrowCount = 1;
+				SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
 
-				if (fDistance <= 5.0f)
-					iArrowCount = 5;
-				else if (fDistance <= 6.0f)
-					iArrowCount = 4;
-				else if (fDistance <= 8.0f)
-					iArrowCount = 3;
-				else if (fDistance < 16.0f)
-					iArrowCount = 2;
-			}
-			break;
+				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iReCastTime * 100.0f) / 1000.0f));	
+
+				if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
+				{
+					std::this_thread::sleep_for(std::chrono::milliseconds((((pSkillData.iReCastTime * 100) * 75) / 100)));
+				}
+
+				m_bSkillCasting = false;
 			}
 
-			for (uint32_t i = 0; i < iArrowCount; i++)
+			if (pSkillData.iFlyingFX != 0)
+				SendStartFlyingAtTargetPacket(pSkillData, -1, v3TargetPosition);
+
+			SendStartSkillMagicAtPosPacket(pSkillData, v3TargetPosition);
+			SendStartMagicAtTarget(pSkillData, -1, v3TargetPosition);
+
+			if (pSkillData.iCooldown > 0)
 			{
-				SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, Vector3(0.0f, 0.0f, 0.0f), (i + 1));
-				SendStartMagicAtTarget(pSkillData, iTargetID, v3TargetPosition, (i + 1));
+				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
 			}
 		}
-		else
-			SendStartSkillMagicAtTargetPacket(pSkillData, iTargetID, v3TargetPosition);
-
+		break;
 	}
-	break;
-
-	case SkillTargetType::TARGET_AREA:
-	case SkillTargetType::TARGET_PARTY_ALL:
-	case SkillTargetType::TARGET_AREA_ENEMY:
-	{
-		if (pSkillData.iReCastTime != 0)
-		{
-			if (m_PlayerMySelf.iMoveType != 0)
-			{
-				SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
-				//StopMove();
-			}
-
-			SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
-
-			if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
-			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
-			}
-		}
-
-		if (pSkillData.iFlyingFX != 0)
-			SendStartFlyingAtTargetPacket(pSkillData, -1, v3TargetPosition);
-
-		SendStartSkillMagicAtPosPacket(pSkillData, v3TargetPosition);
-		SendStartMagicAtTarget(pSkillData, -1, v3TargetPosition);
-	}
-	break;
-	}
-
-	Client::SetSkillUseTime(pSkillData.iID, duration_cast<std::chrono::milliseconds>(
-		std::chrono::system_clock::now().time_since_epoch()
-	));
 }
 
 bool Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority, bool bWaitCastTime)
@@ -1686,16 +1675,12 @@ bool Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPr
 
 	if (pSkillData.iReCastTime != 0)
 	{
-		/*if (GetActionState() == PSA_SPELLMAGIC)
-			return false;*/
-
 		bool bSpeedHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("SpeedHack"), false);
 
 		if (bSpeedHack
 			&& m_PlayerMySelf.iMoveType != 0)
 		{
 			SendMovePacket(v3MyPosition, v3MyPosition, 0, 0);
-			//StopMove();
 		}
 	}
 
@@ -1704,18 +1689,6 @@ bool Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPr
 	pkt << iTargetID << pSkillData.iID << iPriority << uint8_t(0) << uint8_t(0);
 
 	m_Bot->SendPipeServer(pkt);
-
-	if (pSkillData.iReCastTime != 0)
-	{
-		if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(pSkillData.iReCastTime * 100));
-		}
-	}
-
-	//SetSkillUseTime(pSkillData.iID,
-	//	duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-	//);
 
 	return true;
 }
@@ -2531,7 +2504,6 @@ bool Client::GetPartyMember(int32_t iID, Party& pPartyMember)
 
 void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 {
-	std::shared_lock<std::shared_mutex> lock(m_mutexAvailableSkill);
 	for (auto& e : m_vecAvailableSkill)
 	{
 		DWORD iSkillBase = GetSkillBase(e.iID);

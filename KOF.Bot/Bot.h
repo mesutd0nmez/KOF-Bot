@@ -37,6 +37,7 @@ public:
 
 	bool GetSkillTable(std::map<uint32_t, __TABLE_UPC_SKILL>** mapDataOut);
 	bool GetSkillExtension2Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>** mapDataOut);
+	bool GetSkillExtension3Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION3>** mapDataOut);
 	bool GetSkillExtension4Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>** mapDataOut);
 
 	bool GetItemTable(std::map<uint32_t, __TABLE_ITEM>** mapDataOut);
@@ -68,6 +69,7 @@ private:
 
 	Table<__TABLE_UPC_SKILL>* m_pTbl_Skill;
 	Table<__TABLE_UPC_SKILL_EXTENSION2>* m_pTbl_Skill_Extension2;
+	Table<__TABLE_UPC_SKILL_EXTENSION3>* m_pTbl_Skill_Extension3;
 	Table<__TABLE_UPC_SKILL_EXTENSION4>* m_pTbl_Skill_Extension4;
 	Table<__TABLE_ITEM>* m_pTbl_Item;
 	Table<__TABLE_ITEM_EXTENSION>* m_pTbl_Item_Extension[45];

@@ -77,10 +77,6 @@ void Service::HandlePacket(Packet& pkt)
 
     pkt >> iHeader;
 
-#ifdef DEBUG
-    printf("Socket Packet Header: %d\n", iHeader);
-#endif
-
     switch (iHeader)
     {
         case PacketHeader::READY:

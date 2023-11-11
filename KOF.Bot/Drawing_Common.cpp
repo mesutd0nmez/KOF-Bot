@@ -853,19 +853,30 @@ void Drawing::DrawTargetListController()
 
             ImGui::Text(skCryptDec("Death Efektini Kaldir"));
 
-            bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), false);
+            bool bClosestTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), false);
 
-            if (ImGui::Checkbox(skCryptDec("##AutoTargetCheckbox"), &bAutoTarget))
-                m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), bAutoTarget ? 1 : 0);
+            if (ImGui::Checkbox(skCryptDec("##ClosestTargetCheckbox"), &bClosestTarget))
+                m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), bClosestTarget ? 1 : 0);
 
             ImGui::SameLine();
 
-            ImGui::Text(skCryptDec("Tum Hedeflere Saldir"));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+            ImGui::Text(skCryptDec("Herzaman En Yakin Hedefe Vur"));
+            ImGui::PopStyleColor();
 
             ImGui::BeginChild(skCryptDec("TargetListController"), ImVec2(335, 478), true);
             {
                 bool bRangeLimit = m_pUserConfiguration->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
                 int iRangeLimitValue = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), 100);
+
+                bool bAutoTarget = m_pUserConfiguration->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), false);
+
+                if (ImGui::Checkbox(skCryptDec("##AutoTargetCheckbox"), &bAutoTarget))
+                    m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), bAutoTarget ? 1 : 0);
+
+                ImGui::SameLine();
+
+                ImGui::Text(skCryptDec("Tum Hedeflere Vur"));
 
                 if (bAutoTarget)
                     ImGui::BeginDisabled();
@@ -904,7 +915,6 @@ void Drawing::DrawTargetListController()
                         vecTargetList.push_back(pNpcData);
                     }
 
-                    std::shared_lock<std::shared_mutex> lock(m_pClient->m_mutexNpc);
                     for (const auto& x : m_pClient->m_vecNpc)
                     {
                         if (x.iMonsterOrNpc != 1)
@@ -2008,7 +2018,7 @@ void Drawing::DrawRoutePlannerArea()
                                 if (it != vecAvailableSkills->end()
                                     && m_pClient->GetMp() >= it->iExhaustMSP)
                                 {
-                                    m_pClient->UseSkillWithPacket(*it, m_pClient->GetID());
+                                    new std::thread([=]() {  m_pClient->UseSkillWithPacket(*it, m_pClient->GetID()); });
                                 }
                             }
                         }
@@ -2629,7 +2639,14 @@ void Drawing::DrawAutoLootArea()
             bool bAutoLoot = m_pUserConfiguration->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
 
             if (ImGui::Checkbox(skCryptDec("##AutoLoot"), &bAutoLoot))
+            {
+                if (!bAutoLoot)
+                {
+                    m_pClient->m_vecLootList.clear();
+                }
+
                 m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("Enable"), bAutoLoot ? 1 : 0);
+            } 
 
             ImGui::SameLine();
 
@@ -2641,7 +2658,11 @@ void Drawing::DrawAutoLootArea()
 
             if (ImGui::Checkbox(skCryptDec("##MoveToLoot"), &bMoveToLoot))
             {
-                m_pClient->SetAuthority(bMoveToLoot ? 0 : 1);
+                if (!bMoveToLoot) 
+                {
+                    m_pClient->SetMovingToLoot(false);
+                }
+
                 m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), bMoveToLoot ? 1 : 0);
             }
 

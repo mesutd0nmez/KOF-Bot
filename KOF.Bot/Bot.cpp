@@ -13,6 +13,7 @@ Bot::Bot()
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
+	m_pTbl_Skill_Extension3 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
 
@@ -72,6 +73,7 @@ Bot::~Bot()
 
 	m_pTbl_Skill = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
+	m_pTbl_Skill_Extension3 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
 
@@ -173,8 +175,6 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 
 void Bot::Process()
 {
-	std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
 	if (IsServiceClosed())
 	{
 		Close();
@@ -330,6 +330,9 @@ void Bot::Release()
 	if (m_pTbl_Skill_Extension2)
 		m_pTbl_Skill_Extension2->Release();
 
+	if (m_pTbl_Skill_Extension3)
+		m_pTbl_Skill_Extension3->Release();
+
 	if (m_pTbl_Skill_Extension4)
 		m_pTbl_Skill_Extension4->Release();
 
@@ -391,6 +394,9 @@ void Bot::InitializeStaticData()
 
 	m_pTbl_Skill_Extension2 = new Table<__TABLE_UPC_SKILL_EXTENSION2>();
 	m_pTbl_Skill_Extension2->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_2.tbl"));
+
+	m_pTbl_Skill_Extension3 = new Table<__TABLE_UPC_SKILL_EXTENSION3>();
+	m_pTbl_Skill_Extension3->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_3.tbl"));
 
 	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
 	m_pTbl_Skill_Extension4->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_4.tbl"));
@@ -803,8 +809,6 @@ void Bot::OnConfigurationLoaded()
 	printf("User configuration loaded\n");
 #endif
 
-	new std::thread([this]() { UI::Render(this); });
-
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
 #ifdef DEBUG
@@ -845,6 +849,14 @@ bool Bot::GetSkillExtension2Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION
 		return false;
 
 	return m_pTbl_Skill_Extension2->GetData(mapDataOut);
+}
+
+bool Bot::GetSkillExtension3Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION3>** mapDataOut)
+{
+	if (m_pTbl_Skill_Extension3 == nullptr)
+		return false;
+
+	return m_pTbl_Skill_Extension3->GetData(mapDataOut);
 }
 
 bool Bot::GetSkillExtension4Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>** mapDataOut)
@@ -1121,7 +1133,7 @@ bool Bot::ConnectPipeServer()
 		GENERIC_READ | GENERIC_WRITE,
 		0,
 		NULL,
-		OPEN_EXISTING,
+		OPEN_ALWAYS,
 		0,
 		NULL);
 
