@@ -67,8 +67,8 @@ public:
 	uint32_t GetProperMindBuff();
 	uint32_t GetProperHeal();
 
-	std::chrono::milliseconds GetSkillUseTime(int32_t iSkillID);
-	void SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime);
+	float GetSkillNextUseTime(int32_t iSkillID);
+	void SetSkillNextUseTime(int32_t iSkillID, float fSkillNextUseTime);
 
 	bool IsBuffActive(int32_t iBuffType);
 	bool IsSkillActive(int32_t iSkillID);
@@ -105,24 +105,16 @@ protected:
 	TPlayer m_PlayerMySelf;
 
 protected:
-	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
-
-	std::shared_mutex m_mutexAvailableSkill;
+	std::map<int32_t, float> m_mapSkillUseTime;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
-	std::shared_mutex m_mutexNpc;
 	std::vector<TNpc> m_vecNpc;
-
-	std::shared_mutex m_mutexPlayer;
 	std::vector<TPlayer> m_vecPlayer;
 
-protected:
-	std::shared_mutex m_mutexLootList;
 	std::vector<TLoot> m_vecLootList;
 	bool m_bIsMovingToLoot;
 
-protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
 
@@ -139,7 +131,7 @@ public:
 protected:
 	bool IsEnemy(DWORD iBase);
 	void StepCharacterForward(bool bStart);
-	void BasicAttack();
+	void BasicAttack(DWORD iTargetBase);
 	void BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval);
 
 	void PushPhase(DWORD dwAddress);
@@ -262,7 +254,6 @@ public:
 	void UpdateSkillSuccessRate(bool bDisableCasting);
 
 protected:
-	std::shared_mutex m_mutexPartyMembers;
 	std::vector<PartyMember> m_vecPartyMembers;
 
 protected:
@@ -344,4 +335,10 @@ public:
 
 public:
 	std::chrono::milliseconds m_msLastDisconnectTime;
+
+protected:
+	std::vector<std::thread> m_vecThreadSkillPacket;
+
+protected:
+	bool m_bSkillCasting;
 };

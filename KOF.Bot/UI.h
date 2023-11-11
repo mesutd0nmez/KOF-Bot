@@ -30,13 +30,16 @@ public:
 	static std::string m_szRoutePlannerWindowName;
 	static std::string m_szInventoryWindowName;
 
-	static bool CreateDeviceD3D(HWND hWnd);
+	static bool CreateDeviceD3D();
 	static void CleanupDeviceD3D();
 	static void ResetDevice();
+
 	static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 public:
-	static void Render(Bot* pBot);
+	static void Initialize(Bot* pBot);
+	static void Clear();
+	static void Render();
 
 	static bool LoadTextureFromFile(std::string filename, PDIRECT3DTEXTURE9* out_texture, int* out_width, int* out_height);
 	static bool LoadTextureFromMemory(std::vector<uint8_t> pImageRawData, PDIRECT3DTEXTURE9* out_texture);
@@ -45,6 +48,9 @@ private:
 	static void StyleColorsHazar();
 	static void StyleColorsDarkGreenBlue();
 	static void StyleColorsWhite();
+
+private:
+
 
 };
 

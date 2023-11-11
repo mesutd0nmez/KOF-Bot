@@ -2261,7 +2261,7 @@ void Drawing::DrawMainRogueArea()
 
         ImGui::Spacing();
         {
-            bool bPartySwift = m_pUserConfiguration->GetBool(skCryptDec("Rogue"), skCryptDec("PartySwift"), true);
+            bool bPartySwift = m_pUserConfiguration->GetBool(skCryptDec("Rogue"), skCryptDec("PartySwift"), false);
 
             if (ImGui::Checkbox(skCryptDec("##RoguePartySwift"), &bPartySwift))
                 m_pUserConfiguration->SetInt(skCryptDec("Rogue"), skCryptDec("PartySwift"), bPartySwift ? 1 : 0);

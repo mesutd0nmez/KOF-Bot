@@ -269,8 +269,7 @@ typedef struct SLoot
 	float			fNpcY;
 	uint32_t		iBundleID;
 	uint8_t			iItemCount;
-	std::chrono::milliseconds	msDropTime;
-	bool			iRequestedOpen;
+	float			fDropTime;
 } TLoot;
 
 typedef struct  __TABLE_TEXTS
@@ -369,8 +368,8 @@ typedef struct __TABLE_UPC_SKILL_EXTENSION3
 {
 	uint32_t			iID;
 	int32_t				iUnknown1;
-	int32_t				iPotionType;
-	int32_t				iPotionValue;
+	int32_t				iHealType;
+	int32_t				iHealValue;
 	int32_t				iUnknown4;
 	int32_t				iUnknown5;
 	int32_t				iUnknown6;
@@ -687,15 +686,12 @@ typedef struct __PartyMember
 	uint16_t iClass;
 	uint16_t iNation;
 
-	std::chrono::milliseconds iHpBuffTime;
+	float fHpBuffTime;
 	uint8_t iHpBuffAttemptCount;
 
-	std::chrono::milliseconds iACBuffTime;
+	float fACBuffTime;
 	uint8_t iACBuffAttemptCount;
 
-	std::chrono::milliseconds iMindBuffTime;
+	float fMindBuffTime;
 	uint8_t iMindBuffAttemptCount;
-
-	std::chrono::milliseconds iSwiftBuffTime;
-	uint8_t iSwiftBuffAttemptCount;
 } PartyMember;

@@ -65,4 +65,5 @@ extern bool ConsoleCommand(const std::string & input, std::string & out);
 
 extern bool KillProcessesByFileName(const char* fileName);
 
+extern std::string GenerateUniqueString(int iLength);
 #endif //PCH_H

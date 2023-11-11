@@ -38,8 +38,6 @@ bool Ini::Load(const char* lpFilename)
     // from the invalid section into the previously loaded section.
     bool bSkipNextSection = false;
 
-    std::lock_guard<std::recursive_mutex> lock(m_mutex); 
-
     while (!file.eof())
     {
         std::string line;
@@ -112,8 +110,6 @@ bool Ini::Load(std::string szData)
     // from the invalid section into the previously loaded section.
     bool bSkipNextSection = false;
 
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
-
     while (!file.eof())
     {
         std::string line;
@@ -181,8 +177,6 @@ void Ini::Save(const char* lpFilename)
         const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
         FILE* fp = fopen(fn, "w");
 
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-
         for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
         {
             // Start the section
@@ -202,15 +196,12 @@ void Ini::Save(const char* lpFilename)
 
 void Ini::Reset()
 {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_configMap.clear();
 }
 
 std::string Ini::Dump()
 {
     std::stringstream f;
-
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
     for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
     {
@@ -227,7 +218,6 @@ std::string Ini::Dump()
 
 int Ini::GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
     if (sectionItr != m_configMap.end())
@@ -252,7 +242,6 @@ int Ini::GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault
 
 std::vector<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
     if (sectionItr != m_configMap.end())
@@ -306,22 +295,19 @@ int Ini::SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault
 
 std::vector<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
 {
+    std::string ret;
+
+    for (const int& s : nDefault)
     {
-        std::string ret;
+        if (!ret.empty())
+            ret += ",";
 
-        for (const int& s : nDefault)
-        {
-            if (!ret.empty())
-                ret += ",";
-
-            ret += std::to_string(s);
-        }
-
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
-        ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
-        sectionItr->second[lpKeyName] = ret.c_str();
+        ret += std::to_string(s);
     }
+
+    m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+    sectionItr->second[lpKeyName] = ret.c_str();
 
     Save();
 
@@ -335,7 +321,6 @@ bool Ini::GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefa
 
 void Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings /*= true*/)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
     if (sectionItr != m_configMap.end())
@@ -367,14 +352,11 @@ std::string Ini::GetString(const char* lpAppName, const char* lpKeyName, const c
 
 const char* Ini::SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault)
 {
-    {
-        std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        ConfigMap::iterator itr = m_configMap.find(lpAppName);
+    ConfigMap::iterator itr = m_configMap.find(lpAppName);
 
-        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
-        itr = m_configMap.find(lpAppName);
-        itr->second[lpKeyName] = lpDefault;
-    }
+    m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+    itr = m_configMap.find(lpAppName);
+    itr->second[lpKeyName] = lpDefault;
 
     Save();
 

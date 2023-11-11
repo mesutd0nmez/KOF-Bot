@@ -3,6 +3,7 @@
 #include "Client.h"
 #include "Packet.h"
 #include "RouteManager.h"
+#include "Struct.h"
 
 class Bot;
 class ClientHandler : public Client
@@ -122,7 +123,7 @@ private:
 	void PotionProcess();
 	void CharacterProcess();
 
-	void RogueCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false);
+	void PartySwiftProcess();
 	void PriestCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false, uint16_t iMaxHp = 0, uint16_t iHp = 0);
 
 	bool HealthPotionProcess();
@@ -137,7 +138,8 @@ private:
 	void MagicHammerProcess();
 	void SpeedHackProcess();
 
-	void AutomationProcess();
+	void TransformationProcess();
+	void FlashProcess();
 	void PartyProcess();
 
 	void VipWarehouseProcess();
@@ -183,6 +185,26 @@ public:
 
 protected:
 	uint8_t m_iOTPRetryCount;
+
+protected:
+	float m_fLastSearchTargetTime;
+	float m_fLastAttackTime;
+	float m_fLastCharacterProcessTime;
+	float m_fLastMinorProcessTime;
+	float m_fLastMagicHammerProcessTime;
+	float m_fLastAutoLootProcessTime;
+	float m_fLastTransformationProcessTime;
+	float m_fLastFlashProcessTime;
+	float m_fLastSpeedHackProcessTime;
+	float m_fLastRegionProcessTime;
+	float m_fLastMoveToTargetProcessTime;
+	float m_fLastLootRequestTime;
+	float m_fLastPotionProcessTime;
+
+protected:
+	int32_t PartyMemberNeedSwift();
+	int32_t PartyMemberNeedHeal(uint32_t iSkillBaseID);
+	int32_t PartyMemberNeedBuff(uint32_t iSkillBaseID);
 };
 
 

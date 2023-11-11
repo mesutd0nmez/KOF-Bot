@@ -40,6 +40,10 @@ public:
 	static void DrawListenerController();
 	static void DrawPartyController();
 	static void DrawSettingsController();
+	static void DrawModeController();
+
+	static void SetLegalModeSettings(bool bMode);
+	static void SetSpeedModeSettings(bool bMode);
 	
 };
 
