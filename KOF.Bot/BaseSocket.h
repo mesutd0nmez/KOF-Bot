@@ -30,7 +30,7 @@ public:
         TCP = SOCK_STREAM,
         UDP = SOCK_DGRAM
     };
-    const uint32_t BUFFER_SIZE = 262144;
+    const int32_t BUFFER_SIZE = 262144;
     sockaddr_in address;
 
     bool isConnected = false;

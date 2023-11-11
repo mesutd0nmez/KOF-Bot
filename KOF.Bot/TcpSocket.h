@@ -66,13 +66,19 @@ public:
         this->address.sin_addr.s_addr = ipv4;
 
         uint32_t iTcpNoDelay = 1;
-        setsockopt(this->sock, 0x6, TCP_NODELAY, (const char*)&iTcpNoDelay, sizeof(iTcpNoDelay));
+        setsockopt(this->sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&iTcpNoDelay, sizeof(iTcpNoDelay));
 
         u_long iBlocking = 0;
         ioctlsocket(this->sock, FIONBIO, &iBlocking);
 
         int iKeepAlive = 1;
-        setsockopt(this->sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&iTcpNoDelay, sizeof(iTcpNoDelay));
+        setsockopt(this->sock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&iKeepAlive, sizeof(iKeepAlive));
+
+        int iKeepAliveIdle = 7200;
+        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPIDLE, (const char*)&iKeepAliveIdle, sizeof(iKeepAliveIdle));
+
+        int iKeepAliveInterval = 3;
+        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPINTVL, (const char*)&iKeepAliveInterval, sizeof(iKeepAliveInterval));
 
         this->setTimeout(5);
 
@@ -111,11 +117,19 @@ private:
             std::vector<char> vecRecieveBuffer;
             std::vector<char> vecStreamBuffer(socket->BUFFER_SIZE);
 
-            size_t iMessageLength;
+            int iMessageLength;
             while ((iMessageLength = recv(socket->sock, &vecStreamBuffer[0], vecStreamBuffer.size(), 0)) > 0)
             {
                 if (socket->isClosed)
-                    return;
+                    break;
+
+                if (iMessageLength > socket->BUFFER_SIZE)
+                {
+#ifdef DEBUG
+                    printf("Received message to long, iMessageLength(%u) > BUFFER_SIZE(%u)\n", iMessageLength, socket->BUFFER_SIZE);
+#endif
+                    continue;
+                }
 
                 vecStreamBuffer.resize(iMessageLength);
                 vecRecieveBuffer.insert(std::end(vecRecieveBuffer), std::begin(vecStreamBuffer), std::end(vecStreamBuffer));
@@ -146,11 +160,11 @@ private:
         }
         catch (const std::exception& e)
         {
-    #ifdef DEBUG
+#ifdef DEBUG
             printf("%s\n", e.what());
-    #else
+#else
             DBG_UNREFERENCED_PARAMETER(e);
-    #endif
+#endif
         }
     }
 

@@ -1111,6 +1111,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(GetZone())); });
 
+			m_Bot->SendLoadUserConfiguration(GetServerId(), m_PlayerMySelf.szName);
+
 #ifdef DEBUG
 			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
 #endif
@@ -1321,11 +1323,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif
 			new std::thread([this]()
 			{
-				m_Bot->SendLoadUserConfiguration(1, m_PlayerMySelf.szName);
-
+				printf("RecvProcess::WIZ_GAMESTART: 1 Here\n");
 				WaitCondition(GetUserConfiguration() == nullptr)
+				printf("RecvProcess::WIZ_GAMESTART: 2 Here\n");
 				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
+				printf("RecvProcess::WIZ_GAMESTART: 3 Here\n");
 				WaitCondition(m_Bot->IsTableLoaded() == false);
+				printf("RecvProcess::WIZ_GAMESTART: 4 Here\n");
 
 				LoadSkillData();
 
@@ -1338,9 +1342,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				bool bDeathEffect = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DeathEffect"), false);
 				PatchDeathEffect(bDeathEffect);
 
-				// Adres değişmiş olabilir
-				//bool bDisableCasting = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DisableCasting"), false);
-				//UpdateSkillSuccessRate(bDisableCasting);
+				bool bDisableCasting = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("DisableCasting"), false);
+				UpdateSkillSuccessRate(bDisableCasting);
 
 				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
 				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
@@ -1362,6 +1365,30 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				}
 
 				StartHandler();
+
+				bool bLoginRouteStatus = GetUserConfiguration()->GetInt(skCryptDec("Bot"), skCryptDec("LoginRouteStatus"), true);
+
+				if (bLoginRouteStatus)
+				{
+					std::string szSelectedLoginRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedLoginRoute"), "");
+
+					RouteManager* pRouteManager = m_Bot->GetRouteManager();
+					RouteManager::RouteList pRouteList;
+
+					uint8_t iZoneID = GetRepresentZone(GetZone());
+
+					if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
+					{
+						auto pRoute = pRouteList.find(szSelectedLoginRoute);
+
+						if (pRoute != pRouteList.end())
+						{
+							SendStopGenie();
+							SetRoute(pRoute->second);
+						}
+					}
+				}
+				
 			});
 		}
 		break;
@@ -1702,6 +1729,28 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					pMember->iMindBuffAttemptCount = 0;
 					pMember->iSwiftBuffTime = std::chrono::milliseconds(0);
 					pMember->iSwiftBuffAttemptCount = 0;
+				}
+
+				bool bDeathRouteStatus = GetUserConfiguration()->GetInt(skCryptDec("Bot"), skCryptDec("DeathRouteStatus"), true);
+
+				if (bDeathRouteStatus)
+				{
+					std::string szSelectedDeathRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedDeathRoute"), "");
+
+					RouteManager* pRouteManager = m_Bot->GetRouteManager();
+					RouteManager::RouteList pRouteList;
+
+					uint8_t iZoneID = GetRepresentZone(GetZone());
+
+					if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
+					{
+						auto pRoute = pRouteList.find(szSelectedDeathRoute);
+
+						if (pRoute != pRouteList.end())
+						{
+							SetRoute(pRoute->second);
+						}
+					}
 				}
 #ifdef DEBUG
 				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
@@ -3017,6 +3066,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							{
 								if (!SolveCaptcha(vecBuffer))
 								{
+									std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
 									RefreshCaptcha();
 								}
 							}
@@ -3040,6 +3091,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							if (iSelectedCaptchaSolver != 0)
 							{
 								std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
 								RefreshCaptcha();
 #ifdef DEBUG
 								printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
@@ -3069,6 +3121,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						if (iSelectedCaptchaSolver != 0)
 						{
+							std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
 							RefreshCaptcha();
 #ifdef DEBUG
 							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
@@ -3181,24 +3235,31 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					bool bSendTownIfBanNotice = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("SendTownIfBanNotice"), false);
 					bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
 					bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
+					bool bPlayBeepfIfBanNotice = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("PlayBeepfIfBanNotice"), false);
 
-					if ((bAttackStatus || bCharacterStatus) && bSendTownIfBanNotice)
+					std::string searchString = "is currently blocked for using illegal software.";
+					size_t found = szMessage.find(searchString);
+
+					if (found != std::string::npos)
 					{
-						std::string searchString = "is currently blocked for using illegal software.";
-						size_t found = szMessage.find(searchString);
-
-						if (found != std::string::npos)
-						{
 #ifdef DEBUG
-							printf("RecvProcess::WIZ_CHAT: !! GM !!, ban notification received! \n");
-#endif
-							SendTownPacket();
+						printf("RecvProcess::WIZ_CHAT: !! GM !!, ban notification received! \n");
 
+						if (bPlayBeepfIfBanNotice)
+						{
 							Beep(1000, 500);
 							Beep(1000, 500);
 							Beep(1000, 500);
 						}
+
+						if ((bAttackStatus || bCharacterStatus) && bSendTownIfBanNotice)
+						{
+							SendTownPacket();
+						}
+#endif
 					}
+
+						
 #ifdef DEBUG
 					printf("RecvProcess::WIZ_CHAT: PUBLIC_CHAT | ANNOUNCEMENT_CHAT : %s \n", szMessage.c_str());
 #endif
@@ -3404,9 +3465,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						//Genie Stop
 						case 0x05: 
 						{
+							bool bStartGenieIfUserInRegion = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), false);
 							bool bSyncWithGenie = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("SyncWithGenie"), false);
 
-							if (bSyncWithGenie)
+							if (bSyncWithGenie && !bStartGenieIfUserInRegion)
 							{
 								GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
 								GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
@@ -3476,13 +3538,25 @@ bool ClientHandler::SolveCaptcha(std::vector<uint8_t> vecImageBuffer)
 
 		switch (iSelectedCaptchaSolver)
 		{
-			case 1: //truecaptcha.org
+			//kofbot.com
+			case 1: 
+			{
+				m_Bot->SendCaptcha(szBase64Output);
+				return true;
+			}
+			break;
+
+			//truecaptcha.org
+			case 2: 
 			{
 				JSON postData;
 
 				postData["userid"] = GetAppConfiguration()->GetString(skCryptDec("CaptchaSolver"), skCryptDec("Username"), "").c_str();
 				postData["apikey"] = GetAppConfiguration()->GetString(skCryptDec("CaptchaSolver"), skCryptDec("Key"), "").c_str();
 				postData["data"] = szBase64Output.c_str();
+				postData["case"] = "mixed";
+				postData["numeric"] = false;
+				postData["len_str"] = 4;
 
 				std::string szResponse = CurlPost("https://api.apitruecaptcha.org/one/gettext", postData);
 
@@ -4174,7 +4248,7 @@ void ClientHandler::BasicAttackPacketProcess()
 				float fDistance = GetDistance(v3TargetPosition);
 
 				bool bAttackRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
-				int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
+				int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), 50);
 
 				if (bAttackRangeLimit
 					&& fDistance > (float)iAttackRangeLimitValue)
@@ -4512,7 +4586,7 @@ void ClientHandler::AttackProcess()
 					float fDistance = GetDistance(v3TargetPosition);
 
 					bool bAttackRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), false);
-					int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), (int)MAX_ATTACK_RANGE);
+					int iAttackRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), 50);
 
 					float fCalculatedEffectiveAttackRange = fEffectiveAttackRange / 10.0f;
 
@@ -4675,14 +4749,12 @@ void ClientHandler::SearchTargetProcess()
 			if (GetActionState() == PSA_SPELLMAGIC)
 				continue;
 
-			bool bTargetSelectedWaitItDieForNew = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("TargetSelectedWaitItDieForNew"), false);
-
-			if (/*bTargetSelectedWaitItDieForNew && */(GetTarget() != -1 && IsAttackable(GetTargetBase())))
+			if ((GetTarget() != -1 && IsAttackable(GetTargetBase())))
 				continue;
 
 			bool bAutoTarget = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("AutoTarget"), false);
 			bool bRangeLimit = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("RangeLimit"), false);
-			int iRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), (int)MAX_VIEW_RANGE);
+			int iRangeLimitValue = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), 100);
 
 			std::vector<TNpc> vecFilteredTarget;
 			
@@ -4706,6 +4778,7 @@ void ClientHandler::SearchTargetProcess()
 			else
 			{
 				std::vector<int> vecSelectedNpcList = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcList"), std::vector<int>());
+				std::vector<int> vecSelectedNpcIDList = GetUserConfiguration()->GetInt(skCryptDec("Attack"), skCryptDec("NpcIDList"), std::vector<int>());
 
 				std::shared_lock<std::shared_mutex> lock(m_mutexNpc);
 				std::copy_if(m_vecNpc.begin(), m_vecNpc.end(),
@@ -4719,7 +4792,8 @@ void ClientHandler::SearchTargetProcess()
 							&& c.eState != PSA_DYING
 							&& c.eState != PSA_DEATH
 							&& ((c.iHPMax == 0) || (c.iHPMax != 0 && c.iHP > 0))
-							&& std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.iProtoID)
+							&& (std::count(vecSelectedNpcList.begin(), vecSelectedNpcList.end(), c.iProtoID)
+							|| std::count(vecSelectedNpcIDList.begin(), vecSelectedNpcIDList.end(), c.iID))
 							&& ((bRangeLimit && GetDistance(Vector3(c.fX, c.fZ, c.fY)) <= (float)iRangeLimitValue) || !bRangeLimit);
 					});
 			}
@@ -4823,15 +4897,13 @@ void ClientHandler::AutoLootProcess()
 				std::chrono::system_clock::now().time_since_epoch()
 			);
 
-			int iWaitWhileOpenTime = GetUserConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("WaitWhileOpenLoot"), 1100);
-
 			std::vector<TLoot> vecFilteredLoot;
 			std::shared_lock<std::shared_mutex> lock(m_mutexLootList);
 			std::copy_if(m_vecLootList.begin(), m_vecLootList.end(),
 				std::back_inserter(vecFilteredLoot),
 				[&](const TLoot& c)
 				{
-					return (c.msDropTime.count() + iWaitWhileOpenTime) < msNow.count() && c.iRequestedOpen == false;
+					return GetEntityBase(c.iNpcID) == 0 && c.iRequestedOpen == false;
 				});
 
 			if (vecFilteredLoot.size() > 0)
@@ -5156,7 +5228,7 @@ void ClientHandler::SpeedHackProcess()
 	{
 		try
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 			bool bSpeedHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("SpeedHack"), false);
 
@@ -5467,7 +5539,7 @@ void ClientHandler::PartyProcess()
 			if (!bCharacterStatus)
 				continue;
 
-			bool bPartyProtection = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("PartyProtection"), true);
+			bool bPartyProtection = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("PartyProtection"), false);
 
 			if (!bPartyProtection)
 				continue;
@@ -5505,7 +5577,7 @@ void ClientHandler::PartyProcess()
 
 					std::sort(tmpVecPartyMembers.begin(), tmpVecPartyMembers.end(), pSort);
 
-					bool bPartySwift = GetUserConfiguration()->GetBool(skCryptDec("Rogue"), skCryptDec("PartySwift"), true);
+					bool bPartySwift = GetUserConfiguration()->GetBool(skCryptDec("Rogue"), skCryptDec("PartySwift"), false);
 
 					for (auto& pMember : tmpVecPartyMembers)
 					{
@@ -5549,6 +5621,8 @@ void ClientHandler::CharacterProcess()
 		try
 		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+			IsBuffActive(BuffType::BUFF_TYPE_SPEED);
 
 			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
 
@@ -5700,7 +5774,7 @@ void ClientHandler::CharacterProcess()
 				}
 			}
 
-			bool bPartyProtection = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("PartyProtection"), true);
+			bool bPartyProtection = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("PartyProtection"), false);
 
 			if ((!bPartyProtection || m_vecPartyMembers.size() == 0) && IsPriest())
 			{
@@ -5880,7 +5954,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 
 	bool bOnlyAttackSkillUseWithPacket = GetUserConfiguration()->GetBool(skCryptDec("Skill"), skCryptDec("OnlyAttackSkillUseWithPacket"), false);
 
-	bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), true);
+	bool bAutoHealthBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHealthBuff"), false);
 
 	int iSelectedHealthBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHealthBuff"), -1);
 
@@ -6004,7 +6078,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 		}
 	}
 
-	bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), true);
+	bool bAutoDefenceBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoDefenceBuff"), false);
 
 	int iSelectedDefenceBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedDefenceBuff"), -1);
 
@@ -6128,7 +6202,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 		}
 	}
 
-	bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), true);
+	bool bAutoMindBuff = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoMindBuff"), false);
 
 	int iSelectedMindBuff = Drawing::Bot->GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedMindBuff"), -1);
 
@@ -6252,7 +6326,7 @@ void ClientHandler::PriestCharacterProcess(int32_t iTargetID, bool bIsPartyReque
 		}
 	}
 
-	bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), true);
+	bool bAutoHeal = GetUserConfiguration()->GetBool(skCryptDec("Priest"), skCryptDec("AutoHeal"), false);
 	int iSelectedHeal = GetUserConfiguration()->GetInt(skCryptDec("Priest"), skCryptDec("SelectedHeal"), -1);
 
 	if (iSelectedHeal == -1)
@@ -7194,6 +7268,16 @@ void ClientHandler::RouteProcess()
 
 					UseSkillWithPacket(*it, GetID());
 				}
+			}
+			break;
+
+			case RouteStepType::STEP_BOT_START:
+			{
+				if (m_vecRoute.size() == 0)
+					continue;
+
+				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 1);
+				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 1);
 			}
 			break;
 			}

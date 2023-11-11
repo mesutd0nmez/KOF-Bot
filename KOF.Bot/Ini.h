@@ -24,7 +24,7 @@ private:
 
 	ConfigMap m_configMap;
 
-	std::mutex m_mutex;
+	std::recursive_mutex m_mutex;
 
 public:
 	Ini();

@@ -63,4 +63,6 @@ extern bool Injection(DWORD iTargetProcess, std::string szPath);
 
 extern bool ConsoleCommand(const std::string & input, std::string & out);
 
+extern bool KillProcessesByFileName(const char* fileName);
+
 #endif //PCH_H

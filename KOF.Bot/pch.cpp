@@ -231,3 +231,59 @@ bool ConsoleCommand(const std::string& input, std::string& out)
 
 	return !out.empty();
 }
+
+bool KillProcessesByFileName(const char* fileName) 
+{
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+	if (hSnapshot == INVALID_HANDLE_VALUE) 
+	{
+#ifdef DEBUG
+		std::cerr << "Error creating process snapshot" << std::endl;
+#endif
+		return false;
+	}
+
+	PROCESSENTRY32 pe;
+	pe.dwSize = sizeof(PROCESSENTRY32);
+
+	if (Process32First(hSnapshot, &pe)) 
+	{
+		do 
+		{
+			if (_stricmp(pe.szExeFile, fileName) == 0) 
+			{
+				HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+
+				if (hProcess) 
+				{
+					if (TerminateProcess(hProcess, 0)) 
+					{
+#ifdef DEBUG
+						std::cout << "Terminated process ID: " << pe.th32ProcessID << std::endl;
+#endif
+					}
+					else 
+					{
+#ifdef DEBUG
+						std::cerr << "Failed to terminate process ID: " << pe.th32ProcessID << std::endl;
+#endif
+					}
+
+					CloseHandle(hProcess);
+				}
+				else 
+				{
+#ifdef DEBUG
+					std::cerr << "Failed to open process for termination" << std::endl;
+#endif
+				}
+			}
+		} 
+		while (Process32Next(hSnapshot, &pe));
+	}
+
+	CloseHandle(hSnapshot);
+
+	return true;
+}

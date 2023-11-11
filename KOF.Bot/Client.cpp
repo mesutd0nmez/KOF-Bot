@@ -48,6 +48,8 @@ void Client::Clear()
 
 	m_bVipWarehouseInitialized = false;
 	m_bVipWarehouseEnabled = false;
+
+	m_msLastDisconnectTime = std::chrono::milliseconds(0);
 }
 
 DWORD Client::GetAddress(std::string szAddressName)
@@ -58,13 +60,13 @@ DWORD Client::GetAddress(std::string szAddressName)
 
 Ini* Client::GetUserConfiguration()
 {
-	if (!m_Bot) return 0;
+	if (!m_Bot) return nullptr;
 	return m_Bot->GetUserConfiguration();
 }
 
 Ini* Client::GetAppConfiguration()
 {
-	if (!m_Bot) return 0;
+	if (!m_Bot) return nullptr;
 	return m_Bot->GetAppConfiguration();
 }
 
@@ -274,6 +276,11 @@ bool Client::IsAttackable(DWORD iBase)
 	return true;
 }
 
+uint8_t Client::GetServerId()
+{
+	return (uint8_t)Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_SERVER")));
+}
+
 bool Client::IsDisconnect()
 {
 	return Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_PKT"))) + GetAddress(skCryptDec("KO_OFF_DISCONNECT"))) == 0;
@@ -341,8 +348,6 @@ bool Client::IsDeath(DWORD iBase)
 
 bool Client::IsStunned(DWORD iBase)
 {
-	return false;
-
 	if (iBase == 0)
 		iBase = Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
 

@@ -135,8 +135,6 @@ void UI::Render(Bot* pBot)
 
     //ImGui::StyleColorsDark();
     StyleColorsHazar();
-    //StyleColorsDarkGreenBlue();
-    //StyleColorsWhite();
 
     io.Fonts->AddFontFromFileTTF(".\\data\\SF-Pro-Display-Medium.otf", 16.0f);
 

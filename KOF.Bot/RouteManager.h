@@ -10,6 +10,7 @@ enum RouteStepType
     STEP_GENIE,
     STEP_GATE,
     STEP_POTION,
+    STEP_BOT_START
 };
 
 struct Route

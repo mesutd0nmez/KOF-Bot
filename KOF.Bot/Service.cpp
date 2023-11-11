@@ -38,11 +38,11 @@ void Service::Initialize()
 
     m_szToken = m_iniAppConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
 
-//#ifdef DEBUG
-   //Connect(skCryptDec("127.0.0.1"), 8888);
-//#else
+#ifdef DEBUG
     Connect(skCryptDec("watchdog.kofbot.com"), 8888);
-//#endif 
+#else
+    Connect(skCryptDec("watchdog.kofbot.com"), 8888);
+#endif 
 }
 
 void Service::OnConnect()
@@ -76,6 +76,10 @@ void Service::HandlePacket(Packet& pkt)
     uint8_t iHeader;
 
     pkt >> iHeader;
+
+#ifdef DEBUG
+    printf("Socket Packet Header: %d\n", iHeader);
+#endif
 
     switch (iHeader)
     {
@@ -193,6 +197,32 @@ void Service::HandlePacket(Packet& pkt)
             Injection(iProcesssId, vecBuffer);
         }
         break;*/
+
+        case PacketHeader::PING:
+        {
+            uint32_t iLastPingTime;
+
+            pkt.DByte();
+            pkt >> iLastPingTime;
+
+            SendPong();
+            OnPong();
+        }
+        break;
+
+        case PacketHeader::CAPTCHA:
+        {
+            uint8_t iStatus;
+
+            pkt.DByte();
+            pkt >> iStatus;
+
+            std::string szResult;
+            pkt.readString(szResult);
+
+            OnCaptchaResponse(iStatus == 1 ? true : false, szResult);
+        }
+        break;
     }
 }
 
@@ -282,7 +312,7 @@ void Service::SendLoadUserConfiguration(uint8_t iServerId, std::string szCharact
         << uint8_t(ConfigurationRequestType::LOAD) 
         << uint8_t(AppType::BOT) 
         << uint8_t(m_ePlatformType)
-        << uint8_t(1) //server index
+        << uint8_t(iServerId)
         << szCharacterName;
 
     Send(pkt);
@@ -297,7 +327,7 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
         << uint8_t(ConfigurationRequestType::SAVE) 
         << uint8_t(AppType::BOT) 
         << uint8_t(m_ePlatformType)
-        << uint8_t(1) //server index
+        << uint8_t(iServerId)
         << szCharacterName 
         << m_iniUserConfiguration->Dump();
 
@@ -319,4 +349,24 @@ void Service::SendInjectionRequest(uint32_t iProcessId)
 #ifdef DEBUG
     printf("Service: Injection request sended\n");
 #endif
+}
+
+void Service::SendPong()
+{
+    Packet pkt = Packet(PacketHeader::PING);
+
+    pkt.DByte();
+    pkt << uint32_t(time(0));
+
+    Send(pkt);
+}
+
+void Service::SendCaptcha(std::string szImageBase64)
+{
+    Packet pkt = Packet(PacketHeader::CAPTCHA);
+
+    pkt.DByte();
+    pkt << szImageBase64.c_str();
+
+    Send(pkt);
 }

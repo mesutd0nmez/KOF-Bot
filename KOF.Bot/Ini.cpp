@@ -38,7 +38,7 @@ bool Ini::Load(const char* lpFilename)
     // from the invalid section into the previously loaded section.
     bool bSkipNextSection = false;
 
-    std::unique_lock<std::mutex> lock(m_mutex);  // Use std::mutex for exclusive access
+    std::lock_guard<std::recursive_mutex> lock(m_mutex); 
 
     while (!file.eof())
     {
@@ -112,7 +112,7 @@ bool Ini::Load(std::string szData)
     // from the invalid section into the previously loaded section.
     bool bSkipNextSection = false;
 
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
     while (!file.eof())
     {
@@ -181,7 +181,7 @@ void Ini::Save(const char* lpFilename)
         const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
         FILE* fp = fopen(fn, "w");
 
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
         for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
         {
@@ -202,7 +202,7 @@ void Ini::Save(const char* lpFilename)
 
 void Ini::Reset()
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_configMap.clear();
 }
 
@@ -210,7 +210,7 @@ std::string Ini::Dump()
 {
     std::stringstream f;
 
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
     for (auto sectionItr = m_configMap.begin(); sectionItr != m_configMap.end(); sectionItr++)
     {
@@ -227,7 +227,7 @@ std::string Ini::Dump()
 
 int Ini::GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault)
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
     if (sectionItr != m_configMap.end())
@@ -252,7 +252,7 @@ int Ini::GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault
 
 std::vector<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
     if (sectionItr != m_configMap.end())
@@ -317,7 +317,7 @@ std::vector<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const
             ret += std::to_string(s);
         }
 
-        std::unique_lock<std::mutex> lock(m_mutex); 
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
         ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
         sectionItr->second[lpKeyName] = ret.c_str();
@@ -335,7 +335,7 @@ bool Ini::GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefa
 
 void Ini::GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings /*= true*/)
 {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
 
     if (sectionItr != m_configMap.end())
@@ -368,7 +368,7 @@ std::string Ini::GetString(const char* lpAppName, const char* lpKeyName, const c
 const char* Ini::SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault)
 {
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         ConfigMap::iterator itr = m_configMap.find(lpAppName);
 
         m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
