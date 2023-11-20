@@ -168,7 +168,8 @@ void Drawing::DrawTransformationController()
 
         std::vector<DisguiseItem> vecDisguiseItems;
 
-        vecDisguiseItems.push_back(DisguiseItem(381001000, "TS Scroll"));
+        vecDisguiseItems.push_back(DisguiseItem(381001000, "TS Scroll (60 Dakika)"));
+        vecDisguiseItems.push_back(DisguiseItem(-1, "TS Scroll (90 Dakika)"));
         vecDisguiseItems.push_back(DisguiseItem(379090000, "TS Totem 1"));
         vecDisguiseItems.push_back(DisguiseItem(379093000, "TS Totem 2"));
 
@@ -214,6 +215,11 @@ void Drawing::DrawTransformationController()
         int iTransformationSkill = m_pUserConfiguration->GetInt(skCryptDec("Transformation"), skCryptDec("Skill"), 472020);
 
         std::string szSelectedTransformationSkill = "";
+
+        if (iTransformationItem == -1)
+        {
+            iTransformationItem = 379090000;
+        }
 
         std::map<uint32_t, __TABLE_DISGUISE_RING>* mapDisguiseTable;
         if (Drawing::Bot->GetDisguiseRingTable(&mapDisguiseTable))

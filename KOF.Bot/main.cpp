@@ -79,25 +79,25 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         printf("Bot: All client process forcing close\n");
 #endif
 
-        KillProcessesByFileName("KnightOnLine.exe");
+        KillProcessesByFileName(skCryptDec("KnightOnLine.exe"));
 
         if (iPlatformType == PlatformType::USKO) 
         {
-            KillProcessesByFileName("xldr_KnightOnline_NA.exe");
-            KillProcessesByFileName("xldr_KnightOnline_NA_loader_win32.exe");
+            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_NA.exe"));
+            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"));
         }
         
         if (iPlatformType == PlatformType::STKO)
         {
-            KillProcessesByFileName("xldr_KnightOnline_GB.exe");
-            KillProcessesByFileName("xldr_KnightOnline_GB_loader_win32.exe");
+            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_GB.exe"));
+            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"));
         }
 
         if (iPlatformType == PlatformType::USKO
             || iPlatformType == PlatformType::STKO
             || iPlatformType == PlatformType::KOKO)
         {
-            KillProcessesByFileName("xxd-0.xem");
+            KillProcessesByFileName(skCryptDec("xxd-0.xem"));
         }
     }
 

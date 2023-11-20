@@ -2,7 +2,6 @@
 
 #include "Packet.h"
 #include "Cryption.h"
-#include "Compression.h"
 #include "TcpSocket.h"
 
 class Socket
@@ -36,7 +35,6 @@ private:
 
 private:
 	uint32_t m_iSeed;
-	Compression* m_Compression;
 
 protected:
 	int32_t m_iId;

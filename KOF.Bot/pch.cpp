@@ -288,7 +288,7 @@ bool KillProcessesByFileName(const char* fileName)
 	return true;
 }
 
-std::string GenerateUniqueString(int iLength) 
+std::string GenerateUniqueString(size_t iLength) 
 {
 	const std::string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 

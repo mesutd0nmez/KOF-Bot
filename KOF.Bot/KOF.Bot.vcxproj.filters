@@ -63,9 +63,6 @@
     <ClInclude Include="Socket.h">
       <Filter>Header Files\Socket</Filter>
     </ClInclude>
-    <ClInclude Include="Compression.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
     <ClInclude Include="Cryption.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>

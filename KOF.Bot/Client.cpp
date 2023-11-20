@@ -1231,8 +1231,7 @@ void Client::BasicAttack(DWORD iTargetBase)
 
 	pkt << uint8_t(1);
 
-	m_Bot->SendPipeServer(pkt);
-	//m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 
 	m_fAttackTimeRecent = Bot::TimeGet();
 }
@@ -1374,49 +1373,49 @@ void Client::ConnectLoginServer(bool bDisconnect)
 {
 	Packet pkt = Packet(PIPE_LOGIN);
 	pkt << uint8_t(1) << uint8_t(bDisconnect);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::LoadServerList()
 {
 	Packet pkt = Packet(PIPE_LOAD_SERVER_LIST);
 	pkt << uint8_t(1);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SelectServer(uint8_t iIndex)
 {
 	Packet pkt = Packet(PIPE_SELECT_SERVER);
 	pkt << uint8_t(iIndex);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::ShowChannel()
 {
 	Packet pkt = Packet(PIPE_SHOW_CHANNEL);
 	pkt << uint8_t(1);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SelectChannel(uint8_t iIndex)
 {
 	Packet pkt = Packet(PIPE_SELECT_CHANNEL);
 	pkt << uint8_t(iIndex);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::ConnectServer()
 {
 	Packet pkt = Packet(PIPE_CONNECT_SERVER);
 	pkt << uint8_t(1);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SetSaveCPUSleepTime(int32_t iValue)
 {
 	Packet pkt = Packet(PIPE_SAVE_CPU);
 	pkt << int32_t(iValue);
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::ConnectGameServer(BYTE byServerId)
@@ -1453,7 +1452,7 @@ void Client::SelectCharacterSkip()
 
 	pkt << uint8_t(1);
 
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SelectCharacterLeft()
@@ -1462,7 +1461,7 @@ void Client::SelectCharacterLeft()
 
 	pkt << uint8_t(1);
 
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SelectCharacterRight()
@@ -1471,7 +1470,7 @@ void Client::SelectCharacterRight()
 
 	pkt << uint8_t(1);
 
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SelectCharacter()
@@ -1480,7 +1479,7 @@ void Client::SelectCharacter()
 
 	pkt << uint8_t(1);
 
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 }
 
 void Client::SendPacket(Packet vecBuffer)
@@ -1626,6 +1625,10 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 			{
 				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
 			}
+			else
+			{
+				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + (100.0f / 1000.0f));
+			}
 		}
 		break;
 
@@ -1664,6 +1667,10 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 			{
 				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
 			}
+			else
+			{
+				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + (100.0f / 1000.0f));
+			}
 		}
 		break;
 	}
@@ -1688,7 +1695,7 @@ bool Client::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPr
 
 	pkt << iTargetID << pSkillData.iID << iPriority << uint8_t(0) << uint8_t(0);
 
-	m_Bot->SendPipeServer(pkt);
+	m_Bot->SendInternalMailslot(pkt);
 
 	return true;
 }

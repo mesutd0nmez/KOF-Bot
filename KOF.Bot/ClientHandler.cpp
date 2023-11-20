@@ -81,33 +81,6 @@ void ClientHandler::StartHandler()
 #endif
 
 	m_bWorking = true;
-
-	//new std::thread([this]() { BasicAttackPacketProcess(); });
-	//new std::thread([this]() { AttackProcess(); });
-	//new std::thread([this]() { SearchTargetProcess(); });
-	//new std::thread([this]() { MoveToTargetProcess(); });
-	//new std::thread([this]() { PotionProcess(); });
-	//new std::thread([this]() { CharacterProcess(); });
-
-
-	// ASAGIDAKILER GUNCELLENMEDI
-	// 
-	//if (IsRogue())
-	//{
-	//	new std::thread([this]() { MinorProcess(); });
-	//}
-	//
-	//new std::thread([this]() { AutoLootProcess(); });
-	//new std::thread([this]() { RouteProcess(); });
-	//new std::thread([this]() { SupplyProcess(); });
-	//new std::thread([this]() { LevelDownerProcess(); });
-	//new std::thread([this]() { MagicHammerProcess(); });
-	//new std::thread([this]() { SpeedHackProcess(); });
-	//new std::thread([this]() { AutomationProcess(); });
-	//new std::thread([this]() { PartyProcess(); });
-	//new std::thread([this]() { VipWarehouseProcess(); });
-
-	//new std::thread([this]() { RegionProcess(); });
 }
 
 void ClientHandler::StopHandler()
@@ -261,7 +234,7 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\RECV\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF1\\") + std::to_string(m_Bot->GetInjectedProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
 
 	if (m_hMailSlotRecv == nullptr)
@@ -319,7 +292,7 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 			0x8B, 0xE5,
 			0x5D,
 			0xC3
-};
+		};
 
 		m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byHookPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -406,6 +379,143 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 #endif
 }
 
+//void ClientHandler::PatchRecvAddress(DWORD iAddress)
+//{
+//	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+//
+//	DWORD iAddressReady = 0;
+//	while (iAddressReady == 0)
+//	{
+//		ReadProcessMemory(hProcess, (LPVOID)iAddress, &iAddressReady, 4, 0);
+//	}
+//
+//	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
+//
+//	if (hModuleKernel32 == nullptr)
+//	{
+//#ifdef DEBUG
+//		printf("hModuleKernel32 == nullptr\n");
+//#endif
+//		return;
+//	}
+//
+//	LPVOID pCreateFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("CreateFileA"));
+//	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
+//	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
+//
+//	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF1\\") + std::to_string(m_Bot->GetInjectedProcessId());
+//	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
+//
+//	if (m_hMailSlotRecv == nullptr)
+//	{
+//		m_hMailSlotRecv = CreateMailslotA(m_szMailSlotRecvName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
+//
+//		if (m_hMailSlotRecv == INVALID_HANDLE_VALUE)
+//		{
+//#ifdef DEBUG
+//			printf("CreateMailslot recv failed with %d\n", GetLastError());
+//#endif
+//			return;
+//		}
+//	}
+//
+//	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+//
+//	if (pMailSlotNameAddress == 0)
+//	{
+//		return;
+//	}
+//
+//	WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
+//
+//	m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, 2000, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+//
+//	if (m_RecvHookAddress == 0)
+//	{
+//		return;
+//	}
+//
+//	DWORD iRecvAddress = Read4Byte(Read4Byte(iAddress)) + 0x8;
+//
+//	BYTE byPatch[] =
+//	{
+//		0x60,										//pushad 
+//		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
+//		0x8B, 0x40, 0x08,							//mov eax,[eax+08]
+//		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
+//		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
+//		0x8B, 0x40, 0x04,							//mov eax,[eax+04]
+//		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
+//		0x3D, 0x00, 0x40, 0x00, 0x00,				//cmp eax,00004000
+//		0x7D, 0x3D,									//jnl 2624005F
+//
+//		0x6A, 0x00,									//push 00
+//		0x68, 0x80, 0x00, 0x00, 0x00,				//push 00000080
+//		0x6A, 0x03,									//push 03
+//		0x6A, 0x00,									//push 00
+//		0x6A, 0x01,									//push 01
+//		0x68, 0x00, 0x00, 0x00, 0x40,				//push 40000000
+//		0x68, 0x00, 0x00, 0x00, 0x00,				//push pMailSlotNameAddress	
+//			
+//		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CreateFileW
+//		0x83, 0xF8, 0xFF,							//cmp eax,-01
+//			
+//		0x74, 0x1C,									//je 2624005F
+//		0x6A, 0x00,									//push 00
+//		0x54,										//push esp
+//		0x90,										//nop
+//			
+//		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessLength]
+//		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessPacket]
+//
+//		0x50,										//push eax
+//		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.WriteFile
+//		0x50,										//push eax
+//		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CloseHandle
+//		0x61,										//popad 
+//
+//		0xE9, 0x00, 0x00, 0x00, 0x00,				//jmp KnightOnLine.exe+3009F0
+//	};
+//
+//	DWORD iRecvProcessPacket = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x104);
+//	CopyBytes(byPatch + 10, iRecvProcessPacket);
+//
+//	DWORD iRecvProcessLength = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x100);
+//	CopyBytes(byPatch + 23, iRecvProcessLength);
+//
+//	CopyBytes(byPatch + 53, pMailSlotNameAddress);
+//
+//	DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 57, (DWORD)pCreateFilePtr);
+//	CopyBytes(byPatch + 58, iCreateFileDifference);
+//
+//	CopyBytes(byPatch + 73, iRecvProcessLength);
+//	CopyBytes(byPatch + 79, iRecvProcessPacket);
+//
+//	DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 84, (DWORD)pWriteFilePtr);
+//	CopyBytes(byPatch + 85, iWriteFileDifference);
+//
+//	DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 90, (DWORD)pCloseHandlePtr);
+//	CopyBytes(byPatch + 91, iCloseHandlePtrDifference);
+//	
+//	DWORD iRecvCallAddress = Read4Byte(iRecvAddress);
+//	DWORD iCallDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 96, (DWORD)iRecvCallAddress);
+//
+//	CopyBytes(byPatch + 97, iCallDifference);
+//
+//	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
+//
+//	WriteBytes((DWORD)m_RecvHookAddress, vecPatch);
+//
+//	DWORD dwOldProtection;
+//	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+//	Write4Byte(Read4Byte(Read4Byte(iAddress)) + 0x8, (DWORD)m_RecvHookAddress);
+//	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
+//
+//#ifdef DEBUG
+//	printf("PatchRecvAddress: 0x%x patched\n", iRecvAddress);
+//#endif
+//}
+
 void ClientHandler::PatchSendAddress()
 {
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
@@ -431,7 +541,7 @@ void ClientHandler::PatchSendAddress()
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\SEND\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\KOF2\\") + std::to_string(m_Bot->GetInjectedProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotSendName.begin(), m_szMailSlotSendName.end());
 
 	if (m_hMailSlotSend == nullptr)
@@ -2178,8 +2288,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 													{
 														if (pPartyMember->iHpBuffAttemptCount < 2)
 														{
-															pPartyMember->fHpBuffTime = 0.0f;
 															pPartyMember->iHpBuffAttemptCount++;
+														}
+														else
+														{
+															pPartyMember->fHpBuffTime = Bot::TimeGet();
 														}
 													}
 												}
@@ -2197,8 +2310,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 													{
 														if (pPartyMember->iACBuffAttemptCount < 2)
 														{
-															pPartyMember->fACBuffTime = 0;
 															pPartyMember->iACBuffAttemptCount++;
+														}
+														else
+														{
+															pPartyMember->fACBuffTime = Bot::TimeGet();
 														}
 													}
 												}
@@ -2215,8 +2331,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 													{
 														if (pPartyMember->iMindBuffAttemptCount < 2)
 														{
-															pPartyMember->fMindBuffTime = 0;
 															pPartyMember->iMindBuffAttemptCount++;
+														}
+														else 
+														{
+															pPartyMember->fMindBuffTime = Bot::TimeGet();
 														}
 													}
 												}
@@ -4034,8 +4153,18 @@ void ClientHandler::MoveToTargetProcess()
 {
 	try
 	{
-		//if (Bot::TimeGet() < (m_fLastMoveToTargetProcessTime + (1.0f / 1000.0f)))
-		//	return;
+		if (Bot::TimeGet() < (m_fLastMoveToTargetProcessTime + (150.0f / 1000.0f)))
+			return;
+
+		bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+
+		if (!bAttackStatus)
+			return;
+
+		bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
+
+		if (!bMoveToTarget)
+			return;
 
 		if (GetTarget() == -1)
 			return;
@@ -4053,16 +4182,6 @@ void ClientHandler::MoveToTargetProcess()
 			return;
 
 		if (IsStunned())
-			return;
-
-		bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
-
-		if (!bAttackStatus)
-			return;
-
-		bool bMoveToTarget = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("MoveToTarget"), false);
-
-		if (!bMoveToTarget)
 			return;
 
 		DWORD iTargetBase = GetTargetBase();
@@ -4143,7 +4262,7 @@ void ClientHandler::MoveToTargetProcess()
 			}
 		}
 
-		//m_fLastMoveToTargetProcessTime = Bot::TimeGet();
+		m_fLastMoveToTargetProcessTime = Bot::TimeGet();
 	}
 	catch (const std::exception& e)
 	{
@@ -4268,7 +4387,7 @@ void ClientHandler::BasicAttackPacketProcess()
 
 			if (!bIsEquippedBow)
 			{
-				float fAttackInterval = fBasicAttackIntervalTable + 0.1f;
+				float fAttackInterval = fBasicAttackIntervalTable;
 
 				if (Bot::TimeGet() > m_fAttackTimeRecent + fAttackInterval)
 				{
@@ -4436,6 +4555,9 @@ void ClientHandler::AttackProcess()
 				if (pSkillData == pSkillTable->end())
 					return false;
 
+				if (IsSkillHasZoneLimit(iSkillID))
+					return false;
+
 				float fCurrentTime = Bot::TimeGet();
 				float fSkillNextUseTime = GetSkillNextUseTime(iSkillID);
 
@@ -4568,6 +4690,11 @@ void ClientHandler::SearchTargetProcess()
 				if (Bot::TimeGet() < (m_fLastSearchTargetTime + (iSearchTargetSpeedValue / 1000.0f)))
 					return;
 			}
+		}
+		else
+		{
+			if (Bot::TimeGet() < (m_fLastSearchTargetTime + (100.0f / 1000.0f)))
+				return;
 		}
 
 		bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -4710,7 +4837,7 @@ void ClientHandler::AutoLootProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastAutoLootProcessTime + (200.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastAutoLootProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		bool bAutoLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
@@ -4807,7 +4934,7 @@ void ClientHandler::MinorProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastMinorProcessTime + (150.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastMinorProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		bool bMinorProtection = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Minor"), false);
@@ -4871,7 +4998,7 @@ void ClientHandler::PotionProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastPotionProcessTime + (150.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastPotionProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -5141,6 +5268,27 @@ void ClientHandler::TransformationProcess()
 						}
 					}
 					break;
+
+					case -1:
+					{
+						auto pTransformationScroll = pSkillTable->find(472001);
+						auto pTransformationSkill = pSkillTable->find(iTransformationSkill);
+
+						if (pTransformationScroll != pSkillTable->end()
+							&& pTransformationSkill != pSkillTable->end())
+						{
+							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
+								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+							{
+								new std::thread([=]()
+									{
+										UseSkillWithPacket(pTransformationScroll->second, GetID());
+										UseSkillWithPacket(pTransformationSkill->second, GetID());
+									});
+							}
+						}
+					}
+					break;
 					}
 				}
 			}
@@ -5241,7 +5389,7 @@ void ClientHandler::RegionProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastRegionProcessTime + (150.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastRegionProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -5349,7 +5497,7 @@ void ClientHandler::CharacterProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastCharacterProcessTime + (150.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastCharacterProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
@@ -5414,6 +5562,9 @@ void ClientHandler::CharacterProcess()
 				auto pSkillData = pSkillTable->find(iSkillID);
 
 				if (pSkillData == pSkillTable->end())
+					return false;
+
+				if (IsSkillHasZoneLimit(iSkillID))
 					return false;
 
 				float fCurrentTime = Bot::TimeGet();
@@ -8015,7 +8166,8 @@ int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
 
-		if (pFindedPlayer == m_vecPlayer.end())
+		if (GetID() != pMember.iMemberID 
+			&& pFindedPlayer == m_vecPlayer.end())
 			continue;
 
 		if (m_bSkillCasting == true || GetActionState() == PSA_SPELLMAGIC)
@@ -8072,13 +8224,37 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 		}
 		else
 		{
+			if (pSkillExtension4Data != pSkillExtension4->end())
+			{
+				float fBuffDuration = pSkillExtension4Data->second.iBuffDuration * 1000.0f;
 
+				if (pSkillExtension4Data->second.iBuffType == BUFF_TYPE_HP_MP)
+				{
+					if (pMember.fHpBuffTime > 0
+						&& Bot::TimeGet() < pMember.fHpBuffTime + (fBuffDuration / 1000.0f))
+					{
+						continue;
+					}
+				}
 
+				if (pSkillExtension4Data->second.iBuffType == BUFF_TYPE_AC)
+				{
+					if (pMember.fACBuffTime > 0
+						&& Bot::TimeGet() < pMember.fACBuffTime + (fBuffDuration / 1000.0f))
+					{
+						continue;
+					}
+				}
 
-
-
-
-
+				if (pSkillExtension4Data->second.iBuffType == BUFF_TYPE_RESISTANCES)
+				{
+					if (pMember.fMindBuffTime > 0
+						&& Bot::TimeGet() < pMember.fMindBuffTime + (fBuffDuration / 1000.0f))
+					{
+						continue;
+					}
+				}
+			}
 		}
 
 		DWORD iPlayerBase = GetEntityBase(pMember.iMemberID);
@@ -8103,7 +8279,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
 
-		if (pFindedPlayer == m_vecPlayer.end())
+		if (GetID() != pMember.iMemberID && pFindedPlayer == m_vecPlayer.end())
 			continue;
 
 		if (m_bSkillCasting == true || GetActionState() == PSA_SPELLMAGIC)
@@ -8115,3 +8291,30 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 	return -1;
 }
 
+
+bool ClientHandler::IsSkillHasZoneLimit(uint32_t iSkillBaseID)
+{
+	int iZoneIndex = GetZone();
+
+	switch (iSkillBaseID)
+	{
+		case 490803:
+		case 490811:
+		case 490808:
+		case 490809:
+		case 490810:
+		case 490800:
+		case 490801:
+		case 490817:
+		{
+			if (iZoneIndex == ZONE_DRAKI_TOWER ||
+				iZoneIndex == ZONE_MONSTER_STONE1 ||
+				iZoneIndex == ZONE_MONSTER_STONE2 ||
+				iZoneIndex == ZONE_MONSTER_STONE3)
+				return true;
+		}
+		break;
+	}
+
+	return false;
+}

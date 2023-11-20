@@ -94,7 +94,6 @@ public:
 	std::string m_szClientExe;
 
 	bool m_bTableLoaded;
-	std::chrono::milliseconds m_msLastConfigurationSave;
 
 public:
 	RouteManager* GetRouteManager() { return m_RouteManager; };
@@ -136,10 +135,11 @@ private:
 	std::chrono::milliseconds m_msLastInitializeHandle;
 
 public:
-	HANDLE m_hPipe;
-	bool m_bPipeWorking;
-	bool ConnectPipeServer();
-	void SendPipeServer(Packet pkt);
+	HANDLE m_hInternalMailslot;
+	bool m_bInternalMailslotWorking;
+
+	bool ConnectInternalMailslot();
+	void SendInternalMailslot(Packet pkt);
 
 public:
 	BYTE ReadByte(DWORD dwAddress);

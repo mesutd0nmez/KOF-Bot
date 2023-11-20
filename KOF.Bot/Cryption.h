@@ -19,7 +19,7 @@ public:
 	{
 		std::string szTmpInitialVector(szInitialVector
 			+ skCryptDec(".")
-			+ skCryptDec("e6d1663e8b6db24d93fab5a69f64bbc0432c674fa20ee13592e7a432ac61c0ab"));
+			+ skCryptDec("xRMnlYJ8Zyll4dpwYXBEtroo3kZ7AtCie64oaEsOcIvZjFtUQbWZTr3Xla9blbrk"));
 		uint8_t byTmpInitialVector[CryptoPP::SHA256::DIGESTSIZE];
 		CryptoPP::SHA256().CalculateDigest(byTmpInitialVector, (uint8_t*)szTmpInitialVector.data(), szTmpInitialVector.size());
 		CryptoPP::Weak::MD5().CalculateDigest(m_initialVector, byTmpInitialVector, CryptoPP::SHA256::DIGESTSIZE);

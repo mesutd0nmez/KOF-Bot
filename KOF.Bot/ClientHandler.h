@@ -33,6 +33,7 @@ private:
 	virtual void OnReady();
 
 	void PatchRecvAddress(DWORD dwAddress);
+	void hookRecv(long patchAddress, std::string MSName);
 	void PatchSendAddress();
 
 public:
@@ -205,6 +206,9 @@ protected:
 	int32_t PartyMemberNeedSwift();
 	int32_t PartyMemberNeedHeal(uint32_t iSkillBaseID);
 	int32_t PartyMemberNeedBuff(uint32_t iSkillBaseID);
+
+protected:
+	bool IsSkillHasZoneLimit(uint32_t iSkillBaseID);
 };
 
 

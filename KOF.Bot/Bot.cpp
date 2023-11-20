@@ -27,8 +27,6 @@ Bot::Bot()
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
-	m_msLastConfigurationSave = std::chrono::milliseconds(0);
-
 	m_szClientPath.clear();
 	m_szClientExe.clear();
 
@@ -47,8 +45,7 @@ Bot::Bot()
 
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
-	m_hPipe = nullptr;
-	m_bPipeWorking = false;
+	m_bInternalMailslotWorking = false;
 
 	m_jAccountList.clear();
 	m_iSelectedAccount = -1;
@@ -61,6 +58,8 @@ Bot::Bot()
 
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
+
+	m_hInternalMailslot = INVALID_HANDLE_VALUE;
 }
 
 Bot::~Bot()
@@ -104,8 +103,8 @@ Bot::~Bot()
 
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
-	m_hPipe = nullptr;
-	m_bPipeWorking = false;
+	m_hInternalMailslot = nullptr;
+	m_bInternalMailslotWorking = false;
 
 	m_jAccountList.clear();
 	m_iSelectedAccount = -1;
@@ -181,26 +180,25 @@ void Bot::Process()
 	}
 	else
 	{
-		if (m_bPipeWorking == false)
+		if (m_bInternalMailslotWorking == false)
 		{
-			if (ConnectPipeServer())
+			if (ConnectInternalMailslot())
 			{
 #ifdef DEBUG
-				printf("Bot: Connected Pipe server\n");
+				printf("Bot: Internal Connection Ready\n");
 #endif
-
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
 
 				pkt << int32_t(m_mapAddress.size());
 
-				for (auto &e : m_mapAddress)
+				for (auto& e : m_mapAddress)
 				{
 					pkt << e.first << e.second;
 				}
 
-				SendPipeServer(pkt);
+				SendInternalMailslot(pkt);
 
-				m_bPipeWorking = true;
+				m_bInternalMailslotWorking = true;
 			}
 		}
 
@@ -246,7 +244,7 @@ void Bot::Process()
 								<< std::to_string(1);
 
 							PROCESS_INFORMATION botProcessInfo;
-							StartProcess(std::filesystem::current_path().string(), skCryptDec("data\\bin\\chrome.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
+							StartProcess(std::filesystem::current_path().string(), skCryptDec("data\\bin\\Discord.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
 
 							Close();
 						}
@@ -263,21 +261,6 @@ void Bot::Process()
 
 					m_ClientHandler->m_msLastDisconnectTime = std::chrono::milliseconds(0);
 				}
-			}
-		}
-
-		if (m_iniUserConfiguration)
-		{
-			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-				std::chrono::system_clock::now().time_since_epoch()
-			);
-
-			if ((m_msLastUserConfigurationSaveTime.count() + 30000) < msNow.count())
-			{
-				if (m_iniUserConfiguration->onSaveEvent)
-					m_iniUserConfiguration->onSaveEvent();
-
-				m_msLastUserConfigurationSaveTime = msNow;
 			}
 		}
 	}
@@ -724,17 +707,15 @@ void Bot::OnLoaded()
 #ifdef DEBUG
 		printf("Bot: Bypass finished, Knight Online process resuming\n");
 #endif
-
+	
 		ResumeProcess(m_InjectedProcessInfo.hProcess);
 	}
 
-	Patch(m_InjectedProcessInfo.hProcess);
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
 	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("Adapter.dll"));
 
-	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\trkys\\OneDrive\\Belgeler\\GitHub\\Pipeline\\Debug\\Pipeline.dll"));
+	Patch(m_InjectedProcessInfo.hProcess);
+
+	//std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
@@ -756,7 +737,6 @@ void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
 	}
 }
 
-
 void Bot::Patch(HANDLE hProcess)
 {
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -777,17 +757,17 @@ void Bot::Patch(HANDLE hProcess)
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	DWORD iPatchEntryPoint2 = 0;
-	while (iPatchEntryPoint2 == 0)
-		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
+	//DWORD iPatchEntryPoint2 = 0;
+	//while (iPatchEntryPoint2 == 0)
+	//	ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
 
-	BYTE byPatch2[] =
-	{ 
-		0xE9, 0xC5, 0x00, 0x00, 0x00,
-		0x90 
-	};
+	//BYTE byPatch2[] =
+	//{ 
+	//	0xE9, 0xC5, 0x00, 0x00, 0x00,
+	//	0x90 
+	//};
 
-	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
+	//WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
@@ -811,17 +791,7 @@ void Bot::OnConfigurationLoaded()
 
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
-#ifdef DEBUG
-		printf("User configuration saving\n");
-#endif
-
-		std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-		if ((msCurrentTime - m_msLastConfigurationSave) > std::chrono::milliseconds(1000))
-		{
-			SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
-			m_msLastConfigurationSave = msCurrentTime;
-		}
+		SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
 	};
 }
 
@@ -1127,17 +1097,17 @@ void Bot::BuildAdress()
 #endif
 }
 
-bool Bot::ConnectPipeServer()
+bool Bot::ConnectInternalMailslot()
 {
-	m_hPipe = CreateFileA(skCryptDec("\\\\.\\pipe\\pipeline"),
-		GENERIC_READ | GENERIC_WRITE,
+	m_hInternalMailslot = CreateFile(skCryptDec("\\\\.\\mailslot\\Internal"),
+		GENERIC_WRITE,
 		0,
 		NULL,
 		OPEN_ALWAYS,
 		0,
 		NULL);
 
-	if (m_hPipe != INVALID_HANDLE_VALUE)
+	if (m_hInternalMailslot != INVALID_HANDLE_VALUE)
 	{
 		return true;
 	}
@@ -1145,17 +1115,24 @@ bool Bot::ConnectPipeServer()
 	return false;
 }
 
-void Bot::SendPipeServer(Packet pkt)
+void Bot::SendInternalMailslot(Packet pkt)
 {
-	if (m_hPipe != INVALID_HANDLE_VALUE)
+	if (m_hInternalMailslot != INVALID_HANDLE_VALUE)
 	{
-		DWORD iNumberOfBytesWritten;
+		DWORD bytesWritten;
 
-		WriteFile(m_hPipe,
-			pkt.contents(),
-			pkt.size(),
-			&iNumberOfBytesWritten,
-			NULL);
+		if (!WriteFile(m_hInternalMailslot, pkt.contents(), pkt.size(), &bytesWritten, nullptr))
+		{
+#ifdef DEBUG
+			printf("SendInternalMailslot: Failed to write to mailslot. Error code: %d\n", GetLastError());
+#endif
+		}
+	}
+	else
+	{
+#ifdef DEBUG
+		printf("SendInternalMailslot: m_hInternalMailslot == INVALID_HANDLE_VALUE\n");
+#endif
 	}
 }
 

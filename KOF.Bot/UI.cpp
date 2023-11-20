@@ -22,9 +22,9 @@ D3DPRESENT_PARAMETERS    UI::g_d3dpp = {};
 DWORD UI::g_iLastFrameTime = 0;
 DWORD UI::g_iFPSLimit = 30;
 
-std::string UI::m_szMainWindowName = skCryptDec("Google Chrome");
-std::string UI::m_szRoutePlannerWindowName = skCryptDec("Yeni Sekme - Google Chrome");
-std::string UI::m_szInventoryWindowName = skCryptDec("Yeni Sekme - Google Chrome");
+std::string UI::m_szMainWindowName = skCryptDec("Discord");
+std::string UI::m_szRoutePlannerWindowName = skCryptDec("Ayarlar - Discord");
+std::string UI::m_szInventoryWindowName = skCryptDec("Mesajlar - Discord");
 
 WNDCLASSEX m_WndClass;
 HWND m_hWnd;

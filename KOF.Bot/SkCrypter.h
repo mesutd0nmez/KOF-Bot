@@ -79,12 +79,6 @@ namespace skc
 	};
 }
 
-#ifdef DEBUG
-#define skCrypt(str) str
-#define skCrypt_key(str, key1, key2) str
-#define skCryptDec(str) str
-#define skCryptEnc(str) str
-#else
 #define skCrypt(str) skCrypt_key(str, __TIME__[4], __TIME__[7])
 #define skCrypt_key(str, key1, key2) []() { \
 			constexpr static auto crypted = skc::skCrypter \
@@ -93,4 +87,3 @@ namespace skc
 
 #define skCryptDec(str) skCrypt(str).decrypt()
 #define skCryptEnc(str) skCrypt(str).encrypt()
-#endif

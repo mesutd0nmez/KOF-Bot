@@ -327,7 +327,7 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
         << szCharacterName 
         << m_iniUserConfiguration->Dump();
 
-    Send(pkt, true);
+    Send(pkt);
 }
 
 void Service::SendInjectionRequest(uint32_t iProcessId)
