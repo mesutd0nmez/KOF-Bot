@@ -5,6 +5,7 @@
 
 // Windows Header Files
 #include <Windows.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <tchar.h>
 #include <fstream>
@@ -33,3 +34,4 @@
 #include <chrono>
 #include <iomanip>
 #include <random>
+#include <dwmapi.h>

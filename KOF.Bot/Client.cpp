@@ -1224,9 +1224,6 @@ void Client::StepCharacterForward(bool bStart)
 
 void Client::BasicAttack(DWORD iTargetBase)
 {
-	if (!IsAttackable(iTargetBase))
-		return;
-
 	Packet pkt = Packet(PIPE_BASIC_ATTACK);
 
 	pkt << uint8_t(1);
@@ -1238,9 +1235,6 @@ void Client::BasicAttack(DWORD iTargetBase)
 
 void Client::BasicAttackWithPacket(DWORD iTargetBase, float fAttackInterval)
 {
-	if (!IsAttackable(iTargetBase))
-		return;
-
 	Vector3 v3TargetPosition = GetTargetPosition();
 	float fDistance = GetDistance(v3TargetPosition);
 
@@ -1362,8 +1356,6 @@ void Client::WriteLoginInformation(std::string szAccountId, std::string szPasswo
 
 	WriteString(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT")), szAccountId.c_str());
 	Write4Byte(dwCN3UIEditIdBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_ID_INPUT_LENGTH")), szAccountId.size());
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 	WriteString(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT")), szPassword.c_str());
 	Write4Byte(dwCN3UIEditPwBase + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_PW_INPUT_LENGTH")), szPassword.size());
@@ -2193,7 +2185,7 @@ bool Client::IsNeedRepair()
 
 bool Client::IsNeedSupply()
 {
-	auto jSupplyList = m_Bot->GetSupplyList();
+	/*auto jSupplyList = m_Bot->GetSupplyList();
 
 	if (jSupplyList.size() > 0)
 	{
@@ -2224,7 +2216,7 @@ bool Client::IsNeedSupply()
 					return true;
 			}
 		}
-	}
+	}*/
 
 	return false;
 }

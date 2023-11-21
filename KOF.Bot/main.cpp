@@ -27,19 +27,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 #endif
 
-#ifdef DEBUG
     std::string szClientPath = DEVELOPMENT_PATH;
     std::string szClientExe = DEVELOPMENT_EXE;
     PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
     int iAccountIndex = DEVELOPMENT_ACCOUNT_INDEX;
-    bool bForceCloseClient = false;
-#else
-    std::string szClientPath = "";
-    std::string szClientExe = "";
-    PlatformType iPlatformType = PlatformType::USKO;
-    int iAccountIndex = -1;
-    bool bForceCloseClient = false;
-#endif
 
     int argc;
 
@@ -65,16 +56,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         iAccountIndex = std::stoi(szArglist[4]);
     }
 
-    if (argc == 6)
-    {
-        bForceCloseClient = std::stoi(szArglist[5]) == 1 ? true : false;
-    }
-
-    //TODO: Implement later
-    bForceCloseClient = true;
-
-    if (bForceCloseClient)
-    {
 #ifdef DEBUG
         printf("Bot: All client process forcing close\n");
 #endif
@@ -99,37 +80,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
         {
             KillProcessesByFileName(skCryptDec("xxd-0.xem"));
         }
-    }
 
     m_Bot = new Bot();
     m_Bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
 
-    UI::Initialize(m_Bot);
-
-    while (true)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
-        if (m_Bot->IsClosed())
-            break;
-
-        if (Drawing::Done)
-            break;
-
-        if (m_Bot->GetInjectedProcessId() != 0 && m_Bot->IsInjectedProcessLost())
-            break;
-
-        m_Bot->Process();
-
-        if (m_Bot->GetUserConfiguration() != nullptr) 
-        {
-            UI::Render();
-        }
-    }
+    UI::Render(m_Bot);
 
     TerminateMyProcess(m_Bot->GetInjectedProcessId(), -1);
-
-    UI::Clear();
 
 #ifdef DEBUG
     fclose(stdout);

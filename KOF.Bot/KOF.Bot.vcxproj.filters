@@ -182,12 +182,6 @@
     <ClCompile Include="ClientHandler.cpp">
       <Filter>Source Files\Client</Filter>
     </ClCompile>
-    <ClCompile Include="World.cpp">
-      <Filter>Source Files\Utility</Filter>
-    </ClCompile>
-    <ClCompile Include="RouteManager.cpp">
-      <Filter>Source Files\Utility</Filter>
-    </ClCompile>
     <ClCompile Include="Drawing_Hazar.cpp">
       <Filter>Source Files\UI</Filter>
     </ClCompile>

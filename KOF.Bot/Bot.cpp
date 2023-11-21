@@ -32,17 +32,6 @@ Bot::Bot()
 
 	m_bClosed = false;
 
-	m_RouteManager = nullptr;
-
-	m_World = new World();
-
-	m_jSupplyList.clear();
-
-	m_jHealthBuffList.clear();
-	m_jDefenceBuffList.clear();
-	m_jMindBuffList.clear();
-	m_jHealList.clear();
-
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
 	m_bInternalMailslotWorking = false;
@@ -52,14 +41,14 @@ Bot::Bot()
 
 	m_jSelectedAccount.clear();
 
-	m_jInventoryFlags.clear();
-
 	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
 
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
 
 	m_hInternalMailslot = INVALID_HANDLE_VALUE;
+
+	m_bAuthenticated = false;
 }
 
 Bot::~Bot()
@@ -91,16 +80,6 @@ Bot::~Bot()
 
 	m_bClosed = true;
 
-	m_RouteManager = nullptr;
-
-	m_World = nullptr;
-
-	m_jSupplyList.clear();
-	m_jHealthBuffList.clear();
-	m_jDefenceBuffList.clear();
-	m_jMindBuffList.clear();
-	m_jHealList.clear();
-
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
 	m_hInternalMailslot = nullptr;
@@ -115,6 +94,8 @@ Bot::~Bot()
 
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
+
+	m_bAuthenticated = false;
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -146,23 +127,6 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 #ifdef DEBUG
 	printf("Bot: Hardware Information Loaded\n");
 #endif
-
-#ifdef DEBUG
-	printf("Bot: Current process adjusting privileges\n");
-#endif
-
-	HANDLE hToken = NULL;
-	TOKEN_PRIVILEGES priv = { 0 };
-	if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
-	{
-		priv.PrivilegeCount = 1;
-		priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-
-		if (LookupPrivilegeValue(NULL, skCryptDec(SE_DEBUG_NAME), &priv.Privileges[0].Luid))
-			AdjustTokenPrivileges(hToken, FALSE, &priv, 0, NULL, NULL);
-
-		CloseHandle(hToken);
-	}
 
 	m_ePlatformType = ePlatformType;
 	m_iSelectedAccount = iSelectedAccount;
@@ -239,12 +203,10 @@ void Bot::Process()
 								<< " "
 								<< std::to_string(m_ePlatformType)
 								<< " "
-								<< std::to_string(m_iSelectedAccount)
-								<< " "
-								<< std::to_string(1);
+								<< std::to_string(m_iSelectedAccount);
 
 							PROCESS_INFORMATION botProcessInfo;
-							StartProcess(std::filesystem::current_path().string(), skCryptDec("data\\bin\\Discord.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
+							StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
 
 							Close();
 						}
@@ -290,8 +252,6 @@ void Bot::Close()
 #ifdef DEBUG
 	printf("Bot: Closing\n");
 #endif
-
-	Drawing::Done = true;
 
 	m_bClosed = true;
 
@@ -444,94 +404,6 @@ void Bot::InitializeStaticData()
 	m_bTableLoaded = true;
 }
 
-void Bot::InitializeRouteData()
-{
-#ifdef DEBUG
-	printf("InitializeRouteData: Started\n");
-#endif
-
-	m_RouteManager = new RouteManager();
-	m_RouteManager->Load();
-
-#ifdef DEBUG
-	printf("InitializeRouteData: Finished\n");
-#endif
-}
-
-void Bot::InitializeSupplyData()
-{
-#ifdef DEBUG
-	printf("InitializeSupplyData: Started\n");
-#endif
-
-	try
-	{
-		std::ifstream ifSupply(
-			skCryptDec("data\\supply.json"));
-
-		m_jSupplyList = JSON::parse(ifSupply);
-
-		std::ifstream ifInventoryFlags(
-			skCryptDec("data\\inventoryflags.json"));
-
-		m_jInventoryFlags = JSON::parse(ifInventoryFlags);
-	}
-	catch (const std::exception& e)
-	{
-#ifdef DEBUG
-		printf("%s\n", e.what());
-#else
-		DBG_UNREFERENCED_PARAMETER(e);
-#endif
-	}
-
-#ifdef DEBUG
-	printf("InitializeSupplyData: Finished\n");
-#endif
-}
-
-void Bot::InitializePriestData()
-{
-#ifdef DEBUG
-	printf("InitializePriestData: Started\n");
-#endif
-
-	try
-	{
-		std::ifstream iHealthBuffList(
-			skCryptDec("data\\health.json"));
-
-		m_jHealthBuffList = JSON::parse(iHealthBuffList);
-
-		std::ifstream iDefenceBuffList(
-			skCryptDec("data\\defence.json"));
-
-		m_jDefenceBuffList = JSON::parse(iDefenceBuffList);
-
-		std::ifstream iMindBuffList(
-			skCryptDec("data\\mind.json"));
-
-		m_jMindBuffList = JSON::parse(iMindBuffList);
-
-		std::ifstream iHealList(
-			skCryptDec("data\\heal.json"));
-
-		m_jHealList = JSON::parse(iHealList);
-	}
-	catch (const std::exception& e)
-	{
-#ifdef DEBUG
-		printf("%s\n", e.what());
-#else
-		DBG_UNREFERENCED_PARAMETER(e);
-#endif
-	}
-
-#ifdef DEBUG
-	printf("InitializePriestData: Finished\n");
-#endif
-}
-
 void Bot::OnReady()
 {
 #ifdef DEBUG
@@ -556,6 +428,8 @@ void Bot::OnAuthenticated()
 #ifdef DEBUG
 	printf("Bot: OnAuthenticated\n");
 #endif
+
+	m_bAuthenticated = true;
 }
 
 void Bot::OnLoaded()
@@ -587,7 +461,7 @@ void Bot::OnLoaded()
 			return;
 		}
 
-		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+		//WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
 	}
 	else if (m_ePlatformType == PlatformType::STKO)
 	{
@@ -605,7 +479,7 @@ void Bot::OnLoaded()
 			return;
 		}
 
-		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+		//WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
 	}
 #endif
 
@@ -711,11 +585,7 @@ void Bot::OnLoaded()
 		ResumeProcess(m_InjectedProcessInfo.hProcess);
 	}
 
-	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("Adapter.dll"));
-
 	Patch(m_InjectedProcessInfo.hProcess);
-
-	//std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
@@ -1164,42 +1034,6 @@ float Bot::TimeGet()
 	}
 
 	return (float)timeGetTime();
-}
-
-uint8_t Bot::GetInventoryItemFlag(uint32_t iItemID)
-{
-	for (size_t i = 0; i < m_jInventoryFlags.size(); i++)
-	{
-		if (m_jInventoryFlags[i]["id"].get<uint32_t>() == iItemID)
-		{
-			return m_jInventoryFlags[i]["flag"].get<uint8_t>();
-		}
-	}
-
-	return INVENTORY_ITEM_FLAG_NONE;
-};
-
-void Bot::UpdateInventoryItemFlag(JSON pInventoryFlags)
-{
-	try
-	{
-		m_jInventoryFlags = pInventoryFlags;
-
-		std::ofstream o(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("inventoryflags.json"));
-
-		o << std::setw(4) << m_jInventoryFlags << std::endl;
-	}
-	catch (const std::exception& e)
-	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-		printf("%s\n", e.what());
-#endif
-	}
 }
 
 bool Bot::IsInjectedProcessLost()

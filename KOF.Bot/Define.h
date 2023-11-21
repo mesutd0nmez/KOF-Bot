@@ -2,16 +2,35 @@
 
 ///////////////// DEBUG ////////////////////
 
+#ifdef _DEBUG
 #define DEBUG
-//
+#else
+//#define DEBUG 
+#endif
+
+#ifdef DEBUG
 #define PRINT_RECV_PACKET
 #define PRINT_SEND_PACKET
+#endif
+
 //#define DISABLE_XIGNCODE
+
+///////////////// IMPORTANT ////////////////////
 
 #define DEVELOPMENT_PATH "C:\\NTTGame\\KnightOnlineEn"
 #define DEVELOPMENT_EXE "KnightOnLine.exe"
 #define DEVELOPMENT_PLATFORM 0
+
+#ifdef DEBUG
 #define DEVELOPMENT_ACCOUNT_INDEX 8
+#else
+#define DEVELOPMENT_ACCOUNT_INDEX -1
+#endif
+
+///////////////// FEATURES /////////////////
+
+//#define FEATURE_LEVEL_DOWNER
+#define FEATURE_TOURNAMENT_SKILLS
 
 //#define DEVELOPMENT_PATH "C:\\CNKO"
 //#define DEVELOPMENT_EXE "KnightOnLine.exe"
@@ -30,14 +49,11 @@
 
 ///////////////// UI ///////////////////////
 
-#define UI_HAZAR
+//#define UI_HAZAR
 //#define UI_BLANK
 //#define UI_DEFAULT
 //#define UI_COMMON
 //#define DEVELOPER_ONLY
 
-///////////////// FEATURES /////////////////
 
-//#define FEATURE_LEVEL_DOWNER
-#define FEATURE_TOURNAMENT_SKILLS
 

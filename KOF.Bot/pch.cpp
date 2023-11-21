@@ -175,7 +175,7 @@ std::string CurlPost(std::string szUrl, JSON jData)
 
 bool Injection(DWORD iTargetProcess, std::string szPath)
 {
-	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Injector.dll"));
+	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Connector.dll"));
 
 	if (!hInjectionModule)
 	{

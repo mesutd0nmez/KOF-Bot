@@ -113,7 +113,7 @@ public:
 	void LoadSkillData();
 
 private:
-	void BasicAttackPacketProcess();
+	void BasicAttackProcess();
 	void AttackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();

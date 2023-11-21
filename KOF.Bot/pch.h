@@ -23,6 +23,12 @@ using JSON = nlohmann::json;
 
 #include <curl/curl.h>
 
+#include "imgui.h"
+#include "imgui_impl_dx9.h"
+#include "imgui_impl_win32.h"
+
+
+
 #define WaitCondition(condition) \
 	while(condition) \
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));

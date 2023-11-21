@@ -1,57 +1,52 @@
 #ifndef DRAWING_H
 #define DRAWING_H
 
+#include "pch.h"
 #include "Bot.h"
-
-#ifdef UI_DEFAULT
+#include "UI.h"
 
 class Drawing
 {
-public:
-	static Bot* Bot;
-	static bool Done;
-	static bool bDraw;
-
 private:
-	static bool bDrawRoutePlanner;
-	static bool bDrawInventory;
+	static ImVec2 vWindowSize;
+	static ImGuiWindowFlags WindowFlags;
 
-	static void InitializeSceneData();
+	static UI::WindowItem lpSelectedWindow;
+	static LPDIRECT3DDEVICE9 pD3DDevice;
+
+	static void DrawFilledRectangle(int x, int y, int w, int h, unsigned char r, unsigned char g, unsigned char b);
+
+
+	static void DrawMainController();
+	static void DrawProtectionController();
+	static void DrawAutoLootController();
+	static void DrawTransformationController();
+	static void DrawSpeedController();
+	static void DrawDistanceController();
+	static void DrawAttackController();
+	static void DrawIllegalController();
+	static void DrawTargetListController();
+	static void DrawSkillController();
+	static void DrawSizeController();
+	static void DrawSaveCPUController();
+	static void DrawSupplyController();
+	static void DrawListenerController();
+	static void DrawPartyController();
+	static void DrawSettingsController();
+	static void DrawModeController();
+	static void DrawFlashController();
+
+	static void SetLegalModeSettings(bool bMode);
+	static void SetSpeedModeSettings(bool bMode);
 
 public:
-	static void Initialize();
-
-	static void Active();
 	static bool isActive();
 	static void Draw();
-	static void DrawRoutePlanner();
+	static void DXDraw(LPDIRECT3DDEVICE9 pCurrentD3DDevice);
 
-	static void DrawGameController();
-	static void CenteredText(std::string strValue);
-	static void RightText(std::string strValue);
-
-	static void DrawMainProtectionArea();
-	static void DrawMainFeaturesArea();
-	static void DrawMainAutoLootArea();
-	static void DrawMainSupplyArea();
-	static void DrawMainDeveloperOnlyArea();
-	static void DrawMainSettingsArea();
-	static void DrawMainTransformationArea();
-	static void DrawMainListenerArea();
-	static void DrawMainRogueArea();
-	static void DrawMainPriestArea();
-
-	static void DrawRoutePlannerArea();
-
-	static void DrawAutomatedAttackSkillTree();
-	static void DrawAutomatedCharacterSkillTree();
-
-	static void DrawMonsterListTree();
-
-	static void DrawInventory();
-	static void DrawInventoryArea();
+	static Bot* Bot;
+	static LPCSTR lpWindowName;
+	static bool bDraw;
 };
-
-#endif
 
 #endif

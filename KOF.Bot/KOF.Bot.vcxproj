@@ -63,14 +63,12 @@
     <ClCompile Include="Drawing_Blank.cpp" />
     <ClCompile Include="Drawing_Common.cpp" />
     <ClCompile Include="Drawing_Hazar.cpp" />
-    <ClCompile Include="RouteManager.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="Socket.cpp" />
     <ClCompile Include="UI.cpp" />
-    <ClCompile Include="World.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="KOF.ico" />

@@ -127,7 +127,7 @@ void ClientHandler::Process()
 
 			SearchTargetProcess();
 			MoveToTargetProcess();
-			BasicAttackPacketProcess();
+			BasicAttackProcess();
 			AttackProcess();
 
 			MagicHammerProcess();
@@ -160,14 +160,14 @@ void ClientHandler::OnReady()
 
 	new std::thread([&]()
 	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+		PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
+
+		WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
+
 		if (m_Bot->m_iSelectedAccount != -1 && m_Bot->m_jAccountList.size() > 0)
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-			PushPhase(GetAddress(skCryptDec("KO_PTR_INTRO")));
-
-			WaitCondition(Read4Byte(Read4Byte(GetAddress(skCryptDec("KO_PTR_INTRO"))) + GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
-
 			m_Bot->m_jSelectedAccount = m_Bot->m_jAccountList.at(m_Bot->m_iSelectedAccount);
 
 			if (m_Bot->m_ePlatformType != PlatformType::STKO)
@@ -684,36 +684,39 @@ void ClientHandler::MailSlotRecvProcess()
 	{
 		DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
 
-		BOOL bResult = GetMailslotInfo(m_hMailSlotRecv, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
+		while (true)
+		{
+			BOOL bResult = GetMailslotInfo(m_hMailSlotRecv, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
 
-		if (!bResult)
-			return;
+			if (!bResult)
+				return;
 
-		if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
-			return;
+			if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+				break;
 
-		std::vector<uint8_t> vecMessageBuffer;
+			std::vector<uint8_t> vecMessageBuffer;
 
-		vecMessageBuffer.resize(iCurrentMesageSize);
+			vecMessageBuffer.resize(iCurrentMesageSize);
 
-		OVERLAPPED ov {};
-		ov.Offset = 0;
-		ov.OffsetHigh = 0;
-		ov.hEvent = NULL;
+			OVERLAPPED ov{};
+			ov.Offset = 0;
+			ov.OffsetHigh = 0;
+			ov.hEvent = NULL;
 
-		bResult = ReadFile(m_hMailSlotRecv, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
+			bResult = ReadFile(m_hMailSlotRecv, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
 
-		if (!bResult)
-			return;
+			if (!bResult)
+				return;
 
-		vecMessageBuffer.resize(iMessageReadSize);
+			vecMessageBuffer.resize(iMessageReadSize);
 
-		onClientRecvProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
+			onClientRecvProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
+		}
 	}
 	catch (const std::exception& e)
 	{
 #ifdef DEBUG
-		printf("MailSlotRecvProcess:Exception: %s\n", e.what());
+		printf("MailSlotRecvProcess: Exception: %s\n", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -726,36 +729,39 @@ void ClientHandler::MailSlotSendProcess()
 	{
 		DWORD iCurrentMesageSize, iMesageLeft, iMessageReadSize;
 
-		BOOL bResult = GetMailslotInfo(m_hMailSlotSend, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
+		while (true)
+		{
+			BOOL bResult = GetMailslotInfo(m_hMailSlotSend, NULL, &iCurrentMesageSize, &iMesageLeft, NULL);
 
-		if (!bResult)
-			return;
+			if (!bResult)
+				return;
 
-		if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
-			return;
+			if (iCurrentMesageSize == MAILSLOT_NO_MESSAGE)
+				break;
 
-		std::vector<uint8_t> vecMessageBuffer;
+			std::vector<uint8_t> vecMessageBuffer;
 
-		vecMessageBuffer.resize(iCurrentMesageSize);
+			vecMessageBuffer.resize(iCurrentMesageSize);
 
-		OVERLAPPED ov {};
-		ov.Offset = 0;
-		ov.OffsetHigh = 0;
-		ov.hEvent = NULL;
+			OVERLAPPED ov{};
+			ov.Offset = 0;
+			ov.OffsetHigh = 0;
+			ov.hEvent = NULL;
 
-		bResult = ReadFile(m_hMailSlotSend, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
+			bResult = ReadFile(m_hMailSlotSend, &vecMessageBuffer[0], iCurrentMesageSize, &iMessageReadSize, &ov);
 
-		if (!bResult)
-			return;
+			if (!bResult)
+				return;
 
-		vecMessageBuffer.resize(iMessageReadSize);
+			vecMessageBuffer.resize(iMessageReadSize);
 
-		onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
+			onClientSendProcess(vecMessageBuffer.data(), vecMessageBuffer.size());
+		}
 	}
 	catch (const std::exception& e)
 	{
 #ifdef DEBUG
-		printf("MailSlotSendProcess:Exception: %s\n", e.what());
+		printf("MailSlotSendProcess: Exception: %s\n", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -825,9 +831,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif
 
 					new std::thread([&]() { m_Bot->InitializeStaticData(); });
-					new std::thread([&]() { m_Bot->InitializeRouteData(); });
-					new std::thread([&]() { m_Bot->InitializeSupplyData(); });
-					new std::thread([&]() { m_Bot->InitializePriestData(); });
 				}
 				break;
 
@@ -1114,7 +1117,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 						SelectCharacter();
-
 					});
 				}
 			}
@@ -1256,8 +1258,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			}
 
 			LoadSkillData();
-
-			new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(GetZone())); });
 
 			m_Bot->SendLoadUserConfiguration(GetServerId(), m_PlayerMySelf.szName);
 
@@ -1508,30 +1508,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				}
 
 				StartHandler();
-
-				bool bLoginRouteStatus = GetUserConfiguration()->GetInt(skCryptDec("Bot"), skCryptDec("LoginRouteStatus"), true);
-
-				if (bLoginRouteStatus)
-				{
-					std::string szSelectedLoginRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedLoginRoute"), "");
-
-					RouteManager* pRouteManager = m_Bot->GetRouteManager();
-					RouteManager::RouteList pRouteList;
-
-					uint8_t iZoneID = GetRepresentZone(GetZone());
-
-					if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
-					{
-						auto pRoute = pRouteList.find(szSelectedLoginRoute);
-
-						if (pRoute != pRouteList.end())
-						{
-							SendStopGenie();
-							SetRoute(pRoute->second);
-						}
-					}
-				}
-				
 			});
 		}
 		break;
@@ -1859,28 +1835,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					pMember->iACBuffAttemptCount = 0;
 					pMember->fMindBuffTime = 0.0f;
 					pMember->iMindBuffAttemptCount = 0;
-				}
-
-				bool bDeathRouteStatus = GetUserConfiguration()->GetInt(skCryptDec("Bot"), skCryptDec("DeathRouteStatus"), true);
-
-				if (bDeathRouteStatus)
-				{
-					std::string szSelectedDeathRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedDeathRoute"), "");
-
-					RouteManager* pRouteManager = m_Bot->GetRouteManager();
-					RouteManager::RouteList pRouteList;
-
-					uint8_t iZoneID = GetRepresentZone(GetZone());
-
-					if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
-					{
-						auto pRoute = pRouteList.find(szSelectedDeathRoute);
-
-						if (pRoute != pRouteList.end())
-						{
-							SetRoute(pRoute->second);
-						}
-					}
 				}
 #ifdef DEBUG
 				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
@@ -3028,8 +2982,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					uint8_t iVictoryNation = pkt.read<uint8_t>();
 
-					new std::thread([this]() { m_Bot->GetWorld()->Load(GetRepresentZone(m_PlayerMySelf.iCity)); });
-
 					m_vecNpc.clear();
 					m_vecPlayer.clear();
 
@@ -3105,7 +3057,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_CAPTCHA: Image loaded\n");
 #endif
-						int32_t iBufferLength;
+						int iBufferLength;
 						pkt >> iBufferLength;
 
 						std::vector<uint8_t> vecBuffer(iBufferLength);
@@ -3113,22 +3065,17 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						new std::thread([&,vecBuffer]()
 						{ 
-							const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
-
-							if (iSelectedCaptchaSolver != 0)
+							if (!SolveCaptcha(vecBuffer))
 							{
-								if (!SolveCaptcha(vecBuffer))
+								new std::thread([&]()
 								{
 									std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 									RefreshCaptcha();
-								}
-							}
-							else
-							{
 #ifdef DEBUG
-								printf("RecvProcess::WIZ_CAPTCHA: Captcha solver service not selected\n");
+									printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
 #endif
+								});
 							}
 						});					
 					}
@@ -3139,17 +3086,12 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #endif	
 						new std::thread([&]()
 						{
-							const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
+							std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
-							if (iSelectedCaptchaSolver != 0)
-							{
-								std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-
-								RefreshCaptcha();
+							RefreshCaptcha();
 #ifdef DEBUG
-								printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
+							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
 #endif
-							}
 						});
 					}
 				}
@@ -3170,9 +3112,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_CAPTCHA: Failed(%d)\n", iResult);
 #endif
-						const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
-
-						if (iSelectedCaptchaSolver != 0)
+						new std::thread([&]()
 						{
 							std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
@@ -3180,7 +3120,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
 #endif
-						}
+						});
 					}
 				}
 				break;
@@ -3541,16 +3481,6 @@ bool ClientHandler::SolveCaptcha(std::vector<uint8_t> vecImageBuffer)
 {
 	try
 	{
-		const int32_t iSelectedCaptchaSolver = GetAppConfiguration()->GetInt(skCryptDec("CaptchaSolver"), skCryptDec("Service"), 0);
-
-		if (iSelectedCaptchaSolver == 0)
-		{
-#ifdef DEBUG
-			printf("Captcha solver service not selected\n");
-#endif
-			return false;
-		}
-
 		int iWidth, iHeight, iChannel;
 		unsigned char* captchaImage = (unsigned char*)stbi_load_from_memory((unsigned char*)vecImageBuffer.data(), vecImageBuffer.size(), &iWidth, &iHeight, &iChannel, 3);
 
@@ -3588,55 +3518,9 @@ bool ClientHandler::SolveCaptcha(std::vector<uint8_t> vecImageBuffer)
 		szBase64Output.resize(iBase64OutputSize);
 		encoder.Get(reinterpret_cast<CryptoPP::byte*>(&szBase64Output[0]), szBase64Output.size());
 
-		switch (iSelectedCaptchaSolver)
-		{
-			//kofbot.com
-			case 1: 
-			{
-				m_Bot->SendCaptcha(szBase64Output);
-				return true;
-			}
-			break;
+		m_Bot->SendCaptcha(szBase64Output);
 
-			//truecaptcha.org
-			case 2: 
-			{
-				JSON postData;
-
-				postData["userid"] = GetAppConfiguration()->GetString(skCryptDec("CaptchaSolver"), skCryptDec("Username"), "").c_str();
-				postData["apikey"] = GetAppConfiguration()->GetString(skCryptDec("CaptchaSolver"), skCryptDec("Key"), "").c_str();
-				postData["data"] = szBase64Output.c_str();
-				postData["case"] = "mixed";
-				postData["numeric"] = false;
-				postData["len_str"] = 4;
-
-				std::string szResponse = CurlPost("https://api.apitruecaptcha.org/one/gettext", postData);
-
-				if (szResponse.size() == 0)
-				{
-#ifdef DEBUG
-					printf("Curl Captcha API response empty\n");
-#endif
-					return false;
-				}
-
-				JSON jResponse = JSON::parse(szResponse);
-
-				if (jResponse["success"].get<bool>() == true)
-				{
-					SendCaptcha(jResponse["result"].get<std::string>());
-					return true;
-				}
-				else
-				{
-#ifdef DEBUG
-					printf("SolveCaptcha: %s\n", jResponse["error_message"].get<std::string>().c_str());
-#endif
-					return false;
-				}
-			}
-			break;
-		}
+		return true;
 	}
 	catch (const std::exception& e)
 	{
@@ -4181,15 +4065,17 @@ void ClientHandler::MoveToTargetProcess()
 		if (IsDeath())
 			return;
 
-		if (IsStunned())
-			return;
+		bool bDisableStun = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("DisableStun"), false);
+
+		if (!bDisableStun)
+		{
+			if (IsStunned())
+				return;
+		}
 
 		DWORD iTargetBase = GetTargetBase();
 
 		if (iTargetBase == 0)
-			return;
-
-		if (!IsAttackable(iTargetBase))
 			return;
 
 		std::map<uint32_t, __TABLE_ITEM>* pItemTable;
@@ -4274,7 +4160,7 @@ void ClientHandler::MoveToTargetProcess()
 	}
 }
 
-void ClientHandler::BasicAttackPacketProcess()
+void ClientHandler::BasicAttackProcess()
 {
 	try
 	{
@@ -4837,7 +4723,7 @@ void ClientHandler::AutoLootProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastAutoLootProcessTime + (500.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastAutoLootProcessTime + (100.0f / 1000.0f)))
 			return;
 
 		bool bAutoLoot = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("Enable"), false);
@@ -6461,1105 +6347,1105 @@ bool ClientHandler::ManaPotionProcess()
 	return false;
 }
 
-void ClientHandler::RouteProcess()
-{
-#ifdef DEBUG
-	printf("ClientHandler::RouteProcess Started\n");
-#endif
-
-	while (m_bWorking)
-	{
-		try
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-			if (IsZoneChanging())
-				continue;
-
-			if (IsBlinking())
-				continue;
-
-			if (IsDeath())
-				continue;
-
-			if (m_vecRoute.size() == 0)
-				continue;
-
-			Route pRoute = m_vecRoute.front();
-
-			if (GetActionState() == PSA_SPELLMAGIC)
-				continue;
-
-			m_iRouteStep = pRoute.eStepType;
-
-			switch (pRoute.eStepType)
-			{
-			case RouteStepType::STEP_MOVE:
-			{
-				if (m_vecRoute.size() == 0)
-					continue;
-
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
-
-				if (fDistance > 3.0f)
-				{
-					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
-					continue;
-				}
-			}
-			break;
-
-			case RouteStepType::STEP_TOWN:
-			{
-				if (m_vecRoute.size() == 0)
-					continue;
-
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
-
-				if (fDistance > 50.0f)
-				{
-					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
-					continue;
-				}
-
-				SendTownPacket();
-			}
-			break;
-
-			case RouteStepType::STEP_SUNDRIES:
-			case RouteStepType::STEP_POTION:
-			{
-				if (m_vecRoute.size() == 0)
-					continue;
-
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
-
-				if (fDistance > 3.0f)
-				{
-					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
-					continue;
-				}
-
-				/*
-				* Find NPC
-				*/
-
-				int iNpcSellingGroup = 253000;
-
-				if (pRoute.eStepType == RouteStepType::STEP_SUNDRIES)
-				{
-					iNpcSellingGroup = 255000;
-				}
-
-				struct SNpcInformation
-				{
-					SNpcInformation(int32_t iNpcID, int32_t iSellingGroup, Vector3 v3NpcPosition) :
-						m_iNpcID(iNpcID), m_iSellingGroup(iSellingGroup), m_v3NpcPosition(v3NpcPosition) {};
-
-					int32_t m_iNpcID;
-					int32_t m_iSellingGroup;
-					Vector3 m_v3NpcPosition;
-				};
-
-				std::vector<SNpcInformation> vecNpcInformation;
-
-				{
-					std::vector<TNpc> tmpVecNpc = m_vecNpc;
-
-					Vector3 v3CurrentPosition = GetPosition();
-
-					auto pSort = [&](TNpc const& a, TNpc const& b)
-					{
-						auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
-						auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
-
-						if (fADistance != fBDistance)
-						{
-							return fADistance < fBDistance;
-						}
-
-						return false;
-					};
-
-					std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
-
-					for (auto& e : tmpVecNpc)
-					{
-						if (e.iSellingGroup == iNpcSellingGroup)
-						{
-							vecNpcInformation.push_back(
-								SNpcInformation(e.iID, iNpcSellingGroup, Vector3(e.fX, e.fZ, e.fY))
-							);
-						}
-					}
-				}
-
-				auto pNpc = std::find_if(vecNpcInformation.begin(), vecNpcInformation.end(),
-					[&](const SNpcInformation& a) {
-						return a.m_iSellingGroup == iNpcSellingGroup;
-					});
-
-				if (pNpc != vecNpcInformation.end())
-				{
-					/*
-					* Move Operations
-					*/
-
-					DWORD iNpcBase = 0;
-
-					while (m_vecRoute.size() > 0)
-					{
-						std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-						if (GetActionState() == PSA_SPELLMAGIC)
-							continue;
-
-						iNpcBase = GetEntityBase(pNpc->m_iNpcID);
-
-						if (iNpcBase == 0)
-							break;
-
-						float fTargetRadius = GetRadius(iNpcBase) * GetScaleZ(iNpcBase);
-						float fMySelfRadius = GetRadius() * GetScaleZ();
-						float fDistLimit = (fMySelfRadius + fTargetRadius) / 2.0f;
-
-						if (GetDistance(pNpc->m_v3NpcPosition) < 3)
-							break;
-
-						SetMovePosition(pNpc->m_v3NpcPosition);
-					}
-
-					if (iNpcBase != 0)
-					{
-						/**
-						* Selling Operations
-						*/
-
-						bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
-						int iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), 1);
-						int iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), 14);
-						bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
-
-						if (bAutoSellSlotRange || bAutoSellByFlag)
-						{
-							std::vector<TItemData> vecInventoryItemList;
-							GetInventoryItemList(vecInventoryItemList);
-
-							uint8_t iSellPageCount = 0;
-							std::vector<SSItemSell> vecInventoryItemSell[2];
-
-							for (const TItemData& pItem : vecInventoryItemList)
-							{
-								if (pItem.iItemID == 0)
-									continue;
-
-								//Promise Of Training
-								if (pItem.iItemID == 989511000) 
-									continue;
-
-								__TABLE_ITEM* pItemData;
-								if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
-									continue;
-
-								__TABLE_ITEM_EXTENSION* pItemExtensionData;
-								if (!m_Bot->GetItemExtensionData(pItem.iItemID, pItemData->byExtIndex, pItemExtensionData))
-									continue;
-
-								if (pItemData->byNeedRace == RACE_TRADEABLE_IN_72HR
-									|| pItemData->byNeedRace == RACE_NO_TRADE
-									|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD
-									|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD2
-									|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
-									continue;
-
-								if (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
-									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA)
-									continue;
-
-								int iRangeStart = (14 + iAutoSellSlotRangeStart) - 1;
-								int iRangeEnd = (14 + iAutoSellSlotRangeEnd) - 1;
-
-								uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
-
-								if ((bAutoSellByFlag
-									&& iItemFlag == INVENTORY_ITEM_FLAG_SELL)
-									|| (bAutoSellSlotRange
-										&& pItem.iPos >= iRangeStart
-										&& pItem.iPos <= iRangeEnd))
-								{
-									if (vecInventoryItemSell[iSellPageCount].size() == 14)
-										iSellPageCount++;
-
-									vecInventoryItemSell[iSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(pItem.iPos - 14), pItem.iCount));
-								}
-							}
-
-							if (vecInventoryItemSell[0].size() > 0)
-							{
-								SendNpcEvent(pNpc->m_iNpcID);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-								for (size_t i = 0; i <= iSellPageCount; i++)
-								{
-									WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-									SendItemTradeSell(iNpcSellingGroup, pNpc->m_iNpcID, vecInventoryItemSell[i]);
-									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK")), 1);
-								}
-
-								WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-
-								SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-							}
-						}
-
-						/**
-						* VIP Warehouse Operations
-						*/
-
-						bool bAutoSellVipSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRange"), false);
-
-						if (bAutoSellVipSlotRange)
-						{
-							bool bRunWarehouseProcess = true;
-
-							while (bRunWarehouseProcess)
-							{
-								if (m_bVipWarehouseInitialized
-									&& !m_bVipWarehouseEnabled)
-									break;
-
-								if (m_vecRoute.size() == 0)
-									break;
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-								OpenVipWarehouse();
-
-								WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-
-								if (!m_bVipWarehouseLoaded)
-									break;
-
-								bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
-								int iAutoSellVipSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeStart"), 1);
-								int iAutoSellVipSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeEnd"), 48);
-
-								std::vector<TItemData> vecVipWarehouseItemList;
-								std::vector<TItemData> vecVipWarehouseGetOutItemList;
-
-								GetVipWarehouseItemList(vecVipWarehouseItemList);
-
-								for (const TItemData& pItem : vecVipWarehouseItemList)
-								{
-									if (pItem.iItemID == 0)
-										continue;
-
-									int iRangeStart = (iAutoSellVipSlotRangeStart)-1;
-									int iRangeEnd = (iAutoSellVipSlotRangeEnd)-1;
-
-									uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
-
-									if (((bAutoSellByFlag
-										&& iItemFlag == INVENTORY_ITEM_FLAG_SELL))
-										|| (bAutoSellVipSlotRange
-											&& pItem.iPos >= iRangeStart
-											&& pItem.iPos <= iRangeEnd))
-									{
-										vecVipWarehouseGetOutItemList.push_back(pItem);
-									}
-								}
-
-								if (vecVipWarehouseGetOutItemList.size() == 0)
-								{
-									CloseVipWarehouse();
-									break;
-								}	
-
-								uint8_t iVipWarehouseSellPageCount = 0;
-								std::vector<SSItemSell> vecVipWarehouseItemSell[2];
-
-								for (const TItemData& pItem : vecVipWarehouseGetOutItemList)
-								{
-									__TABLE_ITEM* pItemData;
-									if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
-										continue;
-
-									WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-									std::vector<TItemData> vecVipWarehouseInventoryItemList;
-									GetVipWarehouseInventoryItemList(vecVipWarehouseInventoryItemList);
-
-									int iTargetPosition = -1;
-
-									if (pItemData->byContable)
-									{
-										auto pInventoryItem = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
-											[&](const TItemData& a)
-											{
-												return a.iItemID == pItem.iItemID;
-											});
-
-										if (pInventoryItem != vecVipWarehouseInventoryItemList.end())
-										{
-											if ((pItem.iCount + pInventoryItem->iCount) > 9999)
-												continue;
-
-											iTargetPosition = pInventoryItem->iPos;
-										}
-										else
-										{
-											auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
-												[&](const TItemData& a)
-												{
-													return a.iItemID == 0;
-												});
-
-											if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
-											{
-												iTargetPosition = pInventoryEmptySlot->iPos;
-											}
-										}
-									}
-									else
-									{
-										auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
-											[&](const TItemData& a)
-											{
-												return a.iItemID == 0;
-											});
-
-										if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
-										{
-											iTargetPosition = pInventoryEmptySlot->iPos;
-										}
-									}
-
-									if (iTargetPosition == -1)
-									{
-										bRunWarehouseProcess = false;
-										break;
-									}
-
-									WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
-									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), pItem.iPos);
-									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 2);
-									Write4Byte(GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), pItem.iBase);
-
-									VipWarehouseGetOut(iTargetPosition);
-
-									WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-									if (pItemData->byContable)
-									{
-										CountableDialogChangeCount(1);
-										CountableDialogChangeCount(pItem.iCount);
-										AcceptCountableDialog();
-									}
-
-									if (vecVipWarehouseItemSell[iVipWarehouseSellPageCount].size() == 14)
-										iVipWarehouseSellPageCount++;
-
-									vecVipWarehouseItemSell[iVipWarehouseSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(iTargetPosition), pItem.iCount));
-								}
-
-								WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-								CloseVipWarehouse();
-
-								if (vecVipWarehouseItemSell[0].size() > 0)
-								{
-									SendNpcEvent(pNpc->m_iNpcID);
-
-									std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-									for (size_t i = 0; i <= iVipWarehouseSellPageCount; i++)
-									{
-										WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-										SendItemTradeSell(iNpcSellingGroup, pNpc->m_iNpcID, vecVipWarehouseItemSell[i]);
-										Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK")), 1);
-									}
-
-									WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-
-									SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-
-									std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-								}
-							}
-						}
-
-						/**
-						* Buy Operations
-						*/
-
-						bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
-
-						if (bAutoSupply)
-						{
-							auto jSupplyList = m_Bot->GetSupplyList();
-
-							uint8_t iBuyPageCount = 0;
-							std::vector<SSItemBuy> vecInventoryItemBuy[2];
-							std::vector<int32_t> vecExceptedBuyPos;
-
-							for (size_t i = 0; i < jSupplyList.size(); i++)
-							{
-								std::vector<int> vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
-
-								std::string szItemIdAttribute = skCryptDec("itemid");
-								std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
-								std::string szCountAttribute = skCryptDec("count");
-
-								int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
-								int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
-
-								bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iItemId) != vecSupplyList.end();
-
-								if (!bSelected)
-									continue;
-
-								if (iSellingGroup != iNpcSellingGroup)
-									continue;
-
-								std::vector<SShopItem> vecShopItemTable;
-								if (!m_Bot->GetShopItemTable(iNpcSellingGroup, vecShopItemTable))
-									continue;
-
-								uint8_t iPos = -1;
-								int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
-									skCryptDec("Supply"),
-									std::to_string(iItemId).c_str(),
-									jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
-
-								TItemData pInventoryItem = GetInventoryItem(iItemId);
-
-								if (pInventoryItem.iItemID != 0)
-								{
-									if (pInventoryItem.iCount >= iItemCount)
-										continue;
-
-									iPos = (uint8_t)pInventoryItem.iPos;
-									iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
-								}
-								else
-								{
-									iPos = (uint8_t)GetInventoryEmptySlot(vecExceptedBuyPos);
-								}
-
-								if (iPos == -1 || iItemCount == 0)
-									continue;
-
-								auto pShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
-									[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
-
-								if (pShopItem == vecShopItemTable.end())
-									continue;
-
-								if (vecInventoryItemBuy[iBuyPageCount].size() == 14)
-									iBuyPageCount++;
-
-								vecInventoryItemBuy[iBuyPageCount].push_back(
-									SSItemBuy(pShopItem->m_iItemId, (iPos - 14), iItemCount, pShopItem->m_iPage, pShopItem->m_iPos));
-
-								vecExceptedBuyPos.push_back(iPos);
-							}
-
-							if (vecInventoryItemBuy[0].size() > 0)
-							{
-								SendNpcEvent(pNpc->m_iNpcID);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-								for (size_t i = 0; i <= iBuyPageCount; i++)
-								{
-									WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-									SendItemTradeBuy(iNpcSellingGroup, pNpc->m_iNpcID, vecInventoryItemBuy[i]);
-									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK")), 1);
-								}
-
-								WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-
-								SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-
-								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-							}
-						}
-
-						/**
-						* Repair Operations
-						*/
-
-						bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
-
-						if (bAutoRepair 
-							&& pRoute.eStepType == RouteStepType::STEP_SUNDRIES)
-						{
-							SendNpcEvent(pNpc->m_iNpcID);
-
-							std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-							for (uint8_t i = 0; i < SLOT_MAX + HAVE_MAX; i++)
-							{
-								switch (i)
-								{
-									// Equipment District
-									case 1:
-									case 4:
-									case 6:
-									case 8:
-									case 10:
-									case 12:
-									case 13:
-									{
-										TItemData pInventory = GetInventoryItemSlot(i);
-
-										if (pInventory.iItemID == 0)
-											continue;
-
-										SendItemRepair(1, (uint8_t)pInventory.iPos, pNpc->m_iNpcID, pInventory.iItemID);
-									}
-									break;
-
-									// Inventory District
-									default:
-									{
-										//TODO: Inventory Repair Operations
-									}
-									break;
-								}
-							}
-
-							SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-							std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-						}
-					}
-				}
-
-				m_msLastSupplyTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-			}
-			break;
-
-			case RouteStepType::STEP_INN:
-			{
-				std::vector<TItemData> vecInventoryItemList;
-				std::vector<TItemData> vecFlaggedItemList;
-
-				if (GetInventoryItemList(vecInventoryItemList))
-				{
-					for (const TItemData& pItem : vecInventoryItemList)
-					{
-						uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
-
-						if (iItemFlag != INVENTORY_ITEM_FLAG_INN)
-						{
-							continue;
-						}
-
-						vecFlaggedItemList.push_back(pItem);
-					}
-				}
-
-				if (vecFlaggedItemList.size() > 0)
-				{
-					float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
-
-					if (fDistance > 3.0f)
-					{
-						SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
-						continue;
-					}
-
-					struct SNpcInformation
-					{
-						SNpcInformation(int32_t iNpcID, int32_t iFamilyType, Vector3 v3NpcPosition) :
-							m_iNpcID(iNpcID), m_iFamilyType(iFamilyType), m_v3NpcPosition(v3NpcPosition) {};
-
-						int32_t m_iNpcID;
-						int32_t m_iFamilyType;
-						Vector3 m_v3NpcPosition;
-					};
-
-					SNpcInformation* pWarehouseNpcInfo = nullptr;
-
-					{
-						std::vector<TNpc> tmpVecNpc = m_vecNpc;
-
-						Vector3 v3CurrentPosition = GetPosition();
-
-						auto pSort = [&](TNpc const& a, TNpc const& b)
-						{
-							auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
-							auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
-
-							if (fADistance != fBDistance)
-							{
-								return fADistance < fBDistance;
-							}
-
-							return false;
-						};
-
-						std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
-
-						for (auto& e : tmpVecNpc)
-						{
-							if (e.iFamilyType == 31)
-							{
-								pWarehouseNpcInfo = new SNpcInformation(e.iID, e.iFamilyType, Vector3(e.fX, e.fZ, e.fY));
-								break;
-							}
-						}
-					}
-
-					if (pWarehouseNpcInfo)
-					{
-						while (
-							m_vecRoute.size() > 0)
-						{
-							std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-							DWORD iNpcBase = GetEntityBase(pWarehouseNpcInfo->m_iNpcID);
-
-							if (iNpcBase == 0)
-								break;
-
-							if (GetActionState() == PSA_SPELLMAGIC)
-								continue;
-
-							float fTargetRadius = GetRadius(iNpcBase) * GetScaleZ(iNpcBase);
-							float fMySelfRadius = GetRadius() * GetScaleZ();
-							float fDistLimit = (fMySelfRadius + fTargetRadius) / 2.0f;
-
-							if (GetDistance(pWarehouseNpcInfo->m_v3NpcPosition) > fDistLimit)
-							{
-								SetMovePosition(pWarehouseNpcInfo->m_v3NpcPosition);
-							}
-							else
-							{
-								if (GetMoveState() != PSM_STOP)
-								{
-									SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
-								}
-
-								break;
-							}
-						}
-
-						//std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-
-						//TODO: Test edilecek
-						//SendWarehouseOpen(pWarehouseNpcInfo->m_iNpcID);
-
-						//std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-
-						for (const TItemData& pItem : vecFlaggedItemList)
-						{
-							uint8_t iContable = 0;
-
-							__TABLE_ITEM* pItemData;
-							if (m_Bot->GetItemData(pItem.iItemID, pItemData))
-							{
-								iContable = pItemData->byContable;
-							}
-
-							int iRealSlot = GetWarehouseAvailableSlot(pItem.iItemID, iContable);
-							int iPage = iRealSlot / 24;
-							int iSlot = iRealSlot % 24;
-
-							SendWarehouseGetIn(pWarehouseNpcInfo->m_iNpcID, pItem.iItemID, (uint8_t)iPage, pItem.iPos - 14, (uint8_t)iSlot, pItem.iCount);
-
-							m_PlayerMySelf.tWarehouse[iRealSlot] = pItem;
-							m_PlayerMySelf.tWarehouse[iRealSlot].iPos = iRealSlot;
-
-							if (iContable)
-							{
-								m_PlayerMySelf.tWarehouse[iRealSlot].iCount += pItem.iCount;
-							}
-						}
-
-						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-						SendNpcEvent(pWarehouseNpcInfo->m_iNpcID);
-
-						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
-					}
-				}
-			}
-			break;
-
-			case RouteStepType::STEP_GENIE:
-			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-				SendStartGenie();
-			}
-			break;
-
-			case RouteStepType::STEP_GATE:
-			{
-				if (m_vecRoute.size() == 0)
-					continue;
-
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
-
-				if (fDistance > 50.0f)
-				{
-					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
-					continue;
-				}
-
-				std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-				if (GetAvailableSkill(&vecAvailableSkills))
-				{
-					auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-						[](const TABLE_UPC_SKILL& a) { return a.iBaseId == 109015 || a.iBaseId == 111700; });
-
-					if (it == vecAvailableSkills->end())
-						continue;
-
-					if (GetMp() < it->iExhaustMSP)
-						continue;
-
-					new std::thread([=]() { UseSkillWithPacket(*it, GetID()); });
-				}
-			}
-			break;
-
-			case RouteStepType::STEP_BOT_START:
-			{
-				if (m_vecRoute.size() == 0)
-					continue;
-
-				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 1);
-				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 1);
-			}
-			break;
-			}
-
-			if (m_vecRoute.size() > 0)
-				m_vecRoute.erase(m_vecRoute.begin());
-
-			if(m_vecRoute.size() == 0)
-				m_iRouteStep = RouteStepType::STEP_NONE;
-		}
-		catch (const std::exception& e)
-		{
-#ifdef DEBUG
-			printf("RouteProcess:Exception: %s\n", e.what());
-#else
-			UNREFERENCED_PARAMETER(e);
-#endif
-		}
-	}
-
-#ifdef DEBUG
-	printf("ClientHandler::RouteProcess Stopped\n");
-#endif
-}
-
-void ClientHandler::SupplyProcess()
-{
-#ifdef DEBUG
-	printf("ClientHandler::SupplyProcess Started\n");
-#endif
-
-	while (m_bWorking)
-	{
-		try
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
-			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
-
-			if (bAttackStatus || bCharacterStatus)
-			{
-				if (IsZoneChanging())
-					continue;
-
-				if (IsBlinking())
-					continue;
-
-				if (IsRouting())
-					continue;
-
-				if (IsDeath())
-					continue;
-
-				if (IsMovingToLoot())
-					continue;
-
-				//if (IsVipWarehouseOpen())
-				//	continue;
-
-				//if (IsTransactionDialogOpen())
-				//	continue;
-
-				//if (IsWarehouseOpen())
-				//	continue;
-
-				int16_t iHp = GetHp();
-				int16_t iMaxHp = GetMaxHp();
-
-				int32_t iHpPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
-				int32_t iHpNeededValue = 60;
-
-				if (iHpPercent <= iHpNeededValue)
-					continue;
-
-				std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-				if (m_msLastSupplyTime > std::chrono::milliseconds(0) && (msCurrentTime - m_msLastSupplyTime) < std::chrono::milliseconds((60 * 5) * 1000))
-					continue;
-
-				bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
-				bool bAutoRepairMagicHammer = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), false);
-				bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
-				bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
-				bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
-				bool bAutoSellVipSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRange"), false);
-
-				bool bNeedSupply = bAutoSupply && IsNeedSupply();
-				bool bNeedRepair = !bAutoRepairMagicHammer && bAutoRepair && IsNeedRepair();
-				bool bNeedSell = (bAutoSellSlotRange || bAutoSellByFlag) && IsNeedSell();
-
-				if (bNeedSell && bAutoSellVipSlotRange)
-				{
-					if (!m_bVipWarehouseInitialized)
-						continue;
-
-					if (m_bVipWarehouseEnabled && !IsVipWarehouseFull())
-						continue;
-				}
-
-				if (bNeedSupply || bNeedRepair || bNeedSell)
-				{
-					std::string szSelectedSupplyRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedSupplyRoute"), "");
-
-					RouteManager* pRouteManager = m_Bot->GetRouteManager();
-					RouteManager::RouteList pRouteList;
-
-					uint8_t iZoneID = GetRepresentZone(GetZone());
-
-					if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
-					{
-						auto pRoute = pRouteList.find(szSelectedSupplyRoute);
-
-						if (pRoute != pRouteList.end())
-						{
-							SendStopGenie();
-							SetRoute(pRoute->second);
-						}
-					}
-				}
-			}
-		}
-		catch (const std::exception& e)
-		{
-#ifdef DEBUG
-			printf("SupplyProcess:Exception: %s\n", e.what());
-#else
-			UNREFERENCED_PARAMETER(e);
-#endif
-		}
-	}
-
-#ifdef DEBUG
-	printf("ClientHandler::SupplyProcess Stopped\n");
-#endif
-}
-
-void ClientHandler::VipWarehouseProcess()
-{
-#ifdef DEBUG
-	printf("ClientHandler::VipWarehouseProcess Started\n");
-#endif
-
-	return;
-
-	while (m_bWorking)
-	{
-		try
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(15000));
-
-			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
-			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
-
-			if (bAttackStatus || bCharacterStatus)
-			{
-				if (IsZoneChanging())
-					continue;
-
-				if (IsBlinking())
-					continue;
-
-				if (IsRouting())
-					continue;
-
-				if (IsDeath())
-					continue;
-
-				if (IsMovingToLoot())
-					continue;
-
-				if (m_bVipWarehouseInitialized
-					&& !m_bVipWarehouseEnabled)
-					continue;
-
-				std::vector<TItemData> vecInventoryItemList;
-				std::vector<TItemData> vecFlaggedItemList;
-
-				bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
-				int iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), 1);
-				int iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), 14);
-				bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
-
-				GetInventoryItemList(vecInventoryItemList);
-
-				for (const TItemData& pItem : vecInventoryItemList)
-				{
-					if (pItem.iItemID == 0)
-						continue;
-
-					int iRangeStart = (iAutoSellSlotRangeStart)-1;
-					int iRangeEnd = (iAutoSellSlotRangeEnd)-1;
-
-					uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
-
-					if ((iItemFlag == INVENTORY_ITEM_FLAG_VIP
-						|| (bAutoSellByFlag
-							&& iItemFlag == INVENTORY_ITEM_FLAG_SELL))
-						|| (bAutoSellSlotRange
-							&& pItem.iPos >= iRangeStart
-							&& pItem.iPos <= iRangeEnd))
-					{
-						vecFlaggedItemList.push_back(pItem);
-					}
-				}
-
-				if ((bAutoSellSlotRange
-					&& vecFlaggedItemList.size() >= (size_t)std::abs(iAutoSellSlotRangeEnd - iAutoSellSlotRangeStart))
-					|| (vecFlaggedItemList.size() >= 3))
-				{
-					OpenVipWarehouse();
-
-					WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-
-					if (!m_bVipWarehouseLoaded)
-						continue;
-
-					for (const TItemData& pItem : vecFlaggedItemList)
-					{
-						__TABLE_ITEM* pItemData;
-						if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
-							continue;
-
-						if (pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
-							continue;
-
-						WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-						std::vector<TItemData> vecVipWarehouseItemList;
-						GetVipWarehouseItemList(vecVipWarehouseItemList);
-
-						int iTargetPosition = -1;
-
-						if (pItemData->byContable)
-						{
-							auto pWarehouseItem = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
-								[&](const TItemData& a)
-								{
-									return a.iItemID == pItem.iItemID;
-								});
-
-							if (pWarehouseItem != vecVipWarehouseItemList.end())
-							{
-								if ((pItem.iCount + pWarehouseItem->iCount) > 9999)
-									continue;
-
-								iTargetPosition = pWarehouseItem->iPos;
-							}
-							else
-							{
-								auto pWarehouseEmptySlot = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
-									[&](const TItemData& a)
-									{
-										return a.iItemID == 0;
-									});
-
-								if (pWarehouseEmptySlot != vecVipWarehouseItemList.end())
-								{
-									iTargetPosition = pWarehouseEmptySlot->iPos;
-								}
-							}
-						}
-						else
-						{
-							auto pWarehouseEmptySlot = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
-								[&](const TItemData& a)
-								{
-									return a.iItemID == 0;
-								});
-
-							if (pWarehouseEmptySlot != vecVipWarehouseItemList.end())
-							{
-								iTargetPosition = pWarehouseEmptySlot->iPos;
-							}
-						}
-
-						if (iTargetPosition == -1)
-							break;
-
-						WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-						Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
-						Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), pItem.iPos - 14);
-						Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 10);
-						Write4Byte(GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), pItem.iBase);
-
-						VipWarehouseGetIn(iTargetPosition);
-
-						WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-						if (pItemData->byContable)
-						{
-							CountableDialogChangeCount(1);
-							CountableDialogChangeCount(pItem.iCount);
-							AcceptCountableDialog();
-						}
-					}
-
-					WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-					CloseVipWarehouse();
-				}
-			}
-		}
-		catch (const std::exception& e)
-		{
-#ifdef DEBUG
-			printf("VipWarehouseProcess:Exception: %s\n", e.what());
-#else
-			UNREFERENCED_PARAMETER(e);
-#endif
-		}
-	}
-
-#ifdef DEBUG
-	printf("ClientHandler::VipWarehouseProcess Stopped\n");
-#endif
-}
+//void ClientHandler::RouteProcess()
+//{
+//#ifdef DEBUG
+//	printf("ClientHandler::RouteProcess Started\n");
+//#endif
+//
+//	while (m_bWorking)
+//	{
+//		try
+//		{
+//			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//
+//			if (IsZoneChanging())
+//				continue;
+//
+//			if (IsBlinking())
+//				continue;
+//
+//			if (IsDeath())
+//				continue;
+//
+//			if (m_vecRoute.size() == 0)
+//				continue;
+//
+//			Route pRoute = m_vecRoute.front();
+//
+//			if (GetActionState() == PSA_SPELLMAGIC)
+//				continue;
+//
+//			m_iRouteStep = pRoute.eStepType;
+//
+//			switch (pRoute.eStepType)
+//			{
+//			case RouteStepType::STEP_MOVE:
+//			{
+//				if (m_vecRoute.size() == 0)
+//					continue;
+//
+//				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//
+//				if (fDistance > 3.0f)
+//				{
+//					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//					continue;
+//				}
+//			}
+//			break;
+//
+//			case RouteStepType::STEP_TOWN:
+//			{
+//				if (m_vecRoute.size() == 0)
+//					continue;
+//
+//				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//
+//				if (fDistance > 50.0f)
+//				{
+//					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//					continue;
+//				}
+//
+//				SendTownPacket();
+//			}
+//			break;
+//
+//			case RouteStepType::STEP_SUNDRIES:
+//			case RouteStepType::STEP_POTION:
+//			{
+//				if (m_vecRoute.size() == 0)
+//					continue;
+//
+//				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//
+//				if (fDistance > 3.0f)
+//				{
+//					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//					continue;
+//				}
+//
+//				/*
+//				* Find NPC
+//				*/
+//
+//				int iNpcSellingGroup = 253000;
+//
+//				if (pRoute.eStepType == RouteStepType::STEP_SUNDRIES)
+//				{
+//					iNpcSellingGroup = 255000;
+//				}
+//
+//				struct SNpcInformation
+//				{
+//					SNpcInformation(int32_t iNpcID, int32_t iSellingGroup, Vector3 v3NpcPosition) :
+//						m_iNpcID(iNpcID), m_iSellingGroup(iSellingGroup), m_v3NpcPosition(v3NpcPosition) {};
+//
+//					int32_t m_iNpcID;
+//					int32_t m_iSellingGroup;
+//					Vector3 m_v3NpcPosition;
+//				};
+//
+//				std::vector<SNpcInformation> vecNpcInformation;
+//
+//				{
+//					std::vector<TNpc> tmpVecNpc = m_vecNpc;
+//
+//					Vector3 v3CurrentPosition = GetPosition();
+//
+//					auto pSort = [&](TNpc const& a, TNpc const& b)
+//					{
+//						auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+//						auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+//
+//						if (fADistance != fBDistance)
+//						{
+//							return fADistance < fBDistance;
+//						}
+//
+//						return false;
+//					};
+//
+//					std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
+//
+//					for (auto& e : tmpVecNpc)
+//					{
+//						if (e.iSellingGroup == iNpcSellingGroup)
+//						{
+//							vecNpcInformation.push_back(
+//								SNpcInformation(e.iID, iNpcSellingGroup, Vector3(e.fX, e.fZ, e.fY))
+//							);
+//						}
+//					}
+//				}
+//
+//				auto pNpc = std::find_if(vecNpcInformation.begin(), vecNpcInformation.end(),
+//					[&](const SNpcInformation& a) {
+//						return a.m_iSellingGroup == iNpcSellingGroup;
+//					});
+//
+//				if (pNpc != vecNpcInformation.end())
+//				{
+//					/*
+//					* Move Operations
+//					*/
+//
+//					DWORD iNpcBase = 0;
+//
+//					while (m_vecRoute.size() > 0)
+//					{
+//						std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//
+//						if (GetActionState() == PSA_SPELLMAGIC)
+//							continue;
+//
+//						iNpcBase = GetEntityBase(pNpc->m_iNpcID);
+//
+//						if (iNpcBase == 0)
+//							break;
+//
+//						float fTargetRadius = GetRadius(iNpcBase) * GetScaleZ(iNpcBase);
+//						float fMySelfRadius = GetRadius() * GetScaleZ();
+//						float fDistLimit = (fMySelfRadius + fTargetRadius) / 2.0f;
+//
+//						if (GetDistance(pNpc->m_v3NpcPosition) < 3)
+//							break;
+//
+//						SetMovePosition(pNpc->m_v3NpcPosition);
+//					}
+//
+//					if (iNpcBase != 0)
+//					{
+//						/**
+//						* Selling Operations
+//						*/
+//
+//						bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
+//						int iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), 1);
+//						int iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), 14);
+//						bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
+//
+//						if (bAutoSellSlotRange || bAutoSellByFlag)
+//						{
+//							std::vector<TItemData> vecInventoryItemList;
+//							GetInventoryItemList(vecInventoryItemList);
+//
+//							uint8_t iSellPageCount = 0;
+//							std::vector<SSItemSell> vecInventoryItemSell[2];
+//
+//							for (const TItemData& pItem : vecInventoryItemList)
+//							{
+//								if (pItem.iItemID == 0)
+//									continue;
+//
+//								//Promise Of Training
+//								if (pItem.iItemID == 989511000) 
+//									continue;
+//
+//								__TABLE_ITEM* pItemData;
+//								if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+//									continue;
+//
+//								__TABLE_ITEM_EXTENSION* pItemExtensionData;
+//								if (!m_Bot->GetItemExtensionData(pItem.iItemID, pItemData->byExtIndex, pItemExtensionData))
+//									continue;
+//
+//								if (pItemData->byNeedRace == RACE_TRADEABLE_IN_72HR
+//									|| pItemData->byNeedRace == RACE_NO_TRADE
+//									|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD
+//									|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD2
+//									|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+//									continue;
+//
+//								if (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+//									|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA)
+//									continue;
+//
+//								int iRangeStart = (14 + iAutoSellSlotRangeStart) - 1;
+//								int iRangeEnd = (14 + iAutoSellSlotRangeEnd) - 1;
+//
+//								uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+//
+//								if ((bAutoSellByFlag
+//									&& iItemFlag == INVENTORY_ITEM_FLAG_SELL)
+//									|| (bAutoSellSlotRange
+//										&& pItem.iPos >= iRangeStart
+//										&& pItem.iPos <= iRangeEnd))
+//								{
+//									if (vecInventoryItemSell[iSellPageCount].size() == 14)
+//										iSellPageCount++;
+//
+//									vecInventoryItemSell[iSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(pItem.iPos - 14), pItem.iCount));
+//								}
+//							}
+//
+//							if (vecInventoryItemSell[0].size() > 0)
+//							{
+//								SendNpcEvent(pNpc->m_iNpcID);
+//
+//								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//
+//								for (size_t i = 0; i <= iSellPageCount; i++)
+//								{
+//									WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//									SendItemTradeSell(iNpcSellingGroup, pNpc->m_iNpcID, vecInventoryItemSell[i]);
+//									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK")), 1);
+//								}
+//
+//								WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//
+//								SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+//
+//								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//							}
+//						}
+//
+//						/**
+//						* VIP Warehouse Operations
+//						*/
+//
+//						bool bAutoSellVipSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRange"), false);
+//
+//						if (bAutoSellVipSlotRange)
+//						{
+//							bool bRunWarehouseProcess = true;
+//
+//							while (bRunWarehouseProcess)
+//							{
+//								if (m_bVipWarehouseInitialized
+//									&& !m_bVipWarehouseEnabled)
+//									break;
+//
+//								if (m_vecRoute.size() == 0)
+//									break;
+//
+//								std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//
+//								OpenVipWarehouse();
+//
+//								WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//
+//								if (!m_bVipWarehouseLoaded)
+//									break;
+//
+//								bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
+//								int iAutoSellVipSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeStart"), 1);
+//								int iAutoSellVipSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeEnd"), 48);
+//
+//								std::vector<TItemData> vecVipWarehouseItemList;
+//								std::vector<TItemData> vecVipWarehouseGetOutItemList;
+//
+//								GetVipWarehouseItemList(vecVipWarehouseItemList);
+//
+//								for (const TItemData& pItem : vecVipWarehouseItemList)
+//								{
+//									if (pItem.iItemID == 0)
+//										continue;
+//
+//									int iRangeStart = (iAutoSellVipSlotRangeStart)-1;
+//									int iRangeEnd = (iAutoSellVipSlotRangeEnd)-1;
+//
+//									uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+//
+//									if (((bAutoSellByFlag
+//										&& iItemFlag == INVENTORY_ITEM_FLAG_SELL))
+//										|| (bAutoSellVipSlotRange
+//											&& pItem.iPos >= iRangeStart
+//											&& pItem.iPos <= iRangeEnd))
+//									{
+//										vecVipWarehouseGetOutItemList.push_back(pItem);
+//									}
+//								}
+//
+//								if (vecVipWarehouseGetOutItemList.size() == 0)
+//								{
+//									CloseVipWarehouse();
+//									break;
+//								}	
+//
+//								uint8_t iVipWarehouseSellPageCount = 0;
+//								std::vector<SSItemSell> vecVipWarehouseItemSell[2];
+//
+//								for (const TItemData& pItem : vecVipWarehouseGetOutItemList)
+//								{
+//									__TABLE_ITEM* pItemData;
+//									if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+//										continue;
+//
+//									WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//									std::vector<TItemData> vecVipWarehouseInventoryItemList;
+//									GetVipWarehouseInventoryItemList(vecVipWarehouseInventoryItemList);
+//
+//									int iTargetPosition = -1;
+//
+//									if (pItemData->byContable)
+//									{
+//										auto pInventoryItem = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+//											[&](const TItemData& a)
+//											{
+//												return a.iItemID == pItem.iItemID;
+//											});
+//
+//										if (pInventoryItem != vecVipWarehouseInventoryItemList.end())
+//										{
+//											if ((pItem.iCount + pInventoryItem->iCount) > 9999)
+//												continue;
+//
+//											iTargetPosition = pInventoryItem->iPos;
+//										}
+//										else
+//										{
+//											auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+//												[&](const TItemData& a)
+//												{
+//													return a.iItemID == 0;
+//												});
+//
+//											if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
+//											{
+//												iTargetPosition = pInventoryEmptySlot->iPos;
+//											}
+//										}
+//									}
+//									else
+//									{
+//										auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+//											[&](const TItemData& a)
+//											{
+//												return a.iItemID == 0;
+//											});
+//
+//										if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
+//										{
+//											iTargetPosition = pInventoryEmptySlot->iPos;
+//										}
+//									}
+//
+//									if (iTargetPosition == -1)
+//									{
+//										bRunWarehouseProcess = false;
+//										break;
+//									}
+//
+//									WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
+//									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), pItem.iPos);
+//									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 2);
+//									Write4Byte(GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), pItem.iBase);
+//
+//									VipWarehouseGetOut(iTargetPosition);
+//
+//									WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//									if (pItemData->byContable)
+//									{
+//										CountableDialogChangeCount(1);
+//										CountableDialogChangeCount(pItem.iCount);
+//										AcceptCountableDialog();
+//									}
+//
+//									if (vecVipWarehouseItemSell[iVipWarehouseSellPageCount].size() == 14)
+//										iVipWarehouseSellPageCount++;
+//
+//									vecVipWarehouseItemSell[iVipWarehouseSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(iTargetPosition), pItem.iCount));
+//								}
+//
+//								WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//								CloseVipWarehouse();
+//
+//								if (vecVipWarehouseItemSell[0].size() > 0)
+//								{
+//									SendNpcEvent(pNpc->m_iNpcID);
+//
+//									std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//
+//									for (size_t i = 0; i <= iVipWarehouseSellPageCount; i++)
+//									{
+//										WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//										SendItemTradeSell(iNpcSellingGroup, pNpc->m_iNpcID, vecVipWarehouseItemSell[i]);
+//										Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK")), 1);
+//									}
+//
+//									WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//
+//									SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+//
+//									std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//								}
+//							}
+//						}
+//
+//						/**
+//						* Buy Operations
+//						*/
+//
+//						bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+//
+//						if (bAutoSupply)
+//						{
+//							auto jSupplyList = m_Bot->GetSupplyList();
+//
+//							uint8_t iBuyPageCount = 0;
+//							std::vector<SSItemBuy> vecInventoryItemBuy[2];
+//							std::vector<int32_t> vecExceptedBuyPos;
+//
+//							for (size_t i = 0; i < jSupplyList.size(); i++)
+//							{
+//								std::vector<int> vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), std::vector<int>());
+//
+//								std::string szItemIdAttribute = skCryptDec("itemid");
+//								std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+//								std::string szCountAttribute = skCryptDec("count");
+//
+//								int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
+//								int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
+//
+//								bool bSelected = std::find(vecSupplyList.begin(), vecSupplyList.end(), iItemId) != vecSupplyList.end();
+//
+//								if (!bSelected)
+//									continue;
+//
+//								if (iSellingGroup != iNpcSellingGroup)
+//									continue;
+//
+//								std::vector<SShopItem> vecShopItemTable;
+//								if (!m_Bot->GetShopItemTable(iNpcSellingGroup, vecShopItemTable))
+//									continue;
+//
+//								uint8_t iPos = -1;
+//								int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
+//									skCryptDec("Supply"),
+//									std::to_string(iItemId).c_str(),
+//									jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
+//
+//								TItemData pInventoryItem = GetInventoryItem(iItemId);
+//
+//								if (pInventoryItem.iItemID != 0)
+//								{
+//									if (pInventoryItem.iCount >= iItemCount)
+//										continue;
+//
+//									iPos = (uint8_t)pInventoryItem.iPos;
+//									iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
+//								}
+//								else
+//								{
+//									iPos = (uint8_t)GetInventoryEmptySlot(vecExceptedBuyPos);
+//								}
+//
+//								if (iPos == -1 || iItemCount == 0)
+//									continue;
+//
+//								auto pShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
+//									[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
+//
+//								if (pShopItem == vecShopItemTable.end())
+//									continue;
+//
+//								if (vecInventoryItemBuy[iBuyPageCount].size() == 14)
+//									iBuyPageCount++;
+//
+//								vecInventoryItemBuy[iBuyPageCount].push_back(
+//									SSItemBuy(pShopItem->m_iItemId, (iPos - 14), iItemCount, pShopItem->m_iPage, pShopItem->m_iPos));
+//
+//								vecExceptedBuyPos.push_back(iPos);
+//							}
+//
+//							if (vecInventoryItemBuy[0].size() > 0)
+//							{
+//								SendNpcEvent(pNpc->m_iNpcID);
+//
+//								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//
+//								for (size_t i = 0; i <= iBuyPageCount; i++)
+//								{
+//									WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//									SendItemTradeBuy(iNpcSellingGroup, pNpc->m_iNpcID, vecInventoryItemBuy[i]);
+//									Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK")), 1);
+//								}
+//
+//								WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//
+//								SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+//
+//								std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//							}
+//						}
+//
+//						/**
+//						* Repair Operations
+//						*/
+//
+//						bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+//
+//						if (bAutoRepair 
+//							&& pRoute.eStepType == RouteStepType::STEP_SUNDRIES)
+//						{
+//							SendNpcEvent(pNpc->m_iNpcID);
+//
+//							std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//
+//							for (uint8_t i = 0; i < SLOT_MAX + HAVE_MAX; i++)
+//							{
+//								switch (i)
+//								{
+//									// Equipment District
+//									case 1:
+//									case 4:
+//									case 6:
+//									case 8:
+//									case 10:
+//									case 12:
+//									case 13:
+//									{
+//										TItemData pInventory = GetInventoryItemSlot(i);
+//
+//										if (pInventory.iItemID == 0)
+//											continue;
+//
+//										SendItemRepair(1, (uint8_t)pInventory.iPos, pNpc->m_iNpcID, pInventory.iItemID);
+//									}
+//									break;
+//
+//									// Inventory District
+//									default:
+//									{
+//										//TODO: Inventory Repair Operations
+//									}
+//									break;
+//								}
+//							}
+//
+//							SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+//							std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//						}
+//					}
+//				}
+//
+//				m_msLastSupplyTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+//			}
+//			break;
+//
+//			case RouteStepType::STEP_INN:
+//			{
+//				std::vector<TItemData> vecInventoryItemList;
+//				std::vector<TItemData> vecFlaggedItemList;
+//
+//				if (GetInventoryItemList(vecInventoryItemList))
+//				{
+//					for (const TItemData& pItem : vecInventoryItemList)
+//					{
+//						uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+//
+//						if (iItemFlag != INVENTORY_ITEM_FLAG_INN)
+//						{
+//							continue;
+//						}
+//
+//						vecFlaggedItemList.push_back(pItem);
+//					}
+//				}
+//
+//				if (vecFlaggedItemList.size() > 0)
+//				{
+//					float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//
+//					if (fDistance > 3.0f)
+//					{
+//						SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//						continue;
+//					}
+//
+//					struct SNpcInformation
+//					{
+//						SNpcInformation(int32_t iNpcID, int32_t iFamilyType, Vector3 v3NpcPosition) :
+//							m_iNpcID(iNpcID), m_iFamilyType(iFamilyType), m_v3NpcPosition(v3NpcPosition) {};
+//
+//						int32_t m_iNpcID;
+//						int32_t m_iFamilyType;
+//						Vector3 m_v3NpcPosition;
+//					};
+//
+//					SNpcInformation* pWarehouseNpcInfo = nullptr;
+//
+//					{
+//						std::vector<TNpc> tmpVecNpc = m_vecNpc;
+//
+//						Vector3 v3CurrentPosition = GetPosition();
+//
+//						auto pSort = [&](TNpc const& a, TNpc const& b)
+//						{
+//							auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+//							auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+//
+//							if (fADistance != fBDistance)
+//							{
+//								return fADistance < fBDistance;
+//							}
+//
+//							return false;
+//						};
+//
+//						std::sort(tmpVecNpc.begin(), tmpVecNpc.end(), pSort);
+//
+//						for (auto& e : tmpVecNpc)
+//						{
+//							if (e.iFamilyType == 31)
+//							{
+//								pWarehouseNpcInfo = new SNpcInformation(e.iID, e.iFamilyType, Vector3(e.fX, e.fZ, e.fY));
+//								break;
+//							}
+//						}
+//					}
+//
+//					if (pWarehouseNpcInfo)
+//					{
+//						while (
+//							m_vecRoute.size() > 0)
+//						{
+//							std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//
+//							DWORD iNpcBase = GetEntityBase(pWarehouseNpcInfo->m_iNpcID);
+//
+//							if (iNpcBase == 0)
+//								break;
+//
+//							if (GetActionState() == PSA_SPELLMAGIC)
+//								continue;
+//
+//							float fTargetRadius = GetRadius(iNpcBase) * GetScaleZ(iNpcBase);
+//							float fMySelfRadius = GetRadius() * GetScaleZ();
+//							float fDistLimit = (fMySelfRadius + fTargetRadius) / 2.0f;
+//
+//							if (GetDistance(pWarehouseNpcInfo->m_v3NpcPosition) > fDistLimit)
+//							{
+//								SetMovePosition(pWarehouseNpcInfo->m_v3NpcPosition);
+//							}
+//							else
+//							{
+//								if (GetMoveState() != PSM_STOP)
+//								{
+//									SetMovePosition(Vector3(0.0f, 0.0f, 0.0f));
+//								}
+//
+//								break;
+//							}
+//						}
+//
+//						//std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+//
+//						//TODO: Test edilecek
+//						//SendWarehouseOpen(pWarehouseNpcInfo->m_iNpcID);
+//
+//						//std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+//
+//						for (const TItemData& pItem : vecFlaggedItemList)
+//						{
+//							uint8_t iContable = 0;
+//
+//							__TABLE_ITEM* pItemData;
+//							if (m_Bot->GetItemData(pItem.iItemID, pItemData))
+//							{
+//								iContable = pItemData->byContable;
+//							}
+//
+//							int iRealSlot = GetWarehouseAvailableSlot(pItem.iItemID, iContable);
+//							int iPage = iRealSlot / 24;
+//							int iSlot = iRealSlot % 24;
+//
+//							SendWarehouseGetIn(pWarehouseNpcInfo->m_iNpcID, pItem.iItemID, (uint8_t)iPage, pItem.iPos - 14, (uint8_t)iSlot, pItem.iCount);
+//
+//							m_PlayerMySelf.tWarehouse[iRealSlot] = pItem;
+//							m_PlayerMySelf.tWarehouse[iRealSlot].iPos = iRealSlot;
+//
+//							if (iContable)
+//							{
+//								m_PlayerMySelf.tWarehouse[iRealSlot].iCount += pItem.iCount;
+//							}
+//						}
+//
+//						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+//						SendNpcEvent(pWarehouseNpcInfo->m_iNpcID);
+//
+//						std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+//						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+//					}
+//				}
+//			}
+//			break;
+//
+//			case RouteStepType::STEP_GENIE:
+//			{
+//				std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+//				SendStartGenie();
+//			}
+//			break;
+//
+//			case RouteStepType::STEP_GATE:
+//			{
+//				if (m_vecRoute.size() == 0)
+//					continue;
+//
+//				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//
+//				if (fDistance > 50.0f)
+//				{
+//					SetMovePosition(Vector3(pRoute.fX, 0.0f, pRoute.fY));
+//					continue;
+//				}
+//
+//				std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
+//				if (GetAvailableSkill(&vecAvailableSkills))
+//				{
+//					auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+//						[](const TABLE_UPC_SKILL& a) { return a.iBaseId == 109015 || a.iBaseId == 111700; });
+//
+//					if (it == vecAvailableSkills->end())
+//						continue;
+//
+//					if (GetMp() < it->iExhaustMSP)
+//						continue;
+//
+//					new std::thread([=]() { UseSkillWithPacket(*it, GetID()); });
+//				}
+//			}
+//			break;
+//
+//			case RouteStepType::STEP_BOT_START:
+//			{
+//				if (m_vecRoute.size() == 0)
+//					continue;
+//
+//				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 1);
+//				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 1);
+//			}
+//			break;
+//			}
+//
+//			if (m_vecRoute.size() > 0)
+//				m_vecRoute.erase(m_vecRoute.begin());
+//
+//			if(m_vecRoute.size() == 0)
+//				m_iRouteStep = RouteStepType::STEP_NONE;
+//		}
+//		catch (const std::exception& e)
+//		{
+//#ifdef DEBUG
+//			printf("RouteProcess:Exception: %s\n", e.what());
+//#else
+//			UNREFERENCED_PARAMETER(e);
+//#endif
+//		}
+//	}
+//
+//#ifdef DEBUG
+//	printf("ClientHandler::RouteProcess Stopped\n");
+//#endif
+//}
+//
+//void ClientHandler::SupplyProcess()
+//{
+//#ifdef DEBUG
+//	printf("ClientHandler::SupplyProcess Started\n");
+//#endif
+//
+//	while (m_bWorking)
+//	{
+//		try
+//		{
+//			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+//
+//			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+//			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
+//
+//			if (bAttackStatus || bCharacterStatus)
+//			{
+//				if (IsZoneChanging())
+//					continue;
+//
+//				if (IsBlinking())
+//					continue;
+//
+//				if (IsRouting())
+//					continue;
+//
+//				if (IsDeath())
+//					continue;
+//
+//				if (IsMovingToLoot())
+//					continue;
+//
+//				//if (IsVipWarehouseOpen())
+//				//	continue;
+//
+//				//if (IsTransactionDialogOpen())
+//				//	continue;
+//
+//				//if (IsWarehouseOpen())
+//				//	continue;
+//
+//				int16_t iHp = GetHp();
+//				int16_t iMaxHp = GetMaxHp();
+//
+//				int32_t iHpPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
+//				int32_t iHpNeededValue = 60;
+//
+//				if (iHpPercent <= iHpNeededValue)
+//					continue;
+//
+//				std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+//
+//				if (m_msLastSupplyTime > std::chrono::milliseconds(0) && (msCurrentTime - m_msLastSupplyTime) < std::chrono::milliseconds((60 * 5) * 1000))
+//					continue;
+//
+//				bool bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), false);
+//				bool bAutoRepairMagicHammer = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), false);
+//				bool bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), false);
+//				bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
+//				bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
+//				bool bAutoSellVipSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRange"), false);
+//
+//				bool bNeedSupply = bAutoSupply && IsNeedSupply();
+//				bool bNeedRepair = !bAutoRepairMagicHammer && bAutoRepair && IsNeedRepair();
+//				bool bNeedSell = (bAutoSellSlotRange || bAutoSellByFlag) && IsNeedSell();
+//
+//				if (bNeedSell && bAutoSellVipSlotRange)
+//				{
+//					if (!m_bVipWarehouseInitialized)
+//						continue;
+//
+//					if (m_bVipWarehouseEnabled && !IsVipWarehouseFull())
+//						continue;
+//				}
+//
+//				if (bNeedSupply || bNeedRepair || bNeedSell)
+//				{
+//					std::string szSelectedSupplyRoute = GetUserConfiguration()->GetString(skCryptDec("Bot"), skCryptDec("SelectedSupplyRoute"), "");
+//
+//					RouteManager* pRouteManager = m_Bot->GetRouteManager();
+//					RouteManager::RouteList pRouteList;
+//
+//					uint8_t iZoneID = GetRepresentZone(GetZone());
+//
+//					if (pRouteManager && pRouteManager->GetRouteList(iZoneID, pRouteList))
+//					{
+//						auto pRoute = pRouteList.find(szSelectedSupplyRoute);
+//
+//						if (pRoute != pRouteList.end())
+//						{
+//							SendStopGenie();
+//							SetRoute(pRoute->second);
+//						}
+//					}
+//				}
+//			}
+//		}
+//		catch (const std::exception& e)
+//		{
+//#ifdef DEBUG
+//			printf("SupplyProcess:Exception: %s\n", e.what());
+//#else
+//			UNREFERENCED_PARAMETER(e);
+//#endif
+//		}
+//	}
+//
+//#ifdef DEBUG
+//	printf("ClientHandler::SupplyProcess Stopped\n");
+//#endif
+//}
+//
+//void ClientHandler::VipWarehouseProcess()
+//{
+//#ifdef DEBUG
+//	printf("ClientHandler::VipWarehouseProcess Started\n");
+//#endif
+//
+//	return;
+//
+//	while (m_bWorking)
+//	{
+//		try
+//		{
+//			std::this_thread::sleep_for(std::chrono::milliseconds(15000));
+//
+//			bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
+//			bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
+//
+//			if (bAttackStatus || bCharacterStatus)
+//			{
+//				if (IsZoneChanging())
+//					continue;
+//
+//				if (IsBlinking())
+//					continue;
+//
+//				if (IsRouting())
+//					continue;
+//
+//				if (IsDeath())
+//					continue;
+//
+//				if (IsMovingToLoot())
+//					continue;
+//
+//				if (m_bVipWarehouseInitialized
+//					&& !m_bVipWarehouseEnabled)
+//					continue;
+//
+//				std::vector<TItemData> vecInventoryItemList;
+//				std::vector<TItemData> vecFlaggedItemList;
+//
+//				bool bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), false);
+//				int iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), 1);
+//				int iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), 14);
+//				bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
+//
+//				GetInventoryItemList(vecInventoryItemList);
+//
+//				for (const TItemData& pItem : vecInventoryItemList)
+//				{
+//					if (pItem.iItemID == 0)
+//						continue;
+//
+//					int iRangeStart = (iAutoSellSlotRangeStart)-1;
+//					int iRangeEnd = (iAutoSellSlotRangeEnd)-1;
+//
+//					uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+//
+//					if ((iItemFlag == INVENTORY_ITEM_FLAG_VIP
+//						|| (bAutoSellByFlag
+//							&& iItemFlag == INVENTORY_ITEM_FLAG_SELL))
+//						|| (bAutoSellSlotRange
+//							&& pItem.iPos >= iRangeStart
+//							&& pItem.iPos <= iRangeEnd))
+//					{
+//						vecFlaggedItemList.push_back(pItem);
+//					}
+//				}
+//
+//				if ((bAutoSellSlotRange
+//					&& vecFlaggedItemList.size() >= (size_t)std::abs(iAutoSellSlotRangeEnd - iAutoSellSlotRangeStart))
+//					|| (vecFlaggedItemList.size() >= 3))
+//				{
+//					OpenVipWarehouse();
+//
+//					WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//
+//					if (!m_bVipWarehouseLoaded)
+//						continue;
+//
+//					for (const TItemData& pItem : vecFlaggedItemList)
+//					{
+//						__TABLE_ITEM* pItemData;
+//						if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+//							continue;
+//
+//						if (pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+//							continue;
+//
+//						WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//						std::vector<TItemData> vecVipWarehouseItemList;
+//						GetVipWarehouseItemList(vecVipWarehouseItemList);
+//
+//						int iTargetPosition = -1;
+//
+//						if (pItemData->byContable)
+//						{
+//							auto pWarehouseItem = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
+//								[&](const TItemData& a)
+//								{
+//									return a.iItemID == pItem.iItemID;
+//								});
+//
+//							if (pWarehouseItem != vecVipWarehouseItemList.end())
+//							{
+//								if ((pItem.iCount + pWarehouseItem->iCount) > 9999)
+//									continue;
+//
+//								iTargetPosition = pWarehouseItem->iPos;
+//							}
+//							else
+//							{
+//								auto pWarehouseEmptySlot = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
+//									[&](const TItemData& a)
+//									{
+//										return a.iItemID == 0;
+//									});
+//
+//								if (pWarehouseEmptySlot != vecVipWarehouseItemList.end())
+//								{
+//									iTargetPosition = pWarehouseEmptySlot->iPos;
+//								}
+//							}
+//						}
+//						else
+//						{
+//							auto pWarehouseEmptySlot = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
+//								[&](const TItemData& a)
+//								{
+//									return a.iItemID == 0;
+//								});
+//
+//							if (pWarehouseEmptySlot != vecVipWarehouseItemList.end())
+//							{
+//								iTargetPosition = pWarehouseEmptySlot->iPos;
+//							}
+//						}
+//
+//						if (iTargetPosition == -1)
+//							break;
+//
+//						WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//						Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
+//						Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), pItem.iPos - 14);
+//						Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 10);
+//						Write4Byte(GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), pItem.iBase);
+//
+//						VipWarehouseGetIn(iTargetPosition);
+//
+//						WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//						if (pItemData->byContable)
+//						{
+//							CountableDialogChangeCount(1);
+//							CountableDialogChangeCount(pItem.iCount);
+//							AcceptCountableDialog();
+//						}
+//					}
+//
+//					WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//					CloseVipWarehouse();
+//				}
+//			}
+//		}
+//		catch (const std::exception& e)
+//		{
+//#ifdef DEBUG
+//			printf("VipWarehouseProcess:Exception: %s\n", e.what());
+//#else
+//			UNREFERENCED_PARAMETER(e);
+//#endif
+//		}
+//	}
+//
+//#ifdef DEBUG
+//	printf("ClientHandler::VipWarehouseProcess Stopped\n");
+//#endif
+//}
 
 void ClientHandler::LevelDownerProcess()
 {
@@ -7830,142 +7716,142 @@ void ClientHandler::Test1()
 	}*/
 }
 
-void ClientHandler::Test2()
-{
-	bool bRunProcess = true;
-
-	while (bRunProcess)
-	{
-		if (m_bVipWarehouseInitialized
-			&& !m_bVipWarehouseEnabled)
-			break;
-
-		OpenVipWarehouse();
-
-		WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
-
-		if (!m_bVipWarehouseLoaded)
-			break;
-
-		bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
-		bool bAutoSellVipSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRange"), false);
-		int iAutoSellVipSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeStart"), 1);
-		int iAutoSellVipSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeEnd"), 48);
-
-		std::vector<TItemData> vecVipWarehouseItemList;
-		std::vector<TItemData> vecFlaggedItemList;
-
-		GetVipWarehouseItemList(vecVipWarehouseItemList);
-
-		for (const TItemData& pItem : vecVipWarehouseItemList)
-		{
-			if (pItem.iItemID == 0)
-				continue;
-
-			int iRangeStart = (iAutoSellVipSlotRangeStart)-1;
-			int iRangeEnd = (iAutoSellVipSlotRangeEnd)-1;
-
-			uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
-
-			if (((bAutoSellByFlag
-				&& iItemFlag == INVENTORY_ITEM_FLAG_SELL))
-				|| (bAutoSellVipSlotRange
-					&& pItem.iPos >= iRangeStart
-					&& pItem.iPos <= iRangeEnd))
-			{
-				vecFlaggedItemList.push_back(pItem);
-			}
-		}
-
-		if (vecFlaggedItemList.size() == 0)
-			break;
-
-		for (const TItemData& pItem : vecFlaggedItemList)
-		{
-			__TABLE_ITEM* pItemData;
-			if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
-				continue;
-
-			WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-			std::vector<TItemData> vecVipWarehouseInventoryItemList;
-			GetVipWarehouseInventoryItemList(vecVipWarehouseInventoryItemList);
-
-			int iTargetPosition = -1;
-
-			if (pItemData->byContable)
-			{
-				auto pInventoryItem = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
-					[&](const TItemData& a)
-					{
-						return a.iItemID == pItem.iItemID;
-					});
-
-				if (pInventoryItem != vecVipWarehouseInventoryItemList.end())
-				{
-					if ((pItem.iCount + pInventoryItem->iCount) > 9999)
-						continue;
-
-					iTargetPosition = pInventoryItem->iPos;
-				}
-				else
-				{
-					auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
-						[&](const TItemData& a)
-						{
-							return a.iItemID == 0;
-						});
-
-					if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
-					{
-						iTargetPosition = pInventoryEmptySlot->iPos;
-					}
-				}
-			}
-			else
-			{
-				auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
-					[&](const TItemData& a)
-					{
-						return a.iItemID == 0;
-					});
-
-				if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
-				{
-					iTargetPosition = pInventoryEmptySlot->iPos;
-				}
-			}
-
-			if (iTargetPosition == -1)
-			{
-				bRunProcess = false;
-				break;
-			}
-
-			WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-			Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
-			Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), pItem.iPos);
-			Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 2);
-			Write4Byte(GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), pItem.iBase);
-
-			VipWarehouseGetOut(iTargetPosition);
-
-			WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-			if (pItemData->byContable)
-			{
-				CountableDialogChangeCount(1);
-				CountableDialogChangeCount(31);
-				AcceptCountableDialog();
-			}
-		}
-
-		WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
-
-		CloseVipWarehouse();
-	}
-}
+//void ClientHandler::Test2()
+//{
+//	bool bRunProcess = true;
+//
+//	while (bRunProcess)
+//	{
+//		if (m_bVipWarehouseInitialized
+//			&& !m_bVipWarehouseEnabled)
+//			break;
+//
+//		OpenVipWarehouse();
+//
+//		WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+//
+//		if (!m_bVipWarehouseLoaded)
+//			break;
+//
+//		bool bAutoSellByFlag = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellByFlag"), false);
+//		bool bAutoSellVipSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRange"), false);
+//		int iAutoSellVipSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeStart"), 1);
+//		int iAutoSellVipSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellVipSlotRangeEnd"), 48);
+//
+//		std::vector<TItemData> vecVipWarehouseItemList;
+//		std::vector<TItemData> vecFlaggedItemList;
+//
+//		GetVipWarehouseItemList(vecVipWarehouseItemList);
+//
+//		for (const TItemData& pItem : vecVipWarehouseItemList)
+//		{
+//			if (pItem.iItemID == 0)
+//				continue;
+//
+//			int iRangeStart = (iAutoSellVipSlotRangeStart)-1;
+//			int iRangeEnd = (iAutoSellVipSlotRangeEnd)-1;
+//
+//			uint8_t iItemFlag = m_Bot->GetInventoryItemFlag(pItem.iItemID);
+//
+//			if (((bAutoSellByFlag
+//				&& iItemFlag == INVENTORY_ITEM_FLAG_SELL))
+//				|| (bAutoSellVipSlotRange
+//					&& pItem.iPos >= iRangeStart
+//					&& pItem.iPos <= iRangeEnd))
+//			{
+//				vecFlaggedItemList.push_back(pItem);
+//			}
+//		}
+//
+//		if (vecFlaggedItemList.size() == 0)
+//			break;
+//
+//		for (const TItemData& pItem : vecFlaggedItemList)
+//		{
+//			__TABLE_ITEM* pItemData;
+//			if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+//				continue;
+//
+//			WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//			std::vector<TItemData> vecVipWarehouseInventoryItemList;
+//			GetVipWarehouseInventoryItemList(vecVipWarehouseInventoryItemList);
+//
+//			int iTargetPosition = -1;
+//
+//			if (pItemData->byContable)
+//			{
+//				auto pInventoryItem = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+//					[&](const TItemData& a)
+//					{
+//						return a.iItemID == pItem.iItemID;
+//					});
+//
+//				if (pInventoryItem != vecVipWarehouseInventoryItemList.end())
+//				{
+//					if ((pItem.iCount + pInventoryItem->iCount) > 9999)
+//						continue;
+//
+//					iTargetPosition = pInventoryItem->iPos;
+//				}
+//				else
+//				{
+//					auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+//						[&](const TItemData& a)
+//						{
+//							return a.iItemID == 0;
+//						});
+//
+//					if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
+//					{
+//						iTargetPosition = pInventoryEmptySlot->iPos;
+//					}
+//				}
+//			}
+//			else
+//			{
+//				auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+//					[&](const TItemData& a)
+//					{
+//						return a.iItemID == 0;
+//					});
+//
+//				if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
+//				{
+//					iTargetPosition = pInventoryEmptySlot->iPos;
+//				}
+//			}
+//
+//			if (iTargetPosition == -1)
+//			{
+//				bRunProcess = false;
+//				break;
+//			}
+//
+//			WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//			Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
+//			Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), pItem.iPos);
+//			Write4Byte(GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 2);
+//			Write4Byte(GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), pItem.iBase);
+//
+//			VipWarehouseGetOut(iTargetPosition);
+//
+//			WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//			if (pItemData->byContable)
+//			{
+//				CountableDialogChangeCount(1);
+//				CountableDialogChangeCount(31);
+//				AcceptCountableDialog();
+//			}
+//		}
+//
+//		WaitConditionWithTimeout(Read4Byte(GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+//
+//		CloseVipWarehouse();
+//	}
+//}
 
 void ClientHandler::SetRoute(std::vector<Route> vecRoute)
 {
