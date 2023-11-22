@@ -156,7 +156,7 @@ void UI::Render(Bot* pBot)
 
     while (!bDone)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         if (hTargetWindow != nullptr && GetAsyncKeyState(VK_INSERT) & 1)
             Drawing::bDraw = !Drawing::bDraw;

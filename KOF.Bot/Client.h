@@ -102,6 +102,8 @@ protected:
 
 protected:
 	Bot* m_Bot;
+
+public:
 	TPlayer m_PlayerMySelf;
 
 protected:

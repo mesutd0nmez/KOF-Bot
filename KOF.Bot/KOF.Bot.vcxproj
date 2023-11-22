@@ -24,6 +24,9 @@
     <ClInclude Include="ByteBuffer.h" />
     <ClInclude Include="Client.h" />
     <ClInclude Include="ClientHandler.h" />
+    <ClInclude Include="Compression.h" />
+    <ClInclude Include="Compression_LZF.h" />
+    <ClInclude Include="crc32.h" />
     <ClInclude Include="Cryption.h" />
     <ClInclude Include="Define.h" />
     <ClInclude Include="Drawing.h" />
@@ -34,6 +37,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="Injection.h" />
     <ClInclude Include="Json.h" />
+    <ClInclude Include="lzf.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Password.h" />
     <ClInclude Include="Remap.h" />
@@ -59,10 +63,14 @@
     <ClCompile Include="Bot.cpp" />
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="ClientHandler.cpp" />
+    <ClCompile Include="Compression.cpp" />
+    <ClCompile Include="Compression_LZF.cpp" />
+    <ClCompile Include="D:\Backup - 11-17-2023\GitHub\KnightOnline\Server\shared\crc32.cpp" />
     <ClCompile Include="Drawing.cpp" />
     <ClCompile Include="Drawing_Blank.cpp" />
     <ClCompile Include="Drawing_Common.cpp" />
     <ClCompile Include="Drawing_Hazar.cpp" />
+    <ClCompile Include="lzf.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />

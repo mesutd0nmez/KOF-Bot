@@ -255,16 +255,16 @@ bool Client::IsAttackable(DWORD iBase)
 		return false;
 
 	DWORD iNation = GetNation(iBase);
-	DWORD iMeNation = GetNation();
+	DWORD iMeNation = m_PlayerMySelf.eNation;
 
 	if (iTargetID >= 5000)
 	{
-		if (iNation != 0 || iNation == GetNation())
+		if (iNation != 0 || iNation == m_PlayerMySelf.eNation)
 			return false;
 	}
 	else
 	{
-		if (iNation == GetNation())
+		if (iNation == m_PlayerMySelf.eNation)
 			return false;
 	}
 
@@ -365,7 +365,7 @@ bool Client::IsRogue(int32_t eClass)
 {
 	if (eClass == CLASS_UNKNOWN)
 	{
-		eClass = GetClass();
+		eClass = m_PlayerMySelf.eClass;
 	}
 
 	switch (eClass)
@@ -386,7 +386,7 @@ bool Client::IsMage(int32_t eClass)
 {
 	if (eClass == CLASS_UNKNOWN)
 	{
-		eClass = GetClass();
+		eClass = m_PlayerMySelf.eClass;
 	}
 
 	switch (eClass)
@@ -407,7 +407,7 @@ bool Client::IsWarrior(int32_t eClass)
 {
 	if (eClass == CLASS_UNKNOWN)
 	{
-		eClass = GetClass();
+		eClass = m_PlayerMySelf.eClass;
 	}
 
 	switch (eClass)
@@ -428,7 +428,7 @@ bool Client::IsPriest(int32_t eClass)
 {
 	if (eClass == CLASS_UNKNOWN)
 	{
-		eClass = GetClass();
+		eClass = m_PlayerMySelf.eClass;
 	}
 
 	switch (eClass)
@@ -580,7 +580,7 @@ DWORD Client::GetEntityBase(int32_t iTargetId)
 	if(iTargetId == -1)
 		return 0;
 
-	if (iTargetId == GetID())
+	if (iTargetId == m_PlayerMySelf.iID)
 		return Read4Byte(GetAddress(skCryptDec("KO_PTR_CHR")));
 
 	BYTE byCode[] =
@@ -741,7 +741,7 @@ bool Client::IsSkillActive(int32_t iSkillID)
 
 bool Client::IsBlinking(int32_t iTargetID)
 {
-	if (iTargetID == -1 || iTargetID == GetID())
+	if (iTargetID == -1 || iTargetID == m_PlayerMySelf.iID)
 	{
 		return m_PlayerMySelf.bBlinking;
 	}
@@ -2009,7 +2009,7 @@ bool Client::UseItem(uint32_t iItemID)
 
 		if (pSkillData != pSkillTable->end())
 		{
-			UseSkill(pSkillData->second, GetID(), 2);
+			UseSkill(pSkillData->second, m_PlayerMySelf.iID, 2);
 			return true;
 		}
 	}
@@ -2334,7 +2334,7 @@ uint8_t Client::GetRepresentZone(uint8_t iZone)
 
 bool Client::IsTransformationAvailableZone()
 {
-	uint8_t iZoneID = GetRepresentZone(GetZone());
+	uint8_t iZoneID = GetRepresentZone(m_PlayerMySelf.iCity);
 
 	switch (iZoneID)
 	{

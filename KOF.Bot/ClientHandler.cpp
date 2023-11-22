@@ -11,6 +11,7 @@
 #include <base64.h>
 #include "UI.h"
 #include "Password.h"
+#include "Compression.h"
 
 ClientHandler::ClientHandler(Bot* pBot)
 {
@@ -210,175 +211,6 @@ void ClientHandler::PatchSocket()
 	OnReady();
 }
 
-void ClientHandler::PatchRecvAddress(DWORD iAddress)
-{
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
-
-	DWORD iAddressReady = 0;
-	while (iAddressReady == 0)
-	{
-		ReadProcessMemory(hProcess, (LPVOID)iAddress, &iAddressReady, 4, 0);
-	}
-
-	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
-
-	if (hModuleKernel32 == nullptr)
-	{
-#ifdef DEBUG
-		printf("hModuleKernel32 == nullptr\n");
-#endif
-		return;
-	}
-
-	LPVOID pCreateFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("CreateFileA"));
-	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
-	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
-
-	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF1\\") + std::to_string(m_Bot->GetInjectedProcessId());
-	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
-
-	if (m_hMailSlotRecv == nullptr)
-	{
-		m_hMailSlotRecv = CreateMailslotA(m_szMailSlotRecvName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
-
-		if (m_hMailSlotRecv == INVALID_HANDLE_VALUE)
-		{
-#ifdef DEBUG
-			printf("CreateMailslot recv failed with %d\n", GetLastError());
-#endif
-			return;
-		}
-	}
-
-	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (pMailSlotNameAddress == 0)
-	{
-		return;
-	}
-
-	WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
-
-	if (m_RecvHookAddress == 0)
-	{
-		BYTE byHookPatch[] =
-		{
-			0x55,
-			0x8B, 0xEC,
-			0x83, 0xC4, 0xF4,
-			0x33, 0xC0,
-			0x89, 0x45, 0xFC,
-			0x33, 0xD2,
-			0x89, 0x55, 0xF8,
-			0x6A, 0x00,
-			0x68, 0x80, 0x00, 0x00, 0x00,
-			0x6A, 0x03,
-			0x6A, 0x00,
-			0x6A, 0x01,
-			0x68, 0x00, 0x00, 0x00, 0x40,
-			0x68, 0x00, 0x00, 0x00, 0x00,
-			0xE8, 0x00, 0x00, 0x00, 0x00,
-			0x89, 0x45, 0xF8,
-			0x6A, 0x00,
-			0x8D, 0x4D, 0xFC,
-			0x51,
-			0xFF, 0x75, 0x0C,
-			0xFF, 0x75, 0x08,
-			0xFF, 0x75, 0xF8,
-			0xE8, 0x00, 0x00, 0x00, 0x00,
-			0x89, 0x45, 0xF4,
-			0xFF, 0x75, 0xF8,
-			0xE8, 0x00, 0x00, 0x00, 0x00,
-			0x8B, 0xE5,
-			0x5D,
-			0xC3
-		};
-
-		m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byHookPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-		if (m_RecvHookAddress == 0)
-		{
-			return;
-		}
-
-		CopyBytes(byHookPatch + 35, pMailSlotNameAddress);
-
-		DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 39, (DWORD)pCreateFilePtr);
-		CopyBytes(byHookPatch + 40, iCreateFileDifference);
-
-		DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 62, (DWORD)pWriteFilePtr);
-		CopyBytes(byHookPatch + 63, iWriteFileDifference);
-
-		DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 73, (DWORD)pCloseHandlePtr);
-		CopyBytes(byHookPatch + 74, iCloseHandlePtrDifference);
-
-		std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
-		WriteBytes((DWORD)m_RecvHookAddress, vecHookPatch);
-	}
-
-	DWORD iRecvAddress = Read4Byte(Read4Byte(iAddress)) + 0x8;
-
-	BYTE byPatch[] =
-	{
-		0x55,									//push ebp
-		0x8B, 0xEC,								//mov ebp,esp
-		0x83, 0xC4, 0xF8,						//add esp,-08
-		0x53,									//push ebx
-		0x8B, 0x45, 0x08,						//mov eax,[ebp+08]
-		0x83, 0xC0, 0x04,						//add eax,04
-		0x8B, 0x10,								//mov edx,[eax]
-		0x89, 0x55, 0xFC,						//mov [ebp-04],edx
-		0x8B, 0x4D, 0x08,						//mov ecx,[ebp+08]
-		0x83, 0xC1, 0x08,						//add ecx,08
-		0x8B, 0x01,								//mov eax,[ecx]
-		0x89, 0x45, 0xF8,						//mov [ebp-08],eax
-		0xFF, 0x75, 0xFC,						//push [ebp-04]
-		0xFF, 0x75, 0xF8,						//push [ebp-08]
-		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- ClientHook::RecvProcess()
-		0xFF, 0xD0,								//call eax
-		0x83, 0xC4, 0x08,						//add esp,08
-		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,		//mov ecx,[00000000] <-- KO_PTR_DLG
-		0xFF, 0x75, 0x0C,						//push [ebp+0C]
-		0xFF, 0x75, 0x08,						//push [ebp+08]
-		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- GetRecvCallAddress()
-		0xFF, 0xD0,								//call eax
-		0x5B,									//pop ebx
-		0x59,									//pop ecx
-		0x59,									//pop ecx
-		0x5D,									//pop ebp
-		0xC2, 0x08, 0x00						//ret 0008
-	};
-
-	DWORD iRecvProcessFunction = (DWORD)(LPVOID*)m_RecvHookAddress;
-	CopyBytes(byPatch + 36, iRecvProcessFunction);
-
-	DWORD iDlgAddress = iAddress;
-	CopyBytes(byPatch + 47, iDlgAddress);
-
-	DWORD iRecvCallAddress = Read4Byte(iRecvAddress);
-	CopyBytes(byPatch + 58, iRecvCallAddress);
-
-	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
-
-	LPVOID pPatchAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (pPatchAddress == nullptr)
-	{
-		return;
-	}
-
-	WriteBytes((DWORD)pPatchAddress, vecPatch);
-
-	DWORD dwOldProtection;
-	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	Write4Byte(Read4Byte(Read4Byte(iAddress)) + 0x8, (DWORD)pPatchAddress);
-	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
-
-#ifdef DEBUG
-	printf("PatchRecvAddress: 0x%x patched\n", iRecvAddress);
-#endif
-}
-
 //void ClientHandler::PatchRecvAddress(DWORD iAddress)
 //{
 //	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
@@ -428,93 +260,262 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 //
 //	WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
 //
-//	m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, 2000, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-//
 //	if (m_RecvHookAddress == 0)
 //	{
-//		return;
+//		BYTE byHookPatch[] =
+//		{
+//			0x55,
+//			0x8B, 0xEC,
+//			0x83, 0xC4, 0xF4,
+//			0x33, 0xC0,
+//			0x89, 0x45, 0xFC,
+//			0x33, 0xD2,
+//			0x89, 0x55, 0xF8,
+//			0x6A, 0x00,
+//			0x68, 0x80, 0x00, 0x00, 0x00,
+//			0x6A, 0x03,
+//			0x6A, 0x00,
+//			0x6A, 0x01,
+//			0x68, 0x00, 0x00, 0x00, 0x40,
+//			0x68, 0x00, 0x00, 0x00, 0x00,
+//			0xE8, 0x00, 0x00, 0x00, 0x00,
+//			0x89, 0x45, 0xF8,
+//			0x6A, 0x00,
+//			0x8D, 0x4D, 0xFC,
+//			0x51,
+//			0xFF, 0x75, 0x0C,
+//			0xFF, 0x75, 0x08,
+//			0xFF, 0x75, 0xF8,
+//			0xE8, 0x00, 0x00, 0x00, 0x00,
+//			0x89, 0x45, 0xF4,
+//			0xFF, 0x75, 0xF8,
+//			0xE8, 0x00, 0x00, 0x00, 0x00,
+//			0x8B, 0xE5,
+//			0x5D,
+//			0xC3
+//		};
+//
+//		m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byHookPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+//
+//		if (m_RecvHookAddress == 0)
+//		{
+//			return;
+//		}
+//
+//		CopyBytes(byHookPatch + 35, pMailSlotNameAddress);
+//
+//		DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 39, (DWORD)pCreateFilePtr);
+//		CopyBytes(byHookPatch + 40, iCreateFileDifference);
+//
+//		DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 62, (DWORD)pWriteFilePtr);
+//		CopyBytes(byHookPatch + 63, iWriteFileDifference);
+//
+//		DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 73, (DWORD)pCloseHandlePtr);
+//		CopyBytes(byHookPatch + 74, iCloseHandlePtrDifference);
+//
+//		std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
+//		WriteBytes((DWORD)m_RecvHookAddress, vecHookPatch);
 //	}
 //
 //	DWORD iRecvAddress = Read4Byte(Read4Byte(iAddress)) + 0x8;
 //
 //	BYTE byPatch[] =
 //	{
-//		0x60,										//pushad 
-//		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
-//		0x8B, 0x40, 0x08,							//mov eax,[eax+08]
-//		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
-//		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
-//		0x8B, 0x40, 0x04,							//mov eax,[eax+04]
-//		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
-//		0x3D, 0x00, 0x40, 0x00, 0x00,				//cmp eax,00004000
-//		0x7D, 0x3D,									//jnl 2624005F
-//
-//		0x6A, 0x00,									//push 00
-//		0x68, 0x80, 0x00, 0x00, 0x00,				//push 00000080
-//		0x6A, 0x03,									//push 03
-//		0x6A, 0x00,									//push 00
-//		0x6A, 0x01,									//push 01
-//		0x68, 0x00, 0x00, 0x00, 0x40,				//push 40000000
-//		0x68, 0x00, 0x00, 0x00, 0x00,				//push pMailSlotNameAddress	
-//			
-//		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CreateFileW
-//		0x83, 0xF8, 0xFF,							//cmp eax,-01
-//			
-//		0x74, 0x1C,									//je 2624005F
-//		0x6A, 0x00,									//push 00
-//		0x54,										//push esp
-//		0x90,										//nop
-//			
-//		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessLength]
-//		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessPacket]
-//
-//		0x50,										//push eax
-//		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.WriteFile
-//		0x50,										//push eax
-//		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CloseHandle
-//		0x61,										//popad 
-//
-//		0xE9, 0x00, 0x00, 0x00, 0x00,				//jmp KnightOnLine.exe+3009F0
+//		0x55,									//push ebp
+//		0x8B, 0xEC,								//mov ebp,esp
+//		0x83, 0xC4, 0xF8,						//add esp,-08
+//		0x53,									//push ebx
+//		0x8B, 0x45, 0x08,						//mov eax,[ebp+08]
+//		0x83, 0xC0, 0x04,						//add eax,04
+//		0x8B, 0x10,								//mov edx,[eax]
+//		0x89, 0x55, 0xFC,						//mov [ebp-04],edx
+//		0x8B, 0x4D, 0x08,						//mov ecx,[ebp+08]
+//		0x83, 0xC1, 0x08,						//add ecx,08
+//		0x8B, 0x01,								//mov eax,[ecx]
+//		0x89, 0x45, 0xF8,						//mov [ebp-08],eax
+//		0xFF, 0x75, 0xFC,						//push [ebp-04]
+//		0xFF, 0x75, 0xF8,						//push [ebp-08]
+//		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- ClientHook::RecvProcess()
+//		0xFF, 0xD0,								//call eax
+//		0x83, 0xC4, 0x08,						//add esp,08
+//		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,		//mov ecx,[00000000] <-- KO_PTR_DLG
+//		0xFF, 0x75, 0x0C,						//push [ebp+0C]
+//		0xFF, 0x75, 0x08,						//push [ebp+08]
+//		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- GetRecvCallAddress()
+//		0xFF, 0xD0,								//call eax
+//		0x5B,									//pop ebx
+//		0x59,									//pop ecx
+//		0x59,									//pop ecx
+//		0x5D,									//pop ebp
+//		0xC2, 0x08, 0x00						//ret 0008
 //	};
 //
-//	DWORD iRecvProcessPacket = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x104);
-//	CopyBytes(byPatch + 10, iRecvProcessPacket);
+//	DWORD iRecvProcessFunction = (DWORD)(LPVOID*)m_RecvHookAddress;
+//	CopyBytes(byPatch + 36, iRecvProcessFunction);
 //
-//	DWORD iRecvProcessLength = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x100);
-//	CopyBytes(byPatch + 23, iRecvProcessLength);
+//	DWORD iDlgAddress = iAddress;
+//	CopyBytes(byPatch + 47, iDlgAddress);
 //
-//	CopyBytes(byPatch + 53, pMailSlotNameAddress);
-//
-//	DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 57, (DWORD)pCreateFilePtr);
-//	CopyBytes(byPatch + 58, iCreateFileDifference);
-//
-//	CopyBytes(byPatch + 73, iRecvProcessLength);
-//	CopyBytes(byPatch + 79, iRecvProcessPacket);
-//
-//	DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 84, (DWORD)pWriteFilePtr);
-//	CopyBytes(byPatch + 85, iWriteFileDifference);
-//
-//	DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 90, (DWORD)pCloseHandlePtr);
-//	CopyBytes(byPatch + 91, iCloseHandlePtrDifference);
-//	
 //	DWORD iRecvCallAddress = Read4Byte(iRecvAddress);
-//	DWORD iCallDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 96, (DWORD)iRecvCallAddress);
-//
-//	CopyBytes(byPatch + 97, iCallDifference);
+//	CopyBytes(byPatch + 58, iRecvCallAddress);
 //
 //	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
 //
-//	WriteBytes((DWORD)m_RecvHookAddress, vecPatch);
+//	LPVOID pPatchAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+//
+//	if (pPatchAddress == nullptr)
+//	{
+//		return;
+//	}
+//
+//	WriteBytes((DWORD)pPatchAddress, vecPatch);
 //
 //	DWORD dwOldProtection;
 //	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-//	Write4Byte(Read4Byte(Read4Byte(iAddress)) + 0x8, (DWORD)m_RecvHookAddress);
+//	Write4Byte(Read4Byte(Read4Byte(iAddress)) + 0x8, (DWORD)pPatchAddress);
 //	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
 //
 //#ifdef DEBUG
 //	printf("PatchRecvAddress: 0x%x patched\n", iRecvAddress);
 //#endif
 //}
+
+void ClientHandler::PatchRecvAddress(DWORD iAddress)
+{
+	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+
+	DWORD iAddressReady = 0;
+	while (iAddressReady == 0)
+	{
+		ReadProcessMemory(hProcess, (LPVOID)iAddress, &iAddressReady, 4, 0);
+	}
+
+	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
+
+	if (hModuleKernel32 == nullptr)
+	{
+#ifdef DEBUG
+		printf("hModuleKernel32 == nullptr\n");
+#endif
+		return;
+	}
+
+	LPVOID pCreateFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("CreateFileA"));
+	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
+	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
+
+	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF1\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
+
+	if (m_hMailSlotRecv == nullptr)
+	{
+		m_hMailSlotRecv = CreateMailslotA(m_szMailSlotRecvName.c_str(), 0, MAILSLOT_WAIT_FOREVER, NULL);
+
+		if (m_hMailSlotRecv == INVALID_HANDLE_VALUE)
+		{
+#ifdef DEBUG
+			printf("CreateMailslot recv failed with %d\n", GetLastError());
+#endif
+			return;
+		}
+	}
+
+	LPVOID pMailSlotNameAddress = VirtualAllocEx(hProcess, nullptr, vecMailSlotName.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (pMailSlotNameAddress == 0)
+	{
+		return;
+	}
+
+	WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
+
+	m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, 2000, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (m_RecvHookAddress == 0)
+	{
+		return;
+	}
+
+	DWORD iRecvAddress = Read4Byte(Read4Byte(iAddress)) + 0x8;
+
+	BYTE byPatch[] =
+	{
+		0x60,										//pushad 
+		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
+		0x8B, 0x40, 0x08,							//mov eax,[eax+08]
+		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
+		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
+		0x8B, 0x40, 0x04,							//mov eax,[eax+04]
+		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
+		0x3D, 0x00, 0x40, 0x00, 0x00,				//cmp eax,00004000
+		0x7D, 0x3D,									//jnl 2624005F
+
+		0x6A, 0x00,									//push 00
+		0x68, 0x80, 0x00, 0x00, 0x00,				//push 00000080
+		0x6A, 0x03,									//push 03
+		0x6A, 0x00,									//push 00
+		0x6A, 0x01,									//push 01
+		0x68, 0x00, 0x00, 0x00, 0x40,				//push 40000000
+		0x68, 0x00, 0x00, 0x00, 0x00,				//push pMailSlotNameAddress	
+			
+		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CreateFileW
+		0x83, 0xF8, 0xFF,							//cmp eax,-01
+			
+		0x74, 0x1C,									//je 2624005F
+		0x6A, 0x00,									//push 00
+		0x54,										//push esp
+		0x90,										//nop
+			
+		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessLength]
+		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessPacket]
+
+		0x50,										//push eax
+		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.WriteFile
+		0x50,										//push eax
+		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CloseHandle
+		0x61,										//popad 
+
+		0xE9, 0x00, 0x00, 0x00, 0x00,				//jmp KnightOnLine.exe+3009F0
+	};
+
+	DWORD iRecvProcessPacket = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x104);
+	CopyBytes(byPatch + 10, iRecvProcessPacket);
+
+	DWORD iRecvProcessLength = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x100);
+	CopyBytes(byPatch + 23, iRecvProcessLength);
+
+	CopyBytes(byPatch + 53, pMailSlotNameAddress);
+
+	DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 57, (DWORD)pCreateFilePtr);
+	CopyBytes(byPatch + 58, iCreateFileDifference);
+
+	CopyBytes(byPatch + 73, iRecvProcessLength);
+	CopyBytes(byPatch + 79, iRecvProcessPacket);
+
+	DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 84, (DWORD)pWriteFilePtr);
+	CopyBytes(byPatch + 85, iWriteFileDifference);
+
+	DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 90, (DWORD)pCloseHandlePtr);
+	CopyBytes(byPatch + 91, iCloseHandlePtrDifference);
+	
+	DWORD iRecvCallAddress = Read4Byte(iRecvAddress);
+	DWORD iCallDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 96, (DWORD)iRecvCallAddress);
+
+	CopyBytes(byPatch + 97, iCallDifference);
+
+	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
+
+	WriteBytes((DWORD)m_RecvHookAddress, vecPatch);
+
+	DWORD dwOldProtection;
+	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
+	Write4Byte(Read4Byte(Read4Byte(iAddress)) + 0x8, (DWORD)m_RecvHookAddress);
+	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
+
+#ifdef DEBUG
+	printf("PatchRecvAddress: 0x%x patched\n", iRecvAddress);
+#endif
+}
 
 void ClientHandler::PatchSendAddress()
 {
@@ -1453,6 +1454,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					if (m_PlayerMySelf.iID == iID)
 					{
+						m_PlayerMySelf.eClass = (Class)iClass;
+
 						GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
 						GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
 						LoadSkillData();
@@ -1757,7 +1760,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 						int32_t iUserID = pkt.read<int32_t>();
 
-						if (iUserID == GetID())
+						if (iUserID == m_PlayerMySelf.iID)
 							continue;
 
 						m_vecRegionUserList.push_back(iUserID);
@@ -2126,7 +2129,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					int32_t iSourceID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
 
-					if (iSourceID == GetID())
+					if (iSourceID == m_PlayerMySelf.iID)
 					{
 						if (m_vecPartyMembers.size() > 0 && (IsPriest() || IsRogue()))
 						{
@@ -2205,7 +2208,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_MAGIC_PROCESS: %d - %d - Skill failed %d\n", iSourceID, iSkillID, iData[3]);
 #endif
-						if (iSourceID == GetID())
+						if (iSourceID == m_PlayerMySelf.iID)
 						{
 							Client::SetSkillNextUseTime(iSkillID, 0.0f);
 
@@ -3160,7 +3163,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					uint8_t iRank = pkt.read<uint8_t>();
 					uint8_t iAuthority = pkt.read<uint8_t>();
 
-					if (iSenderID != GetID())
+					if (iSenderID != m_PlayerMySelf.iID)
 					{
 						bool bPartyRequest = GetUserConfiguration()->GetBool(skCryptDec("Listener"), skCryptDec("PartyRequest"), false);
 						std::string szPartyRequestMessage = GetUserConfiguration()->GetString(skCryptDec("Listener"), skCryptDec("PartyRequestMessage"), "add");
@@ -3474,6 +3477,45 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 		}
 		break;
+
+		case WIZ_COMPRESS_PACKET:
+		{
+			uint32_t compressedLength = pkt.read<uint32_t>();
+			uint32_t originalLength = pkt.read<uint32_t>();
+			uint32_t crc = pkt.read<uint32_t>();
+
+			uint8_t* decompressedBuffer = Compression::DecompressWithCRC32(pkt.contents() + pkt.rpos(), compressedLength, originalLength, crc);
+
+			if (decompressedBuffer != nullptr)
+			{
+				RecvProcess(decompressedBuffer, originalLength);
+			}
+		}
+		break;
+
+		case WIZ_REGENE:
+		{
+			m_PlayerMySelf.fX = (pkt.read<uint16_t>() / 10.0f);
+			m_PlayerMySelf.fY = (pkt.read<uint16_t>() / 10.0f);
+			m_PlayerMySelf.fZ = (pkt.read<int16_t>() / 10.0f);
+
+			m_PlayerMySelf.eState = PSA_BASIC;
+		}
+		break;
+
+		case WIZ_HP_CHANGE:
+		{
+			m_PlayerMySelf.iHPMax = pkt.read<uint16_t>();
+			m_PlayerMySelf.iHP = pkt.read<uint16_t>();
+		}
+		break;
+
+		case WIZ_MSP_CHANGE:
+		{
+			m_PlayerMySelf.iMSPMax = pkt.read<uint16_t>();
+			m_PlayerMySelf.iMSP = pkt.read<uint16_t>();
+		}
+		break;
 	}
 }
 
@@ -3659,7 +3701,7 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 
 					if (pSkillData != pSkillTable->end())
 					{
-						if (iSourceID == GetID())
+						if (iSourceID == m_PlayerMySelf.iID)
 						{
 							if (IsRogue())
 							{
@@ -3727,18 +3769,18 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 
 					memset(&pPartyMemberMySelf, 0, sizeof(pPartyMemberMySelf));
 
-					pPartyMemberMySelf.iMemberID = GetID();
+					pPartyMemberMySelf.iMemberID = m_PlayerMySelf.iID;
 					pPartyMemberMySelf.iIndex = 100;
-					pPartyMemberMySelf.szName = GetName();
+					pPartyMemberMySelf.szName = m_PlayerMySelf.szName;
 
-					pPartyMemberMySelf.iMaxHP = GetMaxHp();
-					pPartyMemberMySelf.iHP = GetHp();
-					pPartyMemberMySelf.iLevel = GetLevel();
-					pPartyMemberMySelf.iClass = (uint16_t)GetClass();
-					pPartyMemberMySelf.iMaxMP = GetMaxMp();
-					pPartyMemberMySelf.iMP = GetMp();
+					pPartyMemberMySelf.iMaxHP = m_PlayerMySelf.iHPMax;
+					pPartyMemberMySelf.iHP = m_PlayerMySelf.iHP;
+					pPartyMemberMySelf.iLevel = m_PlayerMySelf.iLevel;
+					pPartyMemberMySelf.iClass = (uint16_t)m_PlayerMySelf.eClass;
+					pPartyMemberMySelf.iMaxMP = m_PlayerMySelf.iMSPMax;
+					pPartyMemberMySelf.iMP = m_PlayerMySelf.iMSP;
 
-					pPartyMemberMySelf.iNation = GetNation();
+					pPartyMemberMySelf.iNation = m_PlayerMySelf.eNation;
 
 					m_vecPartyMembers.push_back(pPartyMemberMySelf);
 				}
@@ -3982,7 +4024,7 @@ void ClientHandler::LoadSkillData()
 				&& value.iID != 490817))
 			|| !bEnableTournamentSkills)
 		{
-			if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(GetClass())))
+			if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(m_PlayerMySelf.eClass)))
 				continue;
 
 			if (value.iTarget != SkillTargetType::TARGET_SELF 
@@ -4003,7 +4045,7 @@ void ClientHandler::LoadSkillData()
 				switch (value.iNeedSkill % 10)
 				{
 					case 0:
-						if (value.iNeedLevel > GetLevel())
+						if (value.iNeedLevel > m_PlayerMySelf.iLevel)
 							continue;
 						break;
 
@@ -4062,7 +4104,7 @@ void ClientHandler::MoveToTargetProcess()
 		if (IsRouting())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		bool bDisableStun = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("DisableStun"), false);
@@ -4181,7 +4223,7 @@ void ClientHandler::BasicAttackProcess()
 		if (IsRouting())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (GetActionState() == PSA_SPELLMAGIC)
@@ -4340,7 +4382,7 @@ void ClientHandler::AttackProcess()
 		if (IsRouting())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
@@ -4468,7 +4510,7 @@ void ClientHandler::AttackProcess()
 						iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 				}
 
-				if (GetMp() < pSkillData->second.iExhaustMSP
+				if (m_PlayerMySelf.iMSP < pSkillData->second.iExhaustMSP
 					|| (iNeedItem != 0 && iExistItemCount < iNeedItemCount))
 				{
 					return false;
@@ -4600,7 +4642,7 @@ void ClientHandler::SearchTargetProcess()
 		if (IsRouting())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (GetActionState() == PSA_SPELLMAGIC)
@@ -4740,7 +4782,7 @@ void ClientHandler::AutoLootProcess()
 		if (IsRouting())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (IsStunned())
@@ -4834,7 +4876,7 @@ void ClientHandler::MinorProcess()
 		if (IsBlinking())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
@@ -4843,7 +4885,7 @@ void ClientHandler::MinorProcess()
 
 		int32_t iHpProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("MinorValue"), 30);
 
-		if (GetHp() > 0 && (int32_t)std::ceil((GetHp() * 100) / GetMaxHp()) < iHpProtectionValue)
+		if (m_PlayerMySelf.iHP > 0 && (int32_t)std::ceil((m_PlayerMySelf.iHP * 100) / m_PlayerMySelf.iHPMax) < iHpProtectionValue)
 		{
 			auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
 				[](const TABLE_UPC_SKILL& a) { return a.iBaseId == 107705; });
@@ -4851,7 +4893,7 @@ void ClientHandler::MinorProcess()
 			if (it == vecAvailableSkills->end())
 				return;
 
-			if (GetMp() < it->iExhaustMSP)
+			if (m_PlayerMySelf.iMSP < it->iExhaustMSP)
 				return;
 
 			bool bUseSkillWithPacket = GetUserConfiguration()->GetBool(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), false);
@@ -4860,11 +4902,11 @@ void ClientHandler::MinorProcess()
 			if (!bOnlyAttackSkillUseWithPacket
 				&& bUseSkillWithPacket)
 			{
-				new std::thread([=]() { UseSkillWithPacket(*it, GetID()); });
+				new std::thread([=]() { UseSkillWithPacket(*it, m_PlayerMySelf.iID); });
 			}
 			else
 			{
-				UseSkill(*it, GetID(), 1);
+				UseSkill(*it, m_PlayerMySelf.iID, 1);
 			}
 
 			m_fLastMinorProcessTime = Bot::TimeGet();
@@ -4893,14 +4935,14 @@ void ClientHandler::PotionProcess()
 		if (IsBlinking())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		bool bHpProtectionEnable = GetUserConfiguration()->GetBool(skCryptDec("Protection"), skCryptDec("Hp"), false);
 
 		if (bHpProtectionEnable)
 		{
-			int16_t iHp = GetHp(); int16_t iMaxHp = GetMaxHp();
+			int16_t iHp = m_PlayerMySelf.iHP; int16_t iMaxHp = m_PlayerMySelf.iHPMax;
 
 			if (iHp > 0 && iMaxHp > 0)
 			{
@@ -4920,7 +4962,7 @@ void ClientHandler::PotionProcess()
 
 		if (bMpProtectionEnable)
 		{
-			int16_t iMp = GetMp(); int16_t iMaxMp = GetMaxMp();
+			int16_t iMp = m_PlayerMySelf.iMSP; int16_t iMaxMp = m_PlayerMySelf.iMSPMax;
 
 			if (iMp > 0 && iMaxMp > 0)
 			{
@@ -4966,7 +5008,7 @@ void ClientHandler::MagicHammerProcess()
 		if (IsBlinking())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (!IsNeedRepair())
@@ -5025,7 +5067,7 @@ void ClientHandler::SpeedHackProcess()
 		if (IsZoneChanging())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (GetActionState() == PSA_SPELLMAGIC)
@@ -5076,7 +5118,7 @@ void ClientHandler::TransformationProcess()
 			if (IsBlinking())
 				return;
 
-			if (IsDeath())
+			if (m_PlayerMySelf.eState == PSA_DEATH)
 				return;
 
 			bool bAutoTransformation = GetUserConfiguration()->GetBool(skCryptDec("Transformation"), skCryptDec("Auto"), false);
@@ -5101,12 +5143,12 @@ void ClientHandler::TransformationProcess()
 							&& pTransformationSkill != pSkillTable->end())
 						{
 							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+								&& m_PlayerMySelf.iLevel >= pTransformationSkill->second.iNeedLevel)
 							{
 								new std::thread([=]() 
 								{ 
-									UseSkillWithPacket(pTransformationScroll->second, GetID());
-									UseSkillWithPacket(pTransformationSkill->second, GetID());
+									UseSkillWithPacket(pTransformationScroll->second, m_PlayerMySelf.iID);
+									UseSkillWithPacket(pTransformationSkill->second, m_PlayerMySelf.iID);
 								});
 							}
 						}
@@ -5122,12 +5164,12 @@ void ClientHandler::TransformationProcess()
 							&& pTransformationSkill != pSkillTable->end())
 						{
 							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+								&& m_PlayerMySelf.iLevel >= pTransformationSkill->second.iNeedLevel)
 							{
 								new std::thread([=]()
 								{
-									UseSkillWithPacket(pTransformationScroll->second, GetID());
-									UseSkillWithPacket(pTransformationSkill->second, GetID());
+									UseSkillWithPacket(pTransformationScroll->second, m_PlayerMySelf.iID);
+									UseSkillWithPacket(pTransformationSkill->second, m_PlayerMySelf.iID);
 								});
 							}
 						}
@@ -5143,12 +5185,12 @@ void ClientHandler::TransformationProcess()
 							&& pTransformationSkill != pSkillTable->end())
 						{
 							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+								&& m_PlayerMySelf.iLevel >= pTransformationSkill->second.iNeedLevel)
 							{
 								new std::thread([=]()
 								{
-									UseSkillWithPacket(pTransformationScroll->second, GetID());
-									UseSkillWithPacket(pTransformationSkill->second, GetID());
+									UseSkillWithPacket(pTransformationScroll->second, m_PlayerMySelf.iID);
+									UseSkillWithPacket(pTransformationSkill->second, m_PlayerMySelf.iID);
 								});
 							}
 						}
@@ -5164,12 +5206,12 @@ void ClientHandler::TransformationProcess()
 							&& pTransformationSkill != pSkillTable->end())
 						{
 							if (GetInventoryItemCount(pTransformationScroll->second.dwNeedItem) > 0
-								&& GetLevel() >= pTransformationSkill->second.iNeedLevel)
+								&& m_PlayerMySelf.iLevel >= pTransformationSkill->second.iNeedLevel)
 							{
 								new std::thread([=]()
 									{
-										UseSkillWithPacket(pTransformationScroll->second, GetID());
-										UseSkillWithPacket(pTransformationSkill->second, GetID());
+										UseSkillWithPacket(pTransformationScroll->second, m_PlayerMySelf.iID);
+										UseSkillWithPacket(pTransformationSkill->second, m_PlayerMySelf.iID);
 									});
 							}
 						}
@@ -5210,7 +5252,7 @@ void ClientHandler::FlashProcess()
 			if (IsBlinking())
 				return;
 
-			if (IsDeath())
+			if (m_PlayerMySelf.eState == PSA_DEATH)
 				return;
 
 			bool bAutoDCFlash = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("AutoDCFlash"), false);
@@ -5284,7 +5326,7 @@ void ClientHandler::RegionProcess()
 		if (IsBlinking())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
@@ -5397,7 +5439,7 @@ void ClientHandler::CharacterProcess()
 		if (IsBlinking())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
@@ -5511,7 +5553,7 @@ void ClientHandler::CharacterProcess()
 						{
 							int iHealProtectionValue = GetUserConfiguration()->GetInt(skCryptDec("Protection"), skCryptDec("HealValue"), 75);
 
-							int32_t iHpProtectionPercent = (int32_t)std::ceil((GetHp() * 100) / GetMaxHp());
+							int32_t iHpProtectionPercent = (int32_t)std::ceil((m_PlayerMySelf.iHP * 100) / m_PlayerMySelf.iHPMax);
 
 							if (iHealProtectionValue < iHpProtectionPercent)
 								return false;
@@ -5522,7 +5564,7 @@ void ClientHandler::CharacterProcess()
 
 							if (pSkillExtension3Data != pSkillExtension3->end())
 							{
-								int32_t iNeedHealValue = GetMaxHp() - GetHp();
+								int32_t iNeedHealValue = m_PlayerMySelf.iHPMax - m_PlayerMySelf.iHP;
 
 								if (iNeedHealValue <= 0 
 									|| iNeedHealValue < pSkillExtension3Data->second.iHealValue)
@@ -5600,7 +5642,7 @@ void ClientHandler::CharacterProcess()
 						iNeedItemCount = pSkillExtension2Data->second.iArrowCount;
 				}
 
-				if (GetMp() >= pSkillData->second.iExhaustMSP && (iNeedItem == 0 || (iNeedItem != 0 && iExistItemCount >= iNeedItemCount)))
+				if (m_PlayerMySelf.iMSP >= pSkillData->second.iExhaustMSP && (iNeedItem == 0 || (iNeedItem != 0 && iExistItemCount >= iNeedItemCount)))
 					return true;
 				else
 					return false;
@@ -5709,18 +5751,18 @@ void ClientHandler::CharacterProcess()
 			{
 				if (pSkillData->second.iID == 490803 || pSkillData->second.iID == 490811)
 				{
-					SendStartSkillMagicAtTargetPacket(pSkillData->second, GetID(), Vector3(0.0f, 0.0f, 0.0f));
+					SendStartSkillMagicAtTargetPacket(pSkillData->second, m_PlayerMySelf.iID, Vector3(0.0f, 0.0f, 0.0f));
 				}
 				else
 				{
 					if (!bOnlyAttackSkillUseWithPacket
 						&& bUseSkillWithPacket)
 					{
-						new std::thread([=]() { UseSkillWithPacket(pSkillData->second, GetID()); });
+						new std::thread([=]() { UseSkillWithPacket(pSkillData->second, m_PlayerMySelf.iID); });
 					}
 					else
 					{
-						UseSkill(pSkillData->second, GetID(), 1);
+						UseSkill(pSkillData->second, m_PlayerMySelf.iID, 1);
 					}
 				}
 			}
@@ -5756,7 +5798,7 @@ void ClientHandler::PartySwiftProcess()
 	if (IsBlinking())
 		return;
 
-	if (IsDeath())
+	if (m_PlayerMySelf.eState == PSA_DEATH)
 		return;
 
 	if (GetActionState() == PSA_SPELLMAGIC)
@@ -7488,10 +7530,10 @@ void ClientHandler::LevelDownerProcess()
 			int iLevelDownerLevelLimit = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimit"), 35);
 
 			if (bLevelDownerLevelLimitEnable 
-				&& GetLevel() < iLevelDownerLevelLimit)
+				&& m_PlayerMySelf.iLevel < iLevelDownerLevelLimit)
 				continue;
 
-			if (IsDeath())
+			if (m_PlayerMySelf.eState == PSA_DEATH)
 				SendRegenePacket();
 			else
 			{
@@ -7922,10 +7964,10 @@ int32_t ClientHandler::PartyMemberNeedSwift()
 
 	for (auto& pMember : tmpVecPartyMembers)
 	{
-		if (GetMp() < pSkillData->iExhaustMSP)
+		if (m_PlayerMySelf.iMSP < pSkillData->iExhaustMSP)
 			continue;
 
-		if (GetID() == pMember.iMemberID)
+		if (m_PlayerMySelf.iID == pMember.iMemberID)
 		{
 			auto pSkillExtension4Data = pSkillExtension4->find(pSkillData->iID);
 
@@ -7949,7 +7991,7 @@ int32_t ClientHandler::PartyMemberNeedSwift()
 		if (GetDistance(iPlayerPosition) > 25.0f)
 			continue;
 
-		if (IsStunned() || IsDeath() || IsDeath(iPlayerBase))
+		if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || IsDeath(iPlayerBase))
 			continue;
 
 		if (IsBlinking() || IsBlinking(iPlayerBase))
@@ -7961,7 +8003,7 @@ int32_t ClientHandler::PartyMemberNeedSwift()
 		if (pFindedPlayer == m_vecPlayer.end())
 			continue;
 
-		if (GetID() == pMember.iMemberID
+		if (m_PlayerMySelf.iID == pMember.iMemberID
 			|| (pFindedPlayer->iMoveSpeed < 45 || pFindedPlayer->iMoveSpeed > 45))
 			continue;
 
@@ -8004,7 +8046,7 @@ int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 
 	for (auto& pMember : tmpVecPartyMembers)
 	{
-		if (GetMp() < pSkillData->iExhaustMSP)
+		if (m_PlayerMySelf.iMSP < pSkillData->iExhaustMSP)
 			continue;
 
 		if (bHealProtection)
@@ -8043,7 +8085,7 @@ int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 		if (GetDistance(iPlayerPosition) > 25.0f)
 			continue;
 
-		if (IsStunned() || IsDeath() || IsDeath(iPlayerBase))
+		if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || IsDeath(iPlayerBase))
 			continue;
 
 		if (IsBlinking() || IsBlinking(iPlayerBase))
@@ -8052,7 +8094,7 @@ int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
 
-		if (GetID() != pMember.iMemberID 
+		if (m_PlayerMySelf.iID != pMember.iMemberID
 			&& pFindedPlayer == m_vecPlayer.end())
 			continue;
 
@@ -8095,12 +8137,12 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 
 	for (auto& pMember : tmpVecPartyMembers)
 	{
-		if (GetMp() < pSkillData->iExhaustMSP)
+		if (m_PlayerMySelf.iMSP < pSkillData->iExhaustMSP)
 			continue;
 
 		auto pSkillExtension4Data = pSkillExtension4->find(pSkillData->iID);
 
-		if (GetID() == pMember.iMemberID)
+		if (m_PlayerMySelf.iID == pMember.iMemberID)
 		{
 			if (pSkillExtension4Data != pSkillExtension4->end())
 			{
@@ -8156,7 +8198,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 		if (GetDistance(iPlayerPosition) > 25.0f)
 			continue;
 
-		if (IsStunned() || IsDeath() || IsDeath(iPlayerBase))
+		if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || IsDeath(iPlayerBase))
 			continue;
 
 		if (IsBlinking() || IsBlinking(iPlayerBase))
@@ -8165,7 +8207,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
 			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
 
-		if (GetID() != pMember.iMemberID && pFindedPlayer == m_vecPlayer.end())
+		if (m_PlayerMySelf.iID != pMember.iMemberID && pFindedPlayer == m_vecPlayer.end())
 			continue;
 
 		if (m_bSkillCasting == true || GetActionState() == PSA_SPELLMAGIC)
@@ -8180,7 +8222,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 
 bool ClientHandler::IsSkillHasZoneLimit(uint32_t iSkillBaseID)
 {
-	int iZoneIndex = GetZone();
+	int iZoneIndex = m_PlayerMySelf.iCity;
 
 	switch (iSkillBaseID)
 	{

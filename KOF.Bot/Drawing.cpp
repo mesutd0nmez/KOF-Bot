@@ -415,7 +415,7 @@ void Drawing::DrawTransformationController()
         {
             for (auto& [k, v] : *mapDisguiseTable)
             {
-                if (m_pClient->GetLevel() < v.iRequiredLevel)
+                if (m_pClient->m_PlayerMySelf.iLevel < v.iRequiredLevel)
                     continue;
 
                 if (iTransformationItem != v.iItemID)
