@@ -4152,8 +4152,8 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 					pPartyMemberMySelf.iHP = (uint16_t)m_PlayerMySelf.iHP;
 					pPartyMemberMySelf.iLevel = m_PlayerMySelf.iLevel;
 					pPartyMemberMySelf.iClass = (uint16_t)m_PlayerMySelf.eClass;
-					pPartyMemberMySelf.iMaxMP = m_PlayerMySelf.iMSPMax;
-					pPartyMemberMySelf.iMP = m_PlayerMySelf.iMSP;
+					pPartyMemberMySelf.iMaxMP = (uint16_t)m_PlayerMySelf.iMSPMax;
+					pPartyMemberMySelf.iMP = (uint16_t)m_PlayerMySelf.iMSP;
 
 					pPartyMemberMySelf.iNation = m_PlayerMySelf.eNation;
 
