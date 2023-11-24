@@ -5,7 +5,7 @@
 #include "Ini.h"
 #include "HardwareInformation.h"
 
-class Service : Socket
+class Service : public Socket
 {
 public:
 	Service();
@@ -69,5 +69,6 @@ protected:
 
 public:
 	void SendCaptcha(std::string szImageBase64);
+	void SendLogin(std::string szEmail, std::string szPassword);
 };
 

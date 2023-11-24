@@ -169,9 +169,6 @@ bool Ini::Load(std::string szData)
 
 void Ini::Save(const char* lpFilename)
 {
-    if (onSaveEvent)
-        onSaveEvent();
-
     if (!m_isMemory)
     {
         const char* fn = (lpFilename == nullptr ? m_szFileName.c_str() : lpFilename);
@@ -191,6 +188,11 @@ void Ini::Save(const char* lpFilename)
         }
 
         fclose(fp);
+    }
+    else
+    {
+        if (onSaveEvent)
+            onSaveEvent();
     }
 }
 

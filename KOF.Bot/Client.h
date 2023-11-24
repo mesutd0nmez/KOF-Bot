@@ -34,7 +34,7 @@ public:
 	float GetScaleX(DWORD iBase = 0);
 	float GetScaleZ(DWORD iBase = 0);
 	float GetScaleY(DWORD iBase = 0);
-	bool IsAttackable(DWORD iBase);
+	bool IsAttackable(DWORD iTargetID);
 	uint8_t GetServerId();
 	bool IsDisconnect();
 	bool IsDeath(DWORD iBase = 0);
@@ -96,12 +96,13 @@ public:
 	int SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList);
 
 protected:
-	DWORD GetAddress(std::string szAddressName);
 	Ini* GetUserConfiguration();
 	Ini* GetAppConfiguration();
 
 protected:
 	Bot* m_Bot;
+
+public:
 	TPlayer m_PlayerMySelf;
 
 protected:
@@ -131,7 +132,7 @@ public:
 protected:
 	bool IsEnemy(DWORD iBase);
 	void StepCharacterForward(bool bStart);
-	void BasicAttack(DWORD iTargetBase);
+	void BasicAttack();
 	void BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval);
 
 	void PushPhase(DWORD dwAddress);
@@ -157,7 +158,7 @@ public:
 	void SetSaveCPUSleepTime(int32_t iValue);
 
 protected:
-	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bWaitCastTime = true);
+	
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -178,8 +179,7 @@ protected:
 	void SetPosition(Vector3 v3Position);
 
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
-	void SetTarget(uint32_t iTargetBase);
-	bool UseItem(uint32_t iItemID);
+	void SetTarget(uint32_t iTargetID);
 
 protected:
 	void SendBasicAttackPacket(int32_t iTargetID, float fInterval = 1.0f, float fDistance = 2.0f);
@@ -203,11 +203,6 @@ public:
 	void RefreshCaptcha();
 	void SendCaptcha(std::string szCode);
 
-protected:
-	bool IsNeedRepair();
-	bool IsNeedSupply();
-	bool IsNeedSell();
-
 public:
 	int32_t GetPartyMemberCount();
 	bool GetPartyList(std::vector<Party>& vecParty);
@@ -224,21 +219,6 @@ public:
 	void SendUseGeniePotion(uint32_t iItemID);
 	void SendStartGenie();
 	void SendStopGenie();
-
-protected:
-	BYTE ReadByte(DWORD dwAddress);
-	WORD Read2Byte(DWORD dwAddress);
-	DWORD Read4Byte(DWORD dwAddress);
-	float ReadFloat(DWORD dwAddress);
-	std::string ReadString(DWORD dwAddress, size_t nSize);
-	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
-	void WriteByte(DWORD dwAddress, BYTE byValue);
-	void Write4Byte(DWORD dwAddress, int iValue);
-	void WriteFloat(DWORD dwAddress, float fValue);
-	void WriteString(DWORD dwAddress, std::string strValue);
-	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
-	bool ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize);
-	bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress);
 
 public:
 	bool IsTransformationAvailableZone();

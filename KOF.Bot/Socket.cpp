@@ -1,12 +1,10 @@
 #include "pch.h"
 #include "Socket.h"
-#include "Compression.h"
 
 Socket::Socket()
 {
     m_iId = -1;
     m_iSeed = 0;
-    m_Compression = new Compression();
     m_Cryption = new Cryption();
 }
 
@@ -21,8 +19,8 @@ void Socket::Connect(std::string szIP, uint16_t iPort)
     {
         m_tcpSocket.isConnected = true;
 
-        m_Cryption->SetEncryptionKey(skCryptDec("3f3d7e0528381988cadab8fc19d34c23db1988a5115e4bd750968830ed1508da"));
-        GenerateSeed((1881 * 1923) / 1993 << 16);
+        m_Cryption->SetEncryptionKey(skCryptDec("auJouZxXdDolrmQNIaJ0zHY9wCOvbgSdE45ByrNkXBecZELoupFvhwINAVYJUnTq"));
+        GenerateSeed((1881 * 2023) / 2009 << 16);
         m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
         OnConnect();
@@ -70,35 +68,11 @@ void Socket::Send(Packet& pkt, bool bCompress)
 
     Packet encryptionPkt = Packet();
 
-    if (bCompress && pkt.size() > 256)
-    {
-        encryptionPkt
-            << uint8_t(1) //compression enabled
-            << uint32_t(pkt.size()); //packet size
+    encryptionPkt
+        << uint8_t(0) //compression disabled
+        << uint32_t(pkt.size()); //packet size
 
-        size_t iCompressedStreamSize = snappy_max_compressed_length(pkt.size());
-        uint8_t* iCompressedStream = new uint8_t[iCompressedStreamSize];
-
-        if (!m_Compression->Compress((const char*)pkt.contents(), pkt.size(), (char*)iCompressedStream, &iCompressedStreamSize))
-        {
-#ifdef DEBUG
-            printf("Snappy compression failed\n");
-#endif
-            return;
-        }
-
-        encryptionPkt << uint32_t(iCompressedStreamSize); //compressed packet size
-
-        encryptionPkt.append(iCompressedStream, iCompressedStreamSize);
-    }
-    else
-    {
-        encryptionPkt
-            << uint8_t(0) //compression disabled
-            << uint32_t(pkt.size()); //packet size
-
-        encryptionPkt.append(pkt.contents(), pkt.size()); //raw data
-    }
+    encryptionPkt.append(pkt.contents(), pkt.size()); //raw data
 
     std::vector<uint8_t> vecEncryptedPacket;
     size_t iEncryptionPacketLength = m_Cryption->Encryption(encryptionPkt.contents(), encryptionPkt.size(), vecEncryptedPacket);
@@ -165,49 +139,8 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 
     uint8_t* iPacket;
 
-    if (iFlag == 1)
-    {
-        uint32_t iPacketCompressedLength = *(uint32_t*)&vecDecryptedPacket[5];
-
-        //iFlag(uint8_t) + iPacketLength(uint32_t) + iPacketCompressedLength(uint32_t)
-//        uint32_t iCalculatedPacketLength = iPacketCompressedLength
-//            + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
-//
-//        if (iDecryptedPacketLength != iCalculatedPacketLength)
-//        {
-//#ifdef DEBUG
-//            printf("Invalid packet size: Flag(%d), iDecryptedPacketLength(%d) != iCalculatedPacketLength(%d)\n", iFlag, iDecryptedPacketLength, iCalculatedPacketLength);
-//#endif
-//            return;
-//        }
-
-        iPacket = new uint8_t[iPacketLength];
-
-        if (!m_Compression->UnCompress((const char*)&vecDecryptedPacket[9], iPacketCompressedLength, (char*)iPacket, &iPacketLength))
-        {
-#ifdef DEBUG
-            printf("Snappy decompression failed\n");
-#endif
-            return;
-        }
-    }
-    else
-    {
-        //iFlag(uint8_t) + iPacketLength(uint32_t)
-//        uint32_t iCalculatedPacketLength = iPacketLength
-//            + sizeof(uint8_t) + sizeof(uint32_t);
-//
-//        if (iDecryptedPacketLength != iCalculatedPacketLength)
-//        {
-//#ifdef DEBUG
-//            printf("Invalid packet size: Flag(%d), iDecryptedPacketLength(%d) != iCalculatedPacketLength(%d)\n", iFlag, iDecryptedPacketLength, iCalculatedPacketLength);
-//#endif
-//            return;
-//        }
-
-        iPacket = new uint8_t[iPacketLength];
-        iPacket = (uint8_t*)&vecDecryptedPacket[5];
-    }
+    iPacket = new uint8_t[iPacketLength];
+    iPacket = (uint8_t*)&vecDecryptedPacket[5];
 
     Packet pkt = Packet(iPacket[0], iPacketLength);
 

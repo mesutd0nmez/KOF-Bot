@@ -1,10 +1,11 @@
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-
+#define _WINSOCKAPI_
 
 // Windows Header Files
 #include <Windows.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <tchar.h>
 #include <fstream>
@@ -33,3 +34,6 @@
 #include <chrono>
 #include <iomanip>
 #include <random>
+#include <dwmapi.h>
+#include <unordered_set>
+#include <queue>

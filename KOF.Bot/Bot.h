@@ -20,9 +20,6 @@ public:
 	void Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount);
 	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
 	void InitializeStaticData();
-	void InitializeRouteData();
-	void InitializeSupplyData();
-	void InitializePriestData();
 
 	void Process();
 	void LoadAccountList();
@@ -94,52 +91,22 @@ public:
 	std::string m_szClientExe;
 
 	bool m_bTableLoaded;
-	std::chrono::milliseconds m_msLastConfigurationSave;
-
-public:
-	RouteManager* GetRouteManager() { return m_RouteManager; };
-
-private:
-	RouteManager* m_RouteManager;
-
-public:
-	World* GetWorld() { return m_World; }
-
-protected:
-	World* m_World;
-
-public:
-	JSON GetSupplyList() { return m_jSupplyList; };
-
-protected:
-	JSON m_jSupplyList;
-
-public:
-	JSON GetHealthBuffList() { return m_jHealthBuffList; };
-	JSON GetDefenceBuffList() { return m_jDefenceBuffList; };
-	JSON GetMindBuffList() { return m_jMindBuffList; };
-	JSON GetHealList() { return m_jHealList; };
-
-protected:
-	JSON m_jHealthBuffList;
-	JSON m_jDefenceBuffList;
-	JSON m_jMindBuffList;
-	JSON m_jHealList;
 
 public:
 	void BuildAdress();
 
 private:
-	std::map<std::string, DWORD> m_mapAddress;
+	std::unordered_map<std::string, DWORD> m_mapAddress;
 
 private:
 	std::chrono::milliseconds m_msLastInitializeHandle;
 
 public:
-	HANDLE m_hPipe;
-	bool m_bPipeWorking;
-	bool ConnectPipeServer();
-	void SendPipeServer(Packet pkt);
+	HANDLE m_hInternalMailslot;
+	bool m_bInternalMailslotWorking;
+
+	bool ConnectInternalMailslot();
+	void SendInternalMailslot(Packet pkt);
 
 public:
 	BYTE ReadByte(DWORD dwAddress);
@@ -163,22 +130,11 @@ public:
 	void Patch(HANDLE hProcess);
 
 public:
-	JSON GetInventoryFlags() { return m_jInventoryFlags; };
-	uint8_t GetInventoryItemFlag(uint32_t iItemID);
-	void UpdateInventoryItemFlag(JSON pInventoryFlags);
-
-protected:
-	JSON m_jInventoryFlags;
-
-public:
 	DWORD GetInjectedProcessId() { return m_InjectedProcessInfo.dwProcessId; };
 	HANDLE GetInjectedProcessHandle();
 
 private:
 	PROCESS_INFORMATION m_InjectedProcessInfo;
-
-private:
-	std::chrono::milliseconds m_msLastUserConfigurationSaveTime;
 
 private:
 	HMODULE m_hModuleAnyOTP;
@@ -188,5 +144,11 @@ private:
 
 public:
 	std::wstring ReadAnyOTPCode(std::string szOTPPassword, std::string szHardwareID);
+
+private:
+	bool m_bAuthenticated;
+
+public:
+	bool IsAuthenticated() { return m_bAuthenticated; };
 };
 

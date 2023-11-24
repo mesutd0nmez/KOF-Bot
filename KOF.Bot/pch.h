@@ -21,7 +21,31 @@ using JSON = nlohmann::json;
 #include <imgui.h>
 #include <d3d9.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <netdb.h>
+#elif _WIN32
+#include <winsock2.h>
+#include <Ws2ipdef.h>
+#include <Ws2tcpip.h>
+
+#pragma comment(lib, "Ws2_32.lib")
+#endif
+
+#include <string>
+#include <functional>
+#include <cerrno>
+
 #include <curl/curl.h>
+
+#include "imgui.h"
+#include "imgui_impl_dx9.h"
+#include "imgui_impl_win32.h"
+
+
 
 #define WaitCondition(condition) \
 	while(condition) \
@@ -65,5 +89,6 @@ extern bool ConsoleCommand(const std::string & input, std::string & out);
 
 extern bool KillProcessesByFileName(const char* fileName);
 
-extern std::string GenerateUniqueString(int iLength);
+extern std::string GenerateUniqueString(size_t iLength);
+
 #endif //PCH_H

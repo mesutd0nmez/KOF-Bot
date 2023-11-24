@@ -65,20 +65,23 @@ public:
         this->address.sin_port = htons(port);
         this->address.sin_addr.s_addr = ipv4;
 
-        uint32_t iTcpNoDelay = 1;
-        setsockopt(this->sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&iTcpNoDelay, sizeof(iTcpNoDelay));
+        /*uint32_t iTcpNoDelay = 1;
+        setsockopt(this->sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&iTcpNoDelay, sizeof(iTcpNoDelay));*/
 
         u_long iBlocking = 0;
         ioctlsocket(this->sock, FIONBIO, &iBlocking);
 
-        int iKeepAlive = 1;
+       /* int iKeepAlive = 1;
         setsockopt(this->sock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&iKeepAlive, sizeof(iKeepAlive));
 
-        int iKeepAliveIdle = 7200;
+        int iKeepAliveCnt = 10;
+        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPCNT, (const char*)&iKeepAliveCnt, sizeof(iKeepAliveCnt));
+
+        int iKeepAliveIdle = 1800;
         setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPIDLE, (const char*)&iKeepAliveIdle, sizeof(iKeepAliveIdle));
 
-        int iKeepAliveInterval = 3;
-        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPINTVL, (const char*)&iKeepAliveInterval, sizeof(iKeepAliveInterval));
+        int iKeepAliveInterval = 1;
+        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPINTVL, (const char*)&iKeepAliveInterval, sizeof(iKeepAliveInterval));*/
 
         this->setTimeout(5);
 

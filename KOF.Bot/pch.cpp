@@ -175,7 +175,7 @@ std::string CurlPost(std::string szUrl, JSON jData)
 
 bool Injection(DWORD iTargetProcess, std::string szPath)
 {
-	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Injector.dll"));
+	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Connector.dll"));
 
 	if (!hInjectionModule)
 	{
@@ -288,7 +288,7 @@ bool KillProcessesByFileName(const char* fileName)
 	return true;
 }
 
-std::string GenerateUniqueString(int iLength) 
+std::string GenerateUniqueString(size_t iLength) 
 {
 	const std::string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 

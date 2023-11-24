@@ -1,16 +1,9 @@
 #ifndef UI_H
 #define UI_H
 
-#ifdef UI_HAZAR
-#include "Drawing_Hazar.h"
-#endif
-#ifdef UI_COMMON
-#include "Drawing_Common.h"
-#endif
-#ifdef UI_DEFAULT
-#include "Drawing.h"
-#endif
+#include <string>
 
+#include "pch.h"
 #include "Bot.h"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -18,40 +11,46 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 class UI
 {
 private:
-	static LPDIRECT3D9              g_pD3D;
-	static LPDIRECT3DDEVICE9        g_pd3dDevice;
-	static D3DPRESENT_PARAMETERS    g_d3dpp;
+	static LPDIRECT3D9 pD3D;
+	static LPDIRECT3DDEVICE9 pD3DDevice;
+	static D3DPRESENT_PARAMETERS D3Dpp;
+	static bool bInit;
+	static UINT g_ResizeWidth, g_ResizeHeight;
+	static BOOL bTargetSet;
+	static DWORD dTargetPID;
 
-	static DWORD g_iLastFrameTime;
-	static DWORD g_iFPSLimit;
-
-public:
-	static std::string m_szMainWindowName;
-	static std::string m_szRoutePlannerWindowName;
-	static std::string m_szInventoryWindowName;
-
-	static bool CreateDeviceD3D();
+	static bool CreateDeviceD3D(HWND hWnd);
 	static void CleanupDeviceD3D();
 	static void ResetDevice();
-
 	static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	static BOOL CALLBACK EnumWind(const HWND hWindow, const LPARAM lPrams);
+	static void GetWindow();
+	static void MoveWindow(HWND hCurrentProcessWindow);
+	static BOOL IsWindowFocus(HWND hCurrentProcessWindow);
+	static BOOL CALLBACK EnumAllWind(HWND hWindow, LPARAM lPrams);
+	static void GetProcessName(LPSTR lpProcessName, DWORD dPID);
+	static BOOL IsWindowValid(HWND hCurrentWindow);
+	static BOOL IsWindowCloaked(HWND hCurrentWindow);
+	static BOOL IsWindowAlive();
 
-public:
-	static void Initialize(Bot* pBot);
-	static void Clear();
-	static void Render();
-
-	static bool LoadTextureFromFile(std::string filename, PDIRECT3DTEXTURE9* out_texture, int* out_width, int* out_height);
-	static bool LoadTextureFromMemory(std::vector<uint8_t> pImageRawData, PDIRECT3DTEXTURE9* out_texture);
-
-private:
 	static void StyleColorsHazar();
-	static void StyleColorsDarkGreenBlue();
-	static void StyleColorsWhite();
+public:
+	static HMODULE hCurrentModule;
 
-private:
+	struct WindowItem
+	{
+		HWND CurrentWindow;
+		char CurrentWindowTitle[125];
+		char CurrentProcessName[125];
+	};
 
+	static HWND hTargetWindow;
 
+	static void Render(Bot* pBot);
+	static BOOL IsWindowTargeted();
+	static void GetAllWindow(std::vector<WindowItem>* vWindowList);
+	static void SetTargetWindow(HWND hWindow);
+	static HWND GetProcessWindowHandle(DWORD targetProcessId);
 };
 
 #endif

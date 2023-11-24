@@ -31,12 +31,12 @@ void Service::Clear()
 
 void Service::Initialize()
 {
-    std::string szIniPath = skCryptDec(".\\data\\KOF.ini");
+    std::string szIniPath = skCryptDec(".\\Config.ini");
 
     m_iniAppConfiguration = new Ini();
     m_iniAppConfiguration->Load(szIniPath.c_str());
 
-    m_szToken = m_iniAppConfiguration->GetString(skCryptDec("KOF"), skCryptDec("Token"), m_szToken.c_str());
+    m_szToken = m_iniAppConfiguration->GetString(skCryptDec("Internal"), skCryptDec("Token"), m_szToken.c_str());
 
 #ifdef DEBUG
     Connect(skCryptDec("watchdog.kofbot.com"), 8888);
@@ -98,14 +98,30 @@ void Service::HandlePacket(Packet& pkt)
         {
             if (m_iId == -1) return;
 
-            uint8_t iType, iStatus;
-
             pkt.DByte();
+
+            uint8_t iType, iStatus;
             pkt >> iType >> iStatus;
 
             if (iStatus == 1)
             {
                 pkt >> m_iAccountTypeFlag;
+            }
+
+            switch (iType)
+            {
+            case LoginType::GENERIC:
+            {
+                if (iStatus == 1)
+                {
+                    std::string szToken;
+
+                    pkt >> szToken;
+
+                    m_szToken = m_iniAppConfiguration->SetString(skCryptDec("Internal"), skCryptDec("Token"), szToken.c_str());
+                }
+            }
+            break;
             }
 
             if (iStatus == 1)
@@ -115,7 +131,6 @@ void Service::HandlePacket(Packet& pkt)
 #endif
 
                 SendPointerRequest();
-
                 OnAuthenticated();
             }
             else
@@ -179,21 +194,6 @@ void Service::HandlePacket(Packet& pkt)
         }
         break;
 
-       /* case PacketHeader::INJECTION:
-        {
-            if (m_iId == -1) return;
-
-            int32_t iProcesssId, iBufferLength;
-
-            pkt >> iProcesssId >> iBufferLength;
-
-            std::vector<uint8_t> vecBuffer(iBufferLength);
-            pkt.read(&vecBuffer[0], iBufferLength);
-
-            Injection(iProcesssId, vecBuffer);
-        }
-        break;*/
-
         case PacketHeader::PING:
         {
             uint32_t iLastPingTime;
@@ -226,6 +226,66 @@ void Service::SendReady()
 {
     Packet pkt = Packet(PacketHeader::READY);
     pkt << uint32_t(GetCurrentProcessId());
+
+    Send(pkt);
+}
+
+void Service::SendLogin(std::string szEmail, std::string szPassword)
+{
+    Packet pkt = Packet(PacketHeader::LOGIN);
+
+    pkt.DByte();
+    pkt
+        << uint8_t(LoginType::GENERIC)
+        << szEmail.c_str()
+        << szPassword.c_str()
+        << to_string(m_hardwareInfo.System.Name)
+        << to_string(m_hardwareInfo.CPU.ProcessorId)
+        << to_string(m_hardwareInfo.SMBIOS.SerialNumber);
+
+    std::string szHddSerial;
+    for (size_t i = 0; i < m_hardwareInfo.Disk.size(); i++)
+    {
+        HardwareInformation::DiskObject& Disk{ m_hardwareInfo.Disk.at(i) };
+
+        if (Disk.IsBootDrive)
+        {
+            if (i == 0)
+                szHddSerial += to_string(Disk.SerialNumber);
+            else
+                szHddSerial += "||" + to_string(Disk.SerialNumber);
+        }
+    }
+
+    pkt
+        << szHddSerial
+        << to_string(m_hardwareInfo.Registry.ComputerHardwareId)
+        << to_string(m_hardwareInfo.System.OSSerialNumber);
+
+    std::string szPartNumber;
+    for (size_t i = 0; i < m_hardwareInfo.PhysicalMemory.size(); i++)
+    {
+        HardwareInformation::PhysicalMemoryObject& Memory { m_hardwareInfo.PhysicalMemory.at(i) };
+
+        if (i == 0)
+            szPartNumber += to_string(Memory.PartNumber);
+        else
+            szPartNumber += "||" + to_string(Memory.PartNumber);
+    }
+
+    pkt
+        << szPartNumber;
+
+    std::string szGPUs;
+    for (size_t i = 0; i < m_hardwareInfo.GPU.size(); i++)
+    {
+        if (i == 0)
+            szGPUs += to_string(m_hardwareInfo.GPU.at(i).Name);
+        else
+            szGPUs += "||" + to_string(m_hardwareInfo.GPU.at(i).Name);
+    }
+
+    pkt << szGPUs;
 
     Send(pkt);
 }
@@ -327,7 +387,7 @@ void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharact
         << szCharacterName 
         << m_iniUserConfiguration->Dump();
 
-    Send(pkt, true);
+    Send(pkt);
 }
 
 void Service::SendInjectionRequest(uint32_t iProcessId)

@@ -1,22 +1,5 @@
 #pragma once
 
-#if defined(__linux__) || defined(__APPLE__)
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <netdb.h>
-#elif _WIN32
-#include <winsock2.h>
-#include <Ws2ipdef.h>
-#include <Ws2tcpip.h>
-
-#pragma comment(lib, "Ws2_32.lib")
-#endif
-
-#include <string>
-#include <functional>
-#include <cerrno>
 
 #define FDR_UNUSED(expr){ (void)(expr); } 
 #define FDR_ON_ERROR std::function<void(int)> onError = [](int errorCode){FDR_UNUSED(errorCode)}

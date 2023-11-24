@@ -15,6 +15,7 @@ public:
 	bool IsWorking() { return m_bWorking; }
 
 	void Clear();
+	void ClearUserConfiguration();
 
 	Client* GetClient() { return static_cast<Client*>(this); }
 
@@ -56,63 +57,13 @@ private:
 	LPVOID m_SendHookAddress;
 
 private:
-	struct ClientHook
-	{
-		ClientHook(ClientHandler* pHandler)
-		{
-			m_ClientHandler = pHandler;
-		}
-
-		~ClientHook()
-		{
-			m_ClientHandler = nullptr;
-		}
-
-		static void RecvProcess(BYTE* byBuffer, DWORD dwLength)
-		{
-			try
-			{
-				m_ClientHandler->onClientRecvProcess(byBuffer, dwLength);
-			}
-			catch (const std::exception& e)
-			{
-#ifdef DEBUG
-				printf("OnClientRecvProcess:Exception: %s\n", e.what());
-#else
-				UNREFERENCED_PARAMETER(e);
-#endif
-			}
-		}
-
-		static void SendProcess(BYTE* byBuffer, DWORD dwLength)
-		{
-			try
-			{
-				m_ClientHandler->onClientSendProcess(byBuffer, dwLength);
-			}
-			catch (const std::exception& e)
-			{
-#ifdef DEBUG
-				printf("OnClientSendProcess:Exception: %s\n", e.what());
-#else
-				UNREFERENCED_PARAMETER(e);
-#endif
-			}
-		}
-
-		inline static ClientHandler* m_ClientHandler;
-	};
-
-	ClientHook* m_ClientHook;
-
-private:
 	void SetLoginInformation(std::string szAccountId, std::string szPassword);
 
 public:
 	void LoadSkillData();
 
 private:
-	void BasicAttackPacketProcess();
+	void BasicAttackProcess();
 	void AttackProcess();
 	void MoveToTargetProcess();
 	void SearchTargetProcess();
@@ -193,6 +144,7 @@ protected:
 	float m_fLastMinorProcessTime;
 	float m_fLastMagicHammerProcessTime;
 	float m_fLastAutoLootProcessTime;
+	float m_fLastAutoLootBundleOpenTime;
 	float m_fLastTransformationProcessTime;
 	float m_fLastFlashProcessTime;
 	float m_fLastSpeedHackProcessTime;
@@ -205,6 +157,111 @@ protected:
 	int32_t PartyMemberNeedSwift();
 	int32_t PartyMemberNeedHeal(uint32_t iSkillBaseID);
 	int32_t PartyMemberNeedBuff(uint32_t iSkillBaseID);
+
+protected:
+	bool IsSkillHasZoneLimit(uint32_t iSkillBaseID);
+
+public:
+	bool m_bAttackSpeed;
+	int m_iAttackSpeedValue;
+	bool m_bAttackStatus;
+	std::vector<int> m_vecAttackSkillList;
+	bool m_bCharacterStatus;
+	bool m_bSearchTargetSpeed;
+	int m_iSearchTargetSpeedValue;
+	bool m_bClosestTarget;
+	bool m_bAutoTarget;
+	bool m_bRangeLimit;
+	int m_iRangeLimitValue;
+	std::vector<int> m_vecSelectedNpcList;
+	std::vector<int> m_vecSelectedNpcIDList;
+	bool m_bMoveToTarget;
+	bool m_bDisableStun;
+	bool m_bStartGenieIfUserInRegion;
+
+	std::vector<int> m_vecCharacterSkillList;
+	bool m_bPartySwift;
+	bool m_bPriestPartyHeal;
+	bool m_bHealProtection;
+	bool m_bPriestPartyBuff;
+	int m_iHealProtectionValue;
+	bool m_bUseSkillWithPacket;
+	bool m_bOnlyAttackSkillUseWithPacket;
+
+	bool m_bAttackRangeLimit;
+	int m_iAttackRangeLimitValue;
+	bool m_bBasicAttack;
+	bool m_bBasicAttackWithPacket;
+
+	bool m_bAutoLoot;
+	bool m_bMoveToLoot;
+	bool m_bMinorProtection;
+	int m_iMinorProtectionValue;
+	bool m_bHpProtectionEnable;
+	int32_t m_iHpProtectionValue;
+	bool m_bMpProtectionEnable;
+	int32_t m_iMpProtectionValue;
+	bool m_bAutoRepairMagicHammer;
+	bool m_bSpeedHack;
+	bool m_bAutoTransformation;
+	int m_iTransformationItem;
+	int m_iTransformationSkill;
+	bool m_bAutoDCFlash;
+	int m_iAutoDCFlashCount;
+	bool m_bAutoWarFlash;
+	int m_iAutoWarFlashCount;
+	bool m_bAutoExpFlash;
+	int m_iAutoExpFlashCount;
+
+	int m_iLootMinPrice;
+	bool m_bDeathEffect;
+	bool m_bDisableCasting;
+
+	bool m_bTargetSizeEnable;
+	int m_iTargetSize;
+	bool m_bCharacterSizeEnable;
+	int m_iCharacterSize;
+
+	bool m_bSaveCPUEnable;
+	int m_iSaveCPUValue;
+
+	bool m_bPartyRequest;
+	std::string m_szPartyRequestMessage;
+	bool m_bTeleportRequest;
+	std::string m_szTeleportRequestMessage;
+
+	bool m_bTownStopBot = true;
+	bool m_bTownOrTeleportStopBot = false;
+	bool m_bSyncWithGenie = false;
+
+	bool m_bLegalMode;
+	bool m_bSpeedMode;
+
+	bool m_bStopBotIfDead;
+
+	bool m_bSendTownIfBanNotice;
+	bool m_bPlayBeepfIfBanNotice;
+
+
+	bool m_bWallHack;
+	bool m_bLegalWallHack;
+
+	bool m_bArcherCombo;
+
+public:
+	void InitializeUserConfiguration();
+
+protected:
+	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bWaitCastTime = true);
+	bool UseItem(uint32_t iItemID);
+
+protected:
+	bool IsNeedRepair();
+	bool IsNeedSupply();
+	bool IsNeedSell();
+
+protected:
+	std::queue<TABLE_UPC_SKILL> m_qAttackSkillQueue;
 };
 
 
