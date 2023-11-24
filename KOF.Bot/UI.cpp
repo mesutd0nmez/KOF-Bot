@@ -113,13 +113,13 @@ void UI::Render(Bot* pBot)
     wc.style = CS_VREDRAW | CS_HREDRAW;
 
     ::RegisterClassEx(&wc);
-    const HWND hwnd = ::CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE, wc.lpszClassName, Drawing::lpWindowName, WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), nullptr, nullptr, wc.hInstance, nullptr);
+    const HWND hWnd = ::CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE, wc.lpszClassName, Drawing::lpWindowName, WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), nullptr, nullptr, wc.hInstance, nullptr);
 
-    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
     const MARGINS margin = { -1, -1, -1, -1 };
-    DwmExtendFrameIntoClientArea(hwnd, &margin);
+    DwmExtendFrameIntoClientArea(hWnd, &margin);
 
-    if (!CreateDeviceD3D(hwnd))
+    if (!CreateDeviceD3D(hWnd))
     {
         CleanupDeviceD3D();
         ::UnregisterClass(wc.lpszClassName, wc.hInstance);
@@ -128,8 +128,10 @@ void UI::Render(Bot* pBot)
 
     int iWindowState = SW_SHOWDEFAULT;
 
-    ::ShowWindow(hwnd, iWindowState);
-    ::UpdateWindow(hwnd);
+    //SetWindowDisplayAffinity(hWnd, WDA_EXCLUDEFROMCAPTURE);
+
+    ::ShowWindow(hWnd, iWindowState);
+    ::UpdateWindow(hWnd);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -143,7 +145,7 @@ void UI::Render(Bot* pBot)
 
     ImGui::GetIO().IniFilename = nullptr;
 
-    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX9_Init(pD3DDevice);
 
     const ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -156,7 +158,7 @@ void UI::Render(Bot* pBot)
 
     while (!bDone)
     {
-        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         if (hTargetWindow != nullptr && GetAsyncKeyState(VK_INSERT) & 1)
             Drawing::bDraw = !Drawing::bDraw;
@@ -205,16 +207,16 @@ void UI::Render(Bot* pBot)
         // Move the window on top of the targeted window and handle resize.
 #ifdef _WINDLL 
         if (hTargetWindow != nullptr)
-            MoveWindow(hwnd);
+            MoveWindow(hWnd);
         else
             continue;
 #else
         if (hTargetWindow != nullptr && bTargetSet)
-            MoveWindow(hwnd);
+            MoveWindow(hWnd);
 #endif
 
         // Clear overlay when the targeted window is not focus
-        if (!IsWindowFocus(hwnd) && bTargetSet)
+        if (!IsWindowFocus(hWnd) && bTargetSet)
         {
             pD3DDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
             pD3DDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
@@ -243,9 +245,9 @@ void UI::Render(Bot* pBot)
 
             // Overlay handle inputs when menu is showed.
             if (Drawing::isActive())
-                SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+                SetWindowLong(hWnd, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
             else
-                SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+                SetWindowLong(hWnd, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
 
             ImGui::Render();
             ImGui::EndFrame();
@@ -284,7 +286,7 @@ void UI::Render(Bot* pBot)
     ImGui::DestroyContext();
 
     CleanupDeviceD3D();
-    ::DestroyWindow(hwnd);
+    ::DestroyWindow(hWnd);
     ::UnregisterClass(wc.lpszClassName, wc.hInstance);
 
 #ifdef _WINDLL

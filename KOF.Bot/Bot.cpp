@@ -41,8 +41,6 @@ Bot::Bot()
 
 	m_jSelectedAccount.clear();
 
-	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
-
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
 
@@ -89,8 +87,6 @@ Bot::~Bot()
 	m_iSelectedAccount = -1;
 
 	m_jSelectedAccount.clear();
-
-	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
 
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
@@ -655,6 +651,8 @@ void Bot::OnConfigurationLoaded()
 		return;
 	}
 
+	m_ClientHandler->InitializeUserConfiguration();
+
 #ifdef DEBUG
 	printf("User configuration loaded\n");
 #endif
@@ -933,12 +931,7 @@ bool Bot::GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecSho
 
 DWORD Bot::GetAddress(std::string szAddressName)
 {
-	auto it = m_mapAddress.find(szAddressName);
-
-	if (it != m_mapAddress.end())
-		return it->second;
-
-	return 0;
+	return m_mapAddress[szAddressName];
 }
 
 void Bot::BuildAdress()

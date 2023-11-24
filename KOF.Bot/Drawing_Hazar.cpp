@@ -894,6 +894,7 @@ void Drawing::DrawSizeController()
 
         ImGui::PopItemWidth();
 
+
         bool bCharacterSizeEnable = m_pUserConfiguration->GetBool(skCryptDec("Character"), skCryptDec("SizeEnable"), false);
 
         if (ImGui::Checkbox(skCryptDec("##CharacterSizeCheckbox"), &bCharacterSizeEnable))

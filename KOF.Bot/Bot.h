@@ -96,7 +96,7 @@ public:
 	void BuildAdress();
 
 private:
-	std::map<std::string, DWORD> m_mapAddress;
+	std::unordered_map<std::string, DWORD> m_mapAddress;
 
 private:
 	std::chrono::milliseconds m_msLastInitializeHandle;
@@ -129,16 +129,12 @@ public:
 public:
 	void Patch(HANDLE hProcess);
 
-
 public:
 	DWORD GetInjectedProcessId() { return m_InjectedProcessInfo.dwProcessId; };
 	HANDLE GetInjectedProcessHandle();
 
 private:
 	PROCESS_INFORMATION m_InjectedProcessInfo;
-
-private:
-	std::chrono::milliseconds m_msLastUserConfigurationSaveTime;
 
 private:
 	HMODULE m_hModuleAnyOTP;
