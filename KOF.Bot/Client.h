@@ -34,7 +34,7 @@ public:
 	float GetScaleX(DWORD iBase = 0);
 	float GetScaleZ(DWORD iBase = 0);
 	float GetScaleY(DWORD iBase = 0);
-	bool IsAttackable(DWORD iBase);
+	bool IsAttackable(DWORD iTargetID);
 	uint8_t GetServerId();
 	bool IsDisconnect();
 	bool IsDeath(DWORD iBase = 0);
@@ -67,8 +67,8 @@ public:
 	uint32_t GetProperMindBuff();
 	uint32_t GetProperHeal();
 
-	std::chrono::milliseconds GetSkillUseTime(int32_t iSkillID);
-	void SetSkillUseTime(int32_t iSkillID, std::chrono::milliseconds iSkillUseTime);
+	float GetSkillNextUseTime(int32_t iSkillID);
+	void SetSkillNextUseTime(int32_t iSkillID, float fSkillNextUseTime);
 
 	bool IsBuffActive(int32_t iBuffType);
 	bool IsSkillActive(int32_t iSkillID);
@@ -96,33 +96,26 @@ public:
 	int SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList);
 
 protected:
-	DWORD GetAddress(std::string szAddressName);
 	Ini* GetUserConfiguration();
 	Ini* GetAppConfiguration();
 
 protected:
 	Bot* m_Bot;
+
+public:
 	TPlayer m_PlayerMySelf;
 
 protected:
-	std::map<int32_t, std::chrono::milliseconds> m_mapSkillUseTime;
-
-	std::shared_mutex m_mutexAvailableSkill;
+	std::map<int32_t, float> m_mapSkillUseTime;
 	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
-	std::shared_mutex m_mutexNpc;
 	std::vector<TNpc> m_vecNpc;
-
-	std::shared_mutex m_mutexPlayer;
 	std::vector<TPlayer> m_vecPlayer;
 
-protected:
-	std::shared_mutex m_mutexLootList;
 	std::vector<TLoot> m_vecLootList;
 	bool m_bIsMovingToLoot;
 
-protected:
 	bool IsMovingToLoot() { return m_bIsMovingToLoot; }
 	void SetMovingToLoot(bool bValue) { m_bIsMovingToLoot = bValue; }
 
@@ -165,7 +158,7 @@ public:
 	void SetSaveCPUSleepTime(int32_t iValue);
 
 protected:
-	bool UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority = 0, bool bWaitCastTime = true);
+	
 
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
@@ -186,8 +179,7 @@ protected:
 	void SetPosition(Vector3 v3Position);
 
 	void SendTargetHpRequest(int32_t iTargetID, bool bBroadcast);
-	void SetTarget(uint32_t iTargetBase);
-	bool UseItem(uint32_t iItemID);
+	void SetTarget(uint32_t iTargetID);
 
 protected:
 	void SendBasicAttackPacket(int32_t iTargetID, float fInterval = 1.0f, float fDistance = 2.0f);
@@ -211,11 +203,6 @@ public:
 	void RefreshCaptcha();
 	void SendCaptcha(std::string szCode);
 
-protected:
-	bool IsNeedRepair();
-	bool IsNeedSupply();
-	bool IsNeedSell();
-
 public:
 	int32_t GetPartyMemberCount();
 	bool GetPartyList(std::vector<Party>& vecParty);
@@ -233,21 +220,6 @@ public:
 	void SendStartGenie();
 	void SendStopGenie();
 
-protected:
-	BYTE ReadByte(DWORD dwAddress);
-	WORD Read2Byte(DWORD dwAddress);
-	DWORD Read4Byte(DWORD dwAddress);
-	float ReadFloat(DWORD dwAddress);
-	std::string ReadString(DWORD dwAddress, size_t nSize);
-	std::vector<BYTE> ReadBytes(DWORD dwAddress, size_t nSize);
-	void WriteByte(DWORD dwAddress, BYTE byValue);
-	void Write4Byte(DWORD dwAddress, int iValue);
-	void WriteFloat(DWORD dwAddress, float fValue);
-	void WriteString(DWORD dwAddress, std::string strValue);
-	void WriteBytes(DWORD dwAddress, std::vector<BYTE> byValue);
-	bool ExecuteRemoteCode(HANDLE hProcess, BYTE* codes, size_t psize);
-	bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress);
-
 public:
 	bool IsTransformationAvailableZone();
 	bool IsTransformationAvailable();
@@ -262,7 +234,6 @@ public:
 	void UpdateSkillSuccessRate(bool bDisableCasting);
 
 protected:
-	std::shared_mutex m_mutexPartyMembers;
 	std::vector<PartyMember> m_vecPartyMembers;
 
 protected:
@@ -344,4 +315,10 @@ public:
 
 public:
 	std::chrono::milliseconds m_msLastDisconnectTime;
+
+protected:
+	std::vector<std::thread> m_vecThreadSkillPacket;
+
+protected:
+	bool m_bSkillCasting;
 };

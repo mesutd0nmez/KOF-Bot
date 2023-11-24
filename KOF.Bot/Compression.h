@@ -1,40 +1,16 @@
 #pragma once
 
-#include <stdio.h>
-#include <snappy-c.h>
+#include "Compression_LZF.h"
 
-class Compression
+namespace Compression
 {
-public:
+	static const size_t MinBytes = 500;
+	static const size_t DefaultBufferSize = 16384;
+	static const size_t DefaultGrowthSize = 8192;
 
-	bool Compress(const char* inputData, size_t inputDataLength, char* compressedData, size_t* compressedDataLength)
-	{
-		snappy_status pStatus = snappy_compress(inputData, inputDataLength, compressedData, compressedDataLength);
+	using LZF::CompressWithCRC32;
+	using LZF::DecompressWithCRC32;
 
-		if (pStatus != SNAPPY_OK)
-		{
-#ifdef DEBUG
-			printf("Snappy compression failed: %d\n", pStatus);
-#endif
-			return false;
-		}
-
-		return true;
-	}
-
-	bool UnCompress(const char * compressedData, size_t compressedDataLength, char* outputData, size_t *outputDataLength)
-	{
-		snappy_status pStatus = snappy_uncompress(compressedData, compressedDataLength, outputData, outputDataLength);
-
-		if (pStatus != SNAPPY_OK)
-		{
-#ifdef DEBUG
-			printf("Snappy decompression failed: %d\n", pStatus);
-#endif
-			return false;
-		}
-
-		return true;
-	}
-};
-
+	uint8_t * Compress(const uint8_t * in_data, uint32_t in_len, uint32_t * out_len);
+	uint8_t * Decompress(const uint8_t * in_data, uint32_t in_len, uint32_t original_len);
+}

@@ -13,6 +13,7 @@ Bot::Bot()
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
+	m_pTbl_Skill_Extension3 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
 
@@ -26,40 +27,26 @@ Bot::Bot()
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
-	m_msLastConfigurationSave = std::chrono::milliseconds(0);
-
 	m_szClientPath.clear();
 	m_szClientExe.clear();
 
 	m_bClosed = false;
 
-	m_RouteManager = nullptr;
-
-	m_World = new World();
-
-	m_jSupplyList.clear();
-
-	m_jHealthBuffList.clear();
-	m_jDefenceBuffList.clear();
-	m_jMindBuffList.clear();
-	m_jHealList.clear();
-
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
-	m_hPipe = nullptr;
-	m_bPipeWorking = false;
+	m_bInternalMailslotWorking = false;
 
 	m_jAccountList.clear();
 	m_iSelectedAccount = -1;
 
 	m_jSelectedAccount.clear();
 
-	m_jInventoryFlags.clear();
-
-	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
-
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
+
+	m_hInternalMailslot = INVALID_HANDLE_VALUE;
+
+	m_bAuthenticated = false;
 }
 
 Bot::~Bot()
@@ -72,6 +59,7 @@ Bot::~Bot()
 
 	m_pTbl_Skill = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
+	m_pTbl_Skill_Extension3 = nullptr;
 	m_pTbl_Skill_Extension4 = nullptr;
 	m_pTbl_Item = nullptr;
 
@@ -90,30 +78,20 @@ Bot::~Bot()
 
 	m_bClosed = true;
 
-	m_RouteManager = nullptr;
-
-	m_World = nullptr;
-
-	m_jSupplyList.clear();
-	m_jHealthBuffList.clear();
-	m_jDefenceBuffList.clear();
-	m_jMindBuffList.clear();
-	m_jHealList.clear();
-
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
-	m_hPipe = nullptr;
-	m_bPipeWorking = false;
+	m_hInternalMailslot = nullptr;
+	m_bInternalMailslotWorking = false;
 
 	m_jAccountList.clear();
 	m_iSelectedAccount = -1;
 
 	m_jSelectedAccount.clear();
 
-	m_msLastUserConfigurationSaveTime = std::chrono::milliseconds(0);
-
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
+
+	m_bAuthenticated = false;
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -146,23 +124,6 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 	printf("Bot: Hardware Information Loaded\n");
 #endif
 
-#ifdef DEBUG
-	printf("Bot: Current process adjusting privileges\n");
-#endif
-
-	HANDLE hToken = NULL;
-	TOKEN_PRIVILEGES priv = { 0 };
-	if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
-	{
-		priv.PrivilegeCount = 1;
-		priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-
-		if (LookupPrivilegeValue(NULL, skCryptDec(SE_DEBUG_NAME), &priv.Privileges[0].Luid))
-			AdjustTokenPrivileges(hToken, FALSE, &priv, 0, NULL, NULL);
-
-		CloseHandle(hToken);
-	}
-
 	m_ePlatformType = ePlatformType;
 	m_iSelectedAccount = iSelectedAccount;
 
@@ -173,34 +134,31 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 
 void Bot::Process()
 {
-	std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
 	if (IsServiceClosed())
 	{
 		Close();
 	}
 	else
 	{
-		if (m_bPipeWorking == false)
+		if (m_bInternalMailslotWorking == false)
 		{
-			if (ConnectPipeServer())
+			if (ConnectInternalMailslot())
 			{
 #ifdef DEBUG
-				printf("Bot: Connected Pipe server\n");
+				printf("Bot: Internal Connection Ready\n");
 #endif
-
 				Packet pkt = Packet(PIPE_LOAD_POINTER);
 
 				pkt << int32_t(m_mapAddress.size());
 
-				for (auto &e : m_mapAddress)
+				for (auto& e : m_mapAddress)
 				{
 					pkt << e.first << e.second;
 				}
 
-				SendPipeServer(pkt);
+				SendInternalMailslot(pkt);
 
-				m_bPipeWorking = true;
+				m_bInternalMailslotWorking = true;
 			}
 		}
 
@@ -241,12 +199,10 @@ void Bot::Process()
 								<< " "
 								<< std::to_string(m_ePlatformType)
 								<< " "
-								<< std::to_string(m_iSelectedAccount)
-								<< " "
-								<< std::to_string(1);
+								<< std::to_string(m_iSelectedAccount);
 
 							PROCESS_INFORMATION botProcessInfo;
-							StartProcess(std::filesystem::current_path().string(), skCryptDec("data\\bin\\chrome.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
+							StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
 
 							Close();
 						}
@@ -263,21 +219,6 @@ void Bot::Process()
 
 					m_ClientHandler->m_msLastDisconnectTime = std::chrono::milliseconds(0);
 				}
-			}
-		}
-
-		if (m_iniUserConfiguration)
-		{
-			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-				std::chrono::system_clock::now().time_since_epoch()
-			);
-
-			if ((m_msLastUserConfigurationSaveTime.count() + 30000) < msNow.count())
-			{
-				if (m_iniUserConfiguration->onSaveEvent)
-					m_iniUserConfiguration->onSaveEvent();
-
-				m_msLastUserConfigurationSaveTime = msNow;
 			}
 		}
 	}
@@ -308,8 +249,6 @@ void Bot::Close()
 	printf("Bot: Closing\n");
 #endif
 
-	Drawing::Done = true;
-
 	m_bClosed = true;
 
 	if (m_ClientHandler)
@@ -329,6 +268,9 @@ void Bot::Release()
 
 	if (m_pTbl_Skill_Extension2)
 		m_pTbl_Skill_Extension2->Release();
+
+	if (m_pTbl_Skill_Extension3)
+		m_pTbl_Skill_Extension3->Release();
 
 	if (m_pTbl_Skill_Extension4)
 		m_pTbl_Skill_Extension4->Release();
@@ -391,6 +333,9 @@ void Bot::InitializeStaticData()
 
 	m_pTbl_Skill_Extension2 = new Table<__TABLE_UPC_SKILL_EXTENSION2>();
 	m_pTbl_Skill_Extension2->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_2.tbl"));
+
+	m_pTbl_Skill_Extension3 = new Table<__TABLE_UPC_SKILL_EXTENSION3>();
+	m_pTbl_Skill_Extension3->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_3.tbl"));
 
 	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
 	m_pTbl_Skill_Extension4->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_4.tbl"));
@@ -455,94 +400,6 @@ void Bot::InitializeStaticData()
 	m_bTableLoaded = true;
 }
 
-void Bot::InitializeRouteData()
-{
-#ifdef DEBUG
-	printf("InitializeRouteData: Started\n");
-#endif
-
-	m_RouteManager = new RouteManager();
-	m_RouteManager->Load();
-
-#ifdef DEBUG
-	printf("InitializeRouteData: Finished\n");
-#endif
-}
-
-void Bot::InitializeSupplyData()
-{
-#ifdef DEBUG
-	printf("InitializeSupplyData: Started\n");
-#endif
-
-	try
-	{
-		std::ifstream ifSupply(
-			skCryptDec("data\\supply.json"));
-
-		m_jSupplyList = JSON::parse(ifSupply);
-
-		std::ifstream ifInventoryFlags(
-			skCryptDec("data\\inventoryflags.json"));
-
-		m_jInventoryFlags = JSON::parse(ifInventoryFlags);
-	}
-	catch (const std::exception& e)
-	{
-#ifdef DEBUG
-		printf("%s\n", e.what());
-#else
-		DBG_UNREFERENCED_PARAMETER(e);
-#endif
-	}
-
-#ifdef DEBUG
-	printf("InitializeSupplyData: Finished\n");
-#endif
-}
-
-void Bot::InitializePriestData()
-{
-#ifdef DEBUG
-	printf("InitializePriestData: Started\n");
-#endif
-
-	try
-	{
-		std::ifstream iHealthBuffList(
-			skCryptDec("data\\health.json"));
-
-		m_jHealthBuffList = JSON::parse(iHealthBuffList);
-
-		std::ifstream iDefenceBuffList(
-			skCryptDec("data\\defence.json"));
-
-		m_jDefenceBuffList = JSON::parse(iDefenceBuffList);
-
-		std::ifstream iMindBuffList(
-			skCryptDec("data\\mind.json"));
-
-		m_jMindBuffList = JSON::parse(iMindBuffList);
-
-		std::ifstream iHealList(
-			skCryptDec("data\\heal.json"));
-
-		m_jHealList = JSON::parse(iHealList);
-	}
-	catch (const std::exception& e)
-	{
-#ifdef DEBUG
-		printf("%s\n", e.what());
-#else
-		DBG_UNREFERENCED_PARAMETER(e);
-#endif
-	}
-
-#ifdef DEBUG
-	printf("InitializePriestData: Finished\n");
-#endif
-}
-
 void Bot::OnReady()
 {
 #ifdef DEBUG
@@ -567,6 +424,8 @@ void Bot::OnAuthenticated()
 #ifdef DEBUG
 	printf("Bot: OnAuthenticated\n");
 #endif
+
+	m_bAuthenticated = true;
 }
 
 void Bot::OnLoaded()
@@ -598,7 +457,7 @@ void Bot::OnLoaded()
 			return;
 		}
 
-		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+		//WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
 	}
 	else if (m_ePlatformType == PlatformType::STKO)
 	{
@@ -616,7 +475,7 @@ void Bot::OnLoaded()
 			return;
 		}
 
-		WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+		//WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
 	}
 #endif
 
@@ -718,17 +577,11 @@ void Bot::OnLoaded()
 #ifdef DEBUG
 		printf("Bot: Bypass finished, Knight Online process resuming\n");
 #endif
-
+	
 		ResumeProcess(m_InjectedProcessInfo.hProcess);
 	}
 
 	Patch(m_InjectedProcessInfo.hProcess);
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
-	Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("Adapter.dll"));
-
-	//Injection(m_InjectedProcessInfo.dwProcessId, skCryptDec("C:\\Users\\trkys\\OneDrive\\Belgeler\\GitHub\\Pipeline\\Debug\\Pipeline.dll"));
 
 	m_ClientHandler = new ClientHandler(this);
 	m_ClientHandler->Initialize();
@@ -750,7 +603,6 @@ void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
 	}
 }
 
-
 void Bot::Patch(HANDLE hProcess)
 {
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -771,17 +623,17 @@ void Bot::Patch(HANDLE hProcess)
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	DWORD iPatchEntryPoint2 = 0;
-	while (iPatchEntryPoint2 == 0)
-		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
+	//DWORD iPatchEntryPoint2 = 0;
+	//while (iPatchEntryPoint2 == 0)
+	//	ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
 
-	BYTE byPatch2[] =
-	{ 
-		0xE9, 0xC5, 0x00, 0x00, 0x00,
-		0x90 
-	};
+	//BYTE byPatch2[] =
+	//{ 
+	//	0xE9, 0xC5, 0x00, 0x00, 0x00,
+	//	0x90 
+	//};
 
-	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
+	//WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
@@ -799,25 +651,15 @@ void Bot::OnConfigurationLoaded()
 		return;
 	}
 
+	m_ClientHandler->InitializeUserConfiguration();
+
 #ifdef DEBUG
 	printf("User configuration loaded\n");
 #endif
 
-	new std::thread([this]() { UI::Render(this); });
-
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
-#ifdef DEBUG
-		printf("User configuration saving\n");
-#endif
-
-		std::chrono::milliseconds msCurrentTime = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-		if ((msCurrentTime - m_msLastConfigurationSave) > std::chrono::milliseconds(1000))
-		{
-			SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
-			m_msLastConfigurationSave = msCurrentTime;
-		}
+		SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
 	};
 }
 
@@ -845,6 +687,14 @@ bool Bot::GetSkillExtension2Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION
 		return false;
 
 	return m_pTbl_Skill_Extension2->GetData(mapDataOut);
+}
+
+bool Bot::GetSkillExtension3Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION3>** mapDataOut)
+{
+	if (m_pTbl_Skill_Extension3 == nullptr)
+		return false;
+
+	return m_pTbl_Skill_Extension3->GetData(mapDataOut);
 }
 
 bool Bot::GetSkillExtension4Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>** mapDataOut)
@@ -1081,12 +931,7 @@ bool Bot::GetShopItemTable(int32_t iSellingGroup, std::vector<SShopItem>& vecSho
 
 DWORD Bot::GetAddress(std::string szAddressName)
 {
-	auto it = m_mapAddress.find(szAddressName);
-
-	if (it != m_mapAddress.end())
-		return it->second;
-
-	return 0;
+	return m_mapAddress[szAddressName];
 }
 
 void Bot::BuildAdress()
@@ -1115,17 +960,17 @@ void Bot::BuildAdress()
 #endif
 }
 
-bool Bot::ConnectPipeServer()
+bool Bot::ConnectInternalMailslot()
 {
-	m_hPipe = CreateFileA(skCryptDec("\\\\.\\pipe\\pipeline"),
-		GENERIC_READ | GENERIC_WRITE,
+	m_hInternalMailslot = CreateFile(skCryptDec("\\\\.\\mailslot\\Internal"),
+		GENERIC_WRITE,
 		0,
 		NULL,
-		OPEN_EXISTING,
+		OPEN_ALWAYS,
 		0,
 		NULL);
 
-	if (m_hPipe != INVALID_HANDLE_VALUE)
+	if (m_hInternalMailslot != INVALID_HANDLE_VALUE)
 	{
 		return true;
 	}
@@ -1133,17 +978,24 @@ bool Bot::ConnectPipeServer()
 	return false;
 }
 
-void Bot::SendPipeServer(Packet pkt)
+void Bot::SendInternalMailslot(Packet pkt)
 {
-	if (m_hPipe != INVALID_HANDLE_VALUE)
+	if (m_hInternalMailslot != INVALID_HANDLE_VALUE)
 	{
-		DWORD iNumberOfBytesWritten;
+		DWORD bytesWritten;
 
-		WriteFile(m_hPipe,
-			pkt.contents(),
-			pkt.size(),
-			&iNumberOfBytesWritten,
-			NULL);
+		if (!WriteFile(m_hInternalMailslot, pkt.contents(), pkt.size(), &bytesWritten, nullptr))
+		{
+#ifdef DEBUG
+			printf("SendInternalMailslot: Failed to write to mailslot. Error code: %d\n", GetLastError());
+#endif
+		}
+	}
+	else
+	{
+#ifdef DEBUG
+		printf("SendInternalMailslot: m_hInternalMailslot == INVALID_HANDLE_VALUE\n");
+#endif
 	}
 }
 
@@ -1175,42 +1027,6 @@ float Bot::TimeGet()
 	}
 
 	return (float)timeGetTime();
-}
-
-uint8_t Bot::GetInventoryItemFlag(uint32_t iItemID)
-{
-	for (size_t i = 0; i < m_jInventoryFlags.size(); i++)
-	{
-		if (m_jInventoryFlags[i]["id"].get<uint32_t>() == iItemID)
-		{
-			return m_jInventoryFlags[i]["flag"].get<uint8_t>();
-		}
-	}
-
-	return INVENTORY_ITEM_FLAG_NONE;
-};
-
-void Bot::UpdateInventoryItemFlag(JSON pInventoryFlags)
-{
-	try
-	{
-		m_jInventoryFlags = pInventoryFlags;
-
-		std::ofstream o(
-			std::filesystem::current_path().string()
-			+ skCryptDec("\\data\\")
-			+ skCryptDec("inventoryflags.json"));
-
-		o << std::setw(4) << m_jInventoryFlags << std::endl;
-	}
-	catch (const std::exception& e)
-	{
-		DBG_UNREFERENCED_PARAMETER(e);
-
-#ifdef _DEBUG
-		printf("%s\n", e.what());
-#endif
-	}
 }
 
 bool Bot::IsInjectedProcessLost()
