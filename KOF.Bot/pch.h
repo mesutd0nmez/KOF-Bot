@@ -91,4 +91,8 @@ extern bool KillProcessesByFileName(const char* fileName);
 
 extern std::string GenerateUniqueString(size_t iLength);
 
+extern uint8_t hexCharToUint8(char c);
+extern std::vector<uint8_t> fromHexString(const std::string& hexString);
+extern std::string toHexString(const std::vector<uint8_t>&bytes);
+
 #endif //PCH_H

@@ -313,3 +313,40 @@ std::string GenerateUniqueString(size_t iLength)
 
 	return uniqueString;
 }
+
+uint8_t hexCharToUint8(char c) 
+{
+	if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
+	if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
+	if (c >= 'a' && c <= 'f') return static_cast<uint8_t>(c - 'a' + 10);
+	throw std::invalid_argument("Invalid hex character");
+}
+
+std::vector<uint8_t> fromHexString(const std::string& hexString) 
+{
+	if (hexString.empty())
+		return {};
+
+	if (hexString.size() % 2 != 0)
+		throw std::invalid_argument("Bad hex length");
+
+	std::vector<uint8_t> result(hexString.size() / 2);
+
+	for (size_t i = 0; i < hexString.size(); i += 2) {
+		result[i / 2] = (hexCharToUint8(hexString[i]) << 4) | hexCharToUint8(hexString[i + 1]);
+	}
+
+	return result;
+}
+
+std::string toHexString(const std::vector<uint8_t>& bytes) 
+{
+	if (bytes.size() == 0)
+		return "";
+
+	std::stringstream ss;
+	for (auto c : bytes)
+		ss << std::setw(2) << std::setfill('0') << std::hex << (int)c;
+
+	return ss.str();
+}

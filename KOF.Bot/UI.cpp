@@ -41,8 +41,8 @@ bool UI::CreateDeviceD3D(const HWND hWnd)
     D3Dpp.BackBufferFormat = D3DFMT_A8R8G8B8;
     D3Dpp.EnableAutoDepthStencil = TRUE;
     D3Dpp.AutoDepthStencilFormat = D3DFMT_D16;
-    D3Dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
-    if (pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &D3Dpp, &pD3DDevice) < 0)
+    D3Dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+    if (pD3D->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &D3Dpp, &pD3DDevice) < 0)
         return false;
 
     return true;
@@ -137,6 +137,8 @@ void UI::Render(Bot* pBot)
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    io.Framerate = 30;
     
     //ImGui::StyleColorsDark();
     StyleColorsHazar();
@@ -363,7 +365,7 @@ void UI::MoveWindow(const HWND hCurrentProcessWindow)
     int lWindowHeight = rect.bottom - rect.top;
 
     lWindowWidth -= 5;
-    lWindowHeight -= 29;
+    lWindowHeight -= 1;
 
     SetWindowPos(hCurrentProcessWindow, nullptr, rect.left, rect.top, lWindowWidth, lWindowHeight, SWP_SHOWWINDOW);
 }

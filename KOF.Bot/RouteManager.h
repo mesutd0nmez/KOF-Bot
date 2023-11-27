@@ -8,9 +8,10 @@ enum RouteStepType
     STEP_SUNDRIES,
     STEP_INN,
     STEP_GENIE,
-    STEP_GATE,
     STEP_POTION,
-    STEP_BOT_START
+    STEP_BOT_START,
+    STEP_OBJECT_EVENT,
+    STEP_WARP,
 };
 
 struct Route
@@ -18,6 +19,9 @@ struct Route
     float fX;
     float fY;
     RouteStepType eStepType;
+    std::string szPacket;
+    bool bReRouted;
+    uint32_t pNpcID;
 };
 
 class RouteManager

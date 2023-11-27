@@ -151,6 +151,7 @@ protected:
 	void SelectCharacter();
 
 	void SendPacket(Packet byBuffer);
+	void SendPacket(std::string szPacket);
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 

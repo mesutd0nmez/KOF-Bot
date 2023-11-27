@@ -81,7 +81,6 @@ private:
 	bool ManaPotionProcess();
 
 	void RouteProcess();
-
 	void SupplyProcess();
 
 	void LevelDownerProcess();
@@ -97,6 +96,8 @@ private:
 
 	void RegionProcess();
 
+	void RouteRecorderProcess();
+
 private:
 	bool m_bWorking;
 	bool m_bMailSlotWorking;
@@ -104,18 +105,6 @@ private:
 private:
 	std::string m_szAccountId;
 	std::string m_szPassword;
-
-public:
-	void SetRoute(std::vector<Route> vecRoute);
-	bool IsRouting() { return m_vecRoute.size() > 0; };
-	RouteStepType GetRouteStep() { return m_iRouteStep; };
-	void ClearRoute();
-
-protected:
-	RouteStepType m_iRouteStep;
-
-private:
-	std::vector<Route> m_vecRoute;
 
 private:
 	std::chrono::milliseconds m_msLastSupplyTime;
@@ -242,11 +231,31 @@ public:
 	bool m_bSendTownIfBanNotice;
 	bool m_bPlayBeepfIfBanNotice;
 
-
 	bool m_bWallHack;
 	bool m_bLegalWallHack;
 
 	bool m_bArcherCombo;
+
+	bool m_bSupplyRouteStatus;
+	std::string m_szSelectedSupplyRoute;
+	bool m_bDeathRouteStatus;
+	std::string m_szSelectedDeathRoute;
+	bool m_bLoginRouteStatus;
+	std::string m_szSelectedLoginRoute;
+
+	bool m_bAutoRepair;
+
+	bool m_bAutoSellSlotRange;
+	int m_iAutoSellSlotRangeStart;
+	int m_iAutoSellSlotRangeEnd;
+
+	std::vector<int> m_vecSupplyList;
+
+	bool m_bAutoSupply;
+
+	int m_iSlotExpLimit;
+	bool m_bSlotExpLimitEnable;
+	bool m_bPartyLeaderSelect;
 
 public:
 	void InitializeUserConfiguration();
@@ -262,6 +271,25 @@ protected:
 
 protected:
 	std::queue<TABLE_UPC_SKILL> m_qAttackSkillQueue;
+
+public:
+		void SetRoute(std::vector<Route> vecRoute);
+		bool IsRouting() { return m_vecRouteActive.size() > 0; };
+		RouteStepType GetRouteStep() { return m_iRouteStep; };
+		void ClearRoute();
+		bool m_bIsRoutePlanning;
+
+protected:
+	RouteStepType m_iRouteStep;
+
+public:
+	std::vector<Route> m_vecRouteActive;
+	std::vector<Route> m_vecRoutePlan;
+
+protected:
+	bool m_bRouteWarpListLoaded;
+
+
 };
 
 

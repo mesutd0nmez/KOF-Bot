@@ -1544,6 +1544,49 @@ void Client::SendPacket(Packet vecBuffer)
 	VirtualFreeEx(hProcess, pPacketAddress, 0, MEM_RELEASE);
 }
 
+void Client::SendPacket(std::string szPacket)
+{
+	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+
+	std::vector<uint8_t> vecPacketByte = fromHexString(szPacket);
+
+	LPVOID pPacketAddress = VirtualAllocEx(hProcess, nullptr, vecPacketByte.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (pPacketAddress == nullptr)
+	{
+		return;
+	}
+
+	WriteProcessMemory(hProcess, pPacketAddress, vecPacketByte.data(), vecPacketByte.size(), 0);
+
+	BYTE byCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
+		0x68, 0x0, 0x0, 0x0, 0x0,
+		0x68, 0x0, 0x0, 0x0, 0x0,
+		0xBF, 0x0, 0x0, 0x0, 0x0,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	DWORD dwPtrPkt = m_Bot->GetAddress(skCryptDec("KO_PTR_PKT"));
+
+	CopyBytes(byCode + 3, dwPtrPkt);
+
+	size_t dwPacketSize = szPacket.size();
+
+	CopyBytes(byCode + 8, dwPacketSize);
+	CopyBytes(byCode + 13, pPacketAddress);
+
+	DWORD dwPtrSndFnc = m_Bot->GetAddress(skCryptDec("KO_SND_FNC"));
+	CopyBytes(byCode + 18, dwPtrSndFnc);
+
+	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
+	VirtualFreeEx(hProcess, pPacketAddress, 0, MEM_RELEASE);
+}
+
 void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool bWaitCastTime)
 {
 	Vector3 v3MyPosition = GetPosition();
@@ -1648,7 +1691,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 			}
 			else
 			{
-				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + (100.0f / 1000.0f));
+				//SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + (100.0f / 1000.0f));
 			}
 		}
 		break;
@@ -1690,7 +1733,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 			}
 			else
 			{
-				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + (100.0f / 1000.0f));
+				//SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + (100.0f / 1000.0f));
 			}
 		}
 		break;

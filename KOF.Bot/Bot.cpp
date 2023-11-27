@@ -47,6 +47,8 @@ Bot::Bot()
 	m_hInternalMailslot = INVALID_HANDLE_VALUE;
 
 	m_bAuthenticated = false;
+
+	m_RouteManager = nullptr;
 }
 
 Bot::~Bot()
@@ -92,6 +94,10 @@ Bot::~Bot()
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
 
 	m_bAuthenticated = false;
+
+	m_RouteManager = nullptr;
+
+	m_jSupplyList.clear();
 }
 
 void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
@@ -130,6 +136,9 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 	LoadAccountList();
 
 	GetService()->Initialize();
+
+	InitializeRouteData();
+	InitializeSupplyData();
 }
 
 void Bot::Process()
@@ -1152,4 +1161,45 @@ std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareI
 	szCode = buffer;
 
 	return szCode;
+}
+
+void Bot::InitializeRouteData()
+{
+#ifdef DEBUG
+	printf("InitializeRouteData: Started\n");
+#endif
+
+	m_RouteManager = new RouteManager();
+	m_RouteManager->Load();
+
+#ifdef DEBUG
+	printf("InitializeRouteData: Finished\n");
+#endif
+}
+
+void Bot::InitializeSupplyData()
+{
+#ifdef DEBUG
+	printf("InitializeSupplyData: Started\n");
+#endif
+
+	try
+	{
+		std::ifstream ifSupply(
+			skCryptDec("data\\supply.json"));
+
+		m_jSupplyList = JSON::parse(ifSupply);
+	}
+	catch (const std::exception& e)
+	{
+#ifdef DEBUG
+		printf("%s\n", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
+#endif
+	}
+
+#ifdef DEBUG
+	printf("InitializeSupplyData: Finished\n");
+#endif
 }

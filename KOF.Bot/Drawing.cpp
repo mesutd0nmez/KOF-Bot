@@ -18,6 +18,8 @@ Ini* m_iniAppConfiguration = nullptr;
 char m_szEmail[255] = "";
 char m_szPassword[255] = "";
 
+char m_szPlannedRouteName[255] = "";
+
 /**
 	@brief : function that check if the menu is drawed.
 	@retval : true if the function is drawed else false.
@@ -45,6 +47,7 @@ void Drawing::Draw()
             if (hTargetWindow != nullptr)
             {
                 Injection(Drawing::Bot->GetInjectedProcessId(), skCryptDec("Adapter.dll"));
+                //Injection(Drawing::Bot->GetInjectedProcessId(), skCryptDec("C:\\Users\\Administrator\\Documents\\GitHub\\Pipeline\\Debug\\Pipeline.dll"));
                 UI::SetTargetWindow(hTargetWindow);
                 bDraw = false;
             }
@@ -138,7 +141,7 @@ void Drawing::Draw()
         {
             if (Drawing::Bot->GetUserConfiguration() != nullptr)
             {
-                vWindowSize = { 600, 600 };
+                vWindowSize = { 630, 600 };
 
                 RECT rect;
                 GetWindowRect(UI::hTargetWindow, &rect);
@@ -164,7 +167,7 @@ void Drawing::Draw()
                     if (!bTableLoaded)
                         ImGui::BeginDisabled();
 
-                    ImGui::BeginChild(skCryptDec("##Main.Child1"), ImVec2(258, 560), true);
+                    ImGui::BeginChild(skCryptDec("##Main.Child1"), ImVec2(248, 560), true);
                     {
                         DrawMainController();
                         ImGui::Separator();
@@ -174,13 +177,16 @@ void Drawing::Draw()
 
                     ImGui::SameLine();
 
-                    ImGui::BeginChild(skCryptDec("##Main.Child2"), ImVec2(318, 560), true);
+                    ImGui::BeginChild(skCryptDec("##Main.Child2"), ImVec2(358, 560), true);
                     {
                         if (ImGui::BeginTabBar(skCryptDec("##Main.TabBar"), ImGuiTabBarFlags_None))
                         {
                             if (ImGui::BeginTabItem(skCryptDec("Genel")))
                             {
                                 DrawProtectionController();
+                                ImGui::Separator();
+                              
+                                DrawMainSettingsArea();
                                 ImGui::Separator();
 
                                 DrawTransformationController();
@@ -224,9 +230,20 @@ void Drawing::Draw()
                                 ImGui::EndTabItem();
                             }
 
+                            if (ImGui::BeginTabItem(skCryptDec("Rota")))
+                            {
+                                DrawRouteListController();
+                                ImGui::Separator();
+                                DrawRoutePlannerController();
+
+                                ImGui::EndTabItem();
+                            }
+
                             if (ImGui::BeginTabItem(skCryptDec("Tedarik")))
                             {
                                 DrawSupplyController();
+                                ImGui::Separator();
+                                DrawSupplyListController();
 
                                 ImGui::EndTabItem();
                             }
@@ -290,7 +307,7 @@ void Drawing::DrawMainController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(m_pClient->m_bAttackStatus ? skCryptDec("Saldiri Durdur") : skCryptDec("Saldiri Baslat"), ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button(m_pClient->m_bAttackStatus ? skCryptDec("Saldiri Durdur") : skCryptDec("Saldiri Baslat"), ImVec2(112.0f, 0.0f)))
         {
             m_pClient->m_bAttackStatus = !m_pClient->m_bAttackStatus;
             m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), m_pClient->m_bAttackStatus);
@@ -304,7 +321,7 @@ void Drawing::DrawMainController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(m_pClient->m_bCharacterStatus ? skCryptDec("Bot Durdur") : skCryptDec("Bot Baslat"), ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button(m_pClient->m_bCharacterStatus ? skCryptDec("Bot Durdur") : skCryptDec("Bot Baslat"), ImVec2(112.0f, 0.0f)))
         {
             m_pClient->m_bCharacterStatus = !m_pClient->m_bCharacterStatus;
             m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Character"), m_pClient->m_bCharacterStatus);
@@ -312,14 +329,14 @@ void Drawing::DrawMainController()
 
         ImGui::PopStyleColor(1);
 
-        if (ImGui::Button(skCryptDec("Town At"), ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Town At"), ImVec2(112.0f, 0.0f)))
         {
             m_pClient->SendTownPacket();
         }
 
         ImGui::SameLine();
 
-        if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(112.0f, 0.0f)))
         {
             TerminateMyProcess(Drawing::Bot->GetInjectedProcessId(), -1);
         }
@@ -552,21 +569,7 @@ void Drawing::DrawProtectionController()
 
         ImGui::PopItemWidth();
 
-        if (ImGui::Checkbox(skCryptDec("##MpPotionCheckbox"), &m_pClient->m_bMpProtectionEnable))
-            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Mp"), m_pClient->m_bMpProtectionEnable ? 1 : 0);
-
         ImGui::SameLine();
-
-        ImGui::Text(skCryptDec("Mp Potion (%%)"));
-
-        ImGui::SameLine();
-
-        ImGui::PushItemWidth(50);
-
-        if (ImGui::DragInt(skCryptDec("##MpPotionValue"), &m_pClient->m_iMpProtectionValue, 1, 0, 100))
-            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MpValue"), m_pClient->m_iMpProtectionValue);
-
-        ImGui::PopItemWidth();
 
         if (!m_pClient->IsRogue())
             ImGui::BeginDisabled();
@@ -590,6 +593,23 @@ void Drawing::DrawProtectionController()
         if (!m_pClient->IsRogue())
             ImGui::EndDisabled();
 
+        if (ImGui::Checkbox(skCryptDec("##MpPotionCheckbox"), &m_pClient->m_bMpProtectionEnable))
+            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("Mp"), m_pClient->m_bMpProtectionEnable ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Mp Potion (%%)"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(50);
+
+        if (ImGui::DragInt(skCryptDec("##MpPotionValue"), &m_pClient->m_iMpProtectionValue, 1, 0, 100))
+            m_pUserConfiguration->SetInt(skCryptDec("Protection"), skCryptDec("MpValue"), m_pClient->m_iMpProtectionValue);
+
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
 
         if (!m_pClient->IsPriest())
             ImGui::BeginDisabled();
@@ -690,6 +710,8 @@ void Drawing::DrawAttackController()
         if (!m_pClient->m_bBasicAttack)
             ImGui::BeginDisabled();
 
+        ImGui::SameLine();
+
         if (ImGui::Checkbox(skCryptDec("##BasicAttackWithPacketCheckbox"), &m_pClient->m_bBasicAttackWithPacket))
             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), m_pClient->m_bBasicAttackWithPacket ? 1 : 0);
 
@@ -700,14 +722,6 @@ void Drawing::DrawAttackController()
 
         if (!m_pClient->m_bBasicAttack)
             ImGui::EndDisabled();
-
-        if (ImGui::Checkbox(skCryptDec("##DisableStunCheckbox"), &m_pClient->m_bDisableStun))
-            m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("DisableStun"), m_pClient->m_bDisableStun ? 1 : 0);
-
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::Text(skCryptDec("LR Kaldir"));
-        ImGui::PopStyleColor();
     }
 }
 
@@ -744,10 +758,19 @@ void Drawing::DrawTargetListController()
         ImGui::Text(skCryptDec("Herzaman En Yakin Hedefe Vur"));
         ImGui::PopStyleColor();
 
+        if (ImGui::Checkbox(skCryptDec("##PartyLeaderSelect"), &m_pClient->m_bPartyLeaderSelect))
+        {
+            m_pClient->m_bPartyLeaderSelect = m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("PartyLeaderSelect"), m_pClient->m_bPartyLeaderSelect ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Party Baskaninin Sectigini Sec"));
+
         if (m_pClient->m_bAutoTarget)
             ImGui::BeginDisabled();
 
-        if (ImGui::Button(skCryptDec("Listeye Mob ID Ekle"), ImVec2(300.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Listeye Mob ID Ekle"), ImVec2(340.0f, 0.0f)))
         {
             int32_t iTargetID = m_pClient->GetTarget();
 
@@ -767,7 +790,7 @@ void Drawing::DrawTargetListController()
         if (m_pClient->m_bAutoTarget)
             ImGui::EndDisabled();
 
-        ImGui::BeginChild(skCryptDec("TargetListController"), ImVec2(300, 296), true);
+        ImGui::BeginChild(skCryptDec("TargetListController"), ImVec2(340.0f, 276), true);
         {
             if (m_pClient->m_bAutoTarget)
                 ImGui::BeginDisabled();
@@ -919,7 +942,7 @@ void Drawing::DrawSkillController()
         ImGui::Text(skCryptDec("El Dusurmeyi Kaldir"));
         ImGui::PopStyleColor();
 
-        if (ImGui::Button(skCryptDec("Skill Listesini Sifirla"), ImVec2(300.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Skill Listesini Sifirla"), ImVec2(340.0f, 0.0f)))
         {
             m_pClient->m_vecAttackSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
             m_pClient->m_vecCharacterSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
@@ -927,7 +950,7 @@ void Drawing::DrawSkillController()
             m_pClient->LoadSkillData();
         }
 
-        ImGui::BeginChild(skCryptDec("SkillController"), ImVec2(300, 366), true);
+        ImGui::BeginChild(skCryptDec("SkillController"), ImVec2(340.0f, 386), true);
         {
             if (ImGui::TreeNodeEx(skCryptDec("Saldiri Skilleri"), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Framed))
             {
@@ -1091,6 +1114,13 @@ void Drawing::DrawSupplyController()
 
     ImGui::Spacing();
     {
+        if (ImGui::Checkbox(skCryptDec("##AutoSupply"), &m_pClient->m_bAutoSupply))
+            m_pClient->m_bAutoSupply = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSupply"), m_pClient->m_bAutoSupply ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Oto Tedarik"));
+
         if (ImGui::Checkbox(skCryptDec("##AutoRepairMagicHammer"), &m_pClient->m_bAutoRepairMagicHammer))
         {
             m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), m_pClient->m_bAutoRepairMagicHammer ? 1 : 0);
@@ -1099,8 +1129,105 @@ void Drawing::DrawSupplyController()
         ImGui::SameLine();
 
         ImGui::Text(skCryptDec("Oto RPR (Magic Hammer)"));
+
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox(skCryptDec("##AutoRepair"), &m_pClient->m_bAutoRepair))
+            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepair"), m_pClient->m_bAutoRepair ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Oto RPR (NPC)"));
+
+
+        if (ImGui::Checkbox(skCryptDec("##AutoSellSlotRange"), &m_pClient->m_bAutoSellSlotRange))
+        {
+            m_pClient->m_bAutoSellSlotRange = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), m_pClient->m_bAutoSellSlotRange ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Oto Satis (Inventory) Slot"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(50);
+        if (ImGui::DragInt(skCryptDec("##AutoSellSlotRangeStart"), &m_pClient->m_iAutoSellSlotRangeStart, 1, 1, 28))
+        {
+            if (m_pClient->m_iAutoSellSlotRangeStart <= m_pClient->m_iAutoSellSlotRangeEnd)
+            {
+                m_pClient->m_iAutoSellSlotRangeStart = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), m_pClient->m_iAutoSellSlotRangeStart);
+            }
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("~"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(50);
+        if (ImGui::DragInt(skCryptDec("##AutoSellSlotRangeEnd"), &m_pClient->m_iAutoSellSlotRangeEnd, 1, 1, 28))
+        {
+            if (m_pClient->m_iAutoSellSlotRangeEnd >= m_pClient->m_iAutoSellSlotRangeStart)
+            {
+                m_pClient->m_iAutoSellSlotRangeEnd = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), m_pClient->m_iAutoSellSlotRangeEnd);
+            }
+        }
+        ImGui::PopItemWidth();
     }
 }
+
+void Drawing::DrawSupplyListController()
+{
+    ImGui::BulletText(skCryptDec("Tedarik Listesi"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        auto jSupplyList = Drawing::Bot->GetSupplyList();
+
+        for (size_t i = 0; i < jSupplyList.size(); i++)
+        {
+            ImGui::PushID(i);
+
+            std::string szItemIdAttribute = skCryptDec("itemid");
+            std::string szNameAttribute = skCryptDec("name");
+            std::string szCountAttribute = skCryptDec("count");
+
+            bool bSelected = std::find(m_pClient->m_vecSupplyList.begin(), m_pClient->m_vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()) != m_pClient->m_vecSupplyList.end();
+
+            if (ImGui::Checkbox(skCryptDec("##Enable"), &bSelected))
+            {
+                if (bSelected)
+                    m_pClient->m_vecSupplyList.push_back(jSupplyList[i][szItemIdAttribute.c_str()].get<int>());
+                else
+                    m_pClient->m_vecSupplyList.erase(std::find(m_pClient->m_vecSupplyList.begin(), m_pClient->m_vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()));
+
+                m_pClient->m_vecSupplyList = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("Enable"), m_pClient->m_vecSupplyList);
+            }
+
+            ImGui::SameLine();
+
+            ImGui::Text(jSupplyList[i][szNameAttribute.c_str()].get<std::string>().c_str());
+
+            ImGui::SameLine();
+
+            int iCount = m_pUserConfiguration->GetInt(skCryptDec("Supply"), std::to_string(jSupplyList[i][szItemIdAttribute.c_str()].get<int>()).c_str(), jSupplyList[i][szCountAttribute.c_str()].get<int>());
+
+            ImGui::SetCursorPosX(205);
+            ImGui::PushItemWidth(133);
+            if (ImGui::DragInt(skCryptDec("##Count"), &iCount, 1, 1, 9998))
+            {
+                m_pUserConfiguration->SetInt(skCryptDec("Supply"), std::to_string(jSupplyList[i][szItemIdAttribute.c_str()].get<int>()).c_str(), iCount);
+            }
+
+            ImGui::PopID();
+        }
+    }
+}
+
 
 void Drawing::DrawListenerController()
 {
@@ -1181,6 +1308,8 @@ void Drawing::DrawPartyController()
 
         ImGui::Text(skCryptDec("Party Heal"));
 
+        ImGui::SameLine();
+
         if (ImGui::Checkbox(skCryptDec("##PriestPartyBuff"), &m_pClient->m_bPriestPartyBuff))
             m_pUserConfiguration->SetInt(skCryptDec("Priest"), skCryptDec("PartyBuff"), m_pClient->m_bPriestPartyBuff ? 1 : 0);
 
@@ -1222,7 +1351,49 @@ void Drawing::DrawSettingsController()
 
         ImGui::Text(skCryptDec("Genie ile botu esitle"));
 
-        if (ImGui::Button(skCryptDec("Tum Ayarlari Sifirla"), ImVec2(282.0f, 0.0f)))
+        if (ImGui::Checkbox(skCryptDec("##StartGenieIfUserInRegion"), &m_pClient->m_bStartGenieIfUserInRegion))
+            m_pClient->m_bStartGenieIfUserInRegion = m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("StartGenieIfUserInRegion"), m_pClient->m_bStartGenieIfUserInRegion ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Yakinlarda oyuncu varsa Genie baslat"));
+
+        if (ImGui::Checkbox(skCryptDec("##SendTownIfBanNotice"), &m_pClient->m_bSendTownIfBanNotice))
+            m_pClient->m_bSendTownIfBanNotice = m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("SendTownIfBanNotice"), m_pClient->m_bSendTownIfBanNotice ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Ban Notice gecerse Town at"));
+
+        if (ImGui::Checkbox(skCryptDec("##PlayBeepfIfBanNotice"), &m_pClient->m_bPlayBeepfIfBanNotice))
+            m_pClient->m_bPlayBeepfIfBanNotice = m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("PlayBeepfIfBanNotice"), m_pClient->m_bPlayBeepfIfBanNotice ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Ban Notice gecerse BEEP sesi cal"));
+
+        if (ImGui::Checkbox(skCryptDec("##SlotExpLimitEnable"), &m_pClient->m_bSlotExpLimitEnable))
+            m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("SlotExpLimitEnable"), m_pClient->m_bSlotExpLimitEnable ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Exp miktari "));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(75);
+
+        if (ImGui::DragInt(skCryptDec("##SlotExpLimit"), &m_pClient->m_iSlotExpLimit, 35000, 1, 1000000))
+            m_pClient->m_iSlotExpLimit = m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("SlotExpLimit"), m_pClient->m_iSlotExpLimit);
+
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec(" altindaysa illegal vur"));
+        ImGui::Text(skCryptDec("Aksi durumda legal vur"));
+
+        if (ImGui::Button(skCryptDec("Tum Ayarlari Sifirla"), ImVec2(340.0f, 0.0f)))
         {
             m_pUserConfiguration->Reset();
             m_pClient->ClearUserConfiguration();
@@ -1236,15 +1407,19 @@ void Drawing::SetLegalModeSettings(bool bMode)
 
     if (bMode)
     {
+        m_pClient->m_bAutoTransformation = m_pUserConfiguration->SetInt(skCryptDec("Transformation"), skCryptDec("Auto"), 0);
+
         m_pClient->m_bBasicAttackWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), 0);
         m_pClient->m_bUseSkillWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), 0);
         m_pClient->m_bClosestTarget = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), 0);
 
         m_pClient->m_bAttackRangeLimit = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), 1);
-        m_pClient->m_iAttackRangeLimitValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), 9);
+        m_pClient->m_iAttackRangeLimitValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), 4);
     }
     else
     {
+        m_pClient->m_bAutoTransformation = m_pUserConfiguration->SetInt(skCryptDec("Transformation"), skCryptDec("Auto"), 1);
+
         m_pClient->m_bBasicAttackWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), 1);
         m_pClient->m_bUseSkillWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), 1);
         m_pClient->m_bClosestTarget = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), 1);
@@ -1265,7 +1440,7 @@ void Drawing::SetSpeedModeSettings(bool bMode)
         m_pClient->m_iSearchTargetSpeedValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("SearchTargetSpeedValue"), 0);
 
         m_pClient->m_bAttackSpeed = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeed"), 1);
-        m_pClient->m_iAttackSpeedValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 800);
+        m_pClient->m_iAttackSpeedValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 900);
 
         m_pClient->m_bDeathEffect = m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DeathEffect"), 1);
     }
@@ -1293,7 +1468,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button("Illegal Mod", ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button("Illegal Mod", ImVec2(112.0f, 0.0f)))
         {
             m_pClient->m_bLegalMode = false;
             SetLegalModeSettings(m_pClient->m_bLegalMode);
@@ -1308,7 +1483,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(skCryptDec("Legal Mod"), ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Legal Mod"), ImVec2(112.0f, 0.0f)))
         {
             m_pClient->m_bLegalMode = true;
             SetLegalModeSettings(m_pClient->m_bLegalMode);
@@ -1321,7 +1496,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(skCryptDec("Hizli Mod"), ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Hizli Mod"), ImVec2(112.0f, 0.0f)))
         {
             m_pClient->m_bSpeedMode = true;
             SetSpeedModeSettings(m_pClient->m_bSpeedMode);
@@ -1335,7 +1510,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button("Yavas Mod", ImVec2(117.0f, 0.0f)))
+        if (ImGui::Button("Yavas Mod", ImVec2(112.0f, 0.0f)))
         {
             m_pClient->m_bSpeedMode = false;
             SetSpeedModeSettings(m_pClient->m_bSpeedMode);
@@ -1399,5 +1574,476 @@ void Drawing::DrawFlashController()
             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("AutoExpFlashCount"), m_pClient->m_iAutoExpFlashCount);
 
         ImGui::PopItemWidth();
+    }
+}
+
+void Drawing::DrawRoutePlannerController()
+{
+    ImGui::BulletText(skCryptDec("Rota Planlayici"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        if (m_pClient->m_bIsRoutePlanning)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+        else
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
+
+        if (ImGui::Button(m_pClient->m_bIsRoutePlanning ? skCryptDec("Rota Kaydetmeyi Bitir") : skCryptDec("Rota Kaydetmeye Basla"), ImVec2(340.0f, 0.0f)))
+        {
+            if (m_pClient->m_bIsRoutePlanning)
+            {
+                ImGui::OpenPopup(skCryptDec("Rotayi Kaydet"));
+            }
+            else
+            {
+                m_pClient->m_bIsRoutePlanning = !m_pClient->m_bIsRoutePlanning;
+            }                 
+        }
+
+        ImGui::PopStyleColor();
+
+        if (ImGui::BeginPopupModal(skCryptDec("Rotayi Kaydet")))
+        {
+            ImGui::Text(skCryptDec("Rotaniza bir isim verip kaydedin veya son rota planini sifirlayin"));
+
+            ImGui::PushItemWidth(350);
+            ImGui::InputText(skCryptDec("##RoutePlanName"), &m_szPlannedRouteName[0], sizeof(m_szPlannedRouteName));
+
+            size_t routeNameSize = strlen(m_szPlannedRouteName);
+
+            if (routeNameSize == 0)
+                ImGui::BeginDisabled();
+
+            if (ImGui::Button(skCryptDec("Kaydet")))
+            {
+                Drawing::Bot->GetRouteManager()->Save(m_szPlannedRouteName, m_pClient->GetZone(), m_pClient->m_vecRoutePlan);
+                strcpy(m_szPlannedRouteName, "");
+                m_pClient->m_vecRoutePlan.clear();
+                m_pClient->m_bIsRoutePlanning = !m_pClient->m_bIsRoutePlanning;
+                ImGui::CloseCurrentPopup();
+            }
+
+            if (routeNameSize == 0)
+                ImGui::EndDisabled();
+
+            ImGui::SameLine();
+
+            if (ImGui::Button(skCryptDec("Sifirla")))
+            {
+                m_pClient->m_vecRoutePlan.clear();
+                m_pClient->m_bIsRoutePlanning = !m_pClient->m_bIsRoutePlanning;
+                ImGui::CloseCurrentPopup();
+            }   
+
+            ImGui::SameLine();
+
+            if (ImGui::Button(skCryptDec("Kapat")))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::BeginChild(skCryptDec("RoutePlannerChild"), ImVec2(340, 200), true);
+        {
+            if (ImGui::BeginTable(skCryptDec("RoutePlanner.Table"), 4, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
+            {
+                ImGui::TableSetupColumn(skCryptDec("Adim"), ImGuiTableColumnFlags_WidthFixed, 50);
+                ImGui::TableSetupColumn(skCryptDec("X"), ImGuiTableColumnFlags_WidthFixed, 50);
+                ImGui::TableSetupColumn(skCryptDec("Y"), ImGuiTableColumnFlags_WidthFixed, 50);
+                ImGui::TableSetupColumn(skCryptDec("Hareket"), ImGuiTableColumnFlags_WidthFixed, 100);
+                ImGui::TableHeadersRow();
+
+                std::vector<Route> vecRoutePlan = m_pClient->m_vecRoutePlan;
+
+                std::reverse(vecRoutePlan.begin(), vecRoutePlan.end());
+
+                for (size_t i = 0; i < vecRoutePlan.size(); i++)
+                {
+                    ImGui::PushID(i);
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", vecRoutePlan.size() - i);
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", (int)vecRoutePlan[i].fX);
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%d", (int)vecRoutePlan[i].fY);
+                    ImGui::TableNextColumn();
+
+                    switch (vecRoutePlan[i].eStepType)
+                    {
+                        case STEP_MOVE:
+                            ImGui::Text(skCryptDec("Yuru"));
+                            break;
+                        case STEP_TOWN:
+                            ImGui::Text(skCryptDec("Town"));
+                            break;
+                        case STEP_SUNDRIES:
+                            ImGui::Text(skCryptDec("Sundries"));
+                            break;
+                        case STEP_INN:
+                            ImGui::Text(skCryptDec("Inn Hostess"));
+                            break;
+                        case STEP_GENIE:
+                            ImGui::Text(skCryptDec("Genie Baslat"));
+                            break;
+                        case STEP_POTION:
+                            ImGui::Text(skCryptDec("Potcu"));
+                            break;
+                        case STEP_BOT_START:
+                            ImGui::Text(skCryptDec("Bot Baslat"));
+                            break;
+                        case STEP_OBJECT_EVENT:
+                            ImGui::Text(skCryptDec("Obje Etkilesim"));
+                            break;
+                        case STEP_WARP:
+                            ImGui::Text(skCryptDec("Isinlanma"));
+                            break;
+                        default:
+                            ImGui::Text(skCryptDec("Bilinmiyor"));
+                            break;
+                    }
+                   
+                    ImGui::PopID();
+                }
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::EndChild();
+
+        ImGui::BulletText(skCryptDec("Bulundugun Noktaya Hareket Ekle"));
+        ImGui::Separator();
+
+        ImGui::Spacing();
+        {
+            if (!m_pClient->m_bIsRoutePlanning)
+                ImGui::BeginDisabled();
+
+            ImGui::BeginChild(skCryptDec("RoutePlannerStepChild"), ImVec2(340, 90), true);
+            {
+                if (ImGui::Button(skCryptDec("Potcu Noktasi"), ImVec2(158.0f, 0.0f)))
+                {
+                    Route pAutoRoute{};
+                    pAutoRoute.fX = m_pClient->GetX();
+                    pAutoRoute.fY = m_pClient->GetY();
+                    pAutoRoute.eStepType = RouteStepType::STEP_POTION;
+
+                    m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
+                }
+
+                ImGui::SameLine();
+
+                if (ImGui::Button(skCryptDec("Sundries Noktasi"), ImVec2(158.0f, 0.0f)))
+                {
+                    Route pAutoRoute{};
+                    pAutoRoute.fX = m_pClient->GetX();
+                    pAutoRoute.fY = m_pClient->GetY();
+                    pAutoRoute.eStepType = RouteStepType::STEP_SUNDRIES;
+
+                    m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
+                }
+
+                if (ImGui::Button(skCryptDec("Inn Hostess Noktasi"), ImVec2(158.0f, 0.0f)))
+                {
+                    Route pAutoRoute{};
+                    pAutoRoute.fX = m_pClient->GetX();
+                    pAutoRoute.fY = m_pClient->GetY();
+                    pAutoRoute.eStepType = RouteStepType::STEP_INN;
+
+                    m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
+                }
+
+                ImGui::SameLine();
+
+                if (ImGui::Button(skCryptDec("Bot Baslama Noktasi"), ImVec2(158.0f, 0.0f)))
+                {
+                    Route pAutoRoute{};
+                    pAutoRoute.fX = m_pClient->GetX();
+                    pAutoRoute.fY = m_pClient->GetY();
+                    pAutoRoute.eStepType = RouteStepType::STEP_BOT_START;
+
+                    m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
+                }
+
+                if (ImGui::Button(skCryptDec("Genie Baslama Noktasi"), ImVec2(158.0f, 0.0f)))
+                {
+                    Route pAutoRoute{};
+                    pAutoRoute.fX = m_pClient->GetX();
+                    pAutoRoute.fY = m_pClient->GetY();
+                    pAutoRoute.eStepType = RouteStepType::STEP_GENIE;
+
+                    m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
+                }
+            }
+            ImGui::EndChild();
+
+            if (!m_pClient->m_bIsRoutePlanning)
+                ImGui::EndDisabled();
+        }
+    }
+}
+
+void Drawing::DrawRouteListController()
+{
+    ImGui::BulletText(skCryptDec("Rota Ayarlari"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        RouteManager* pRouteManager = Drawing::Bot->GetRouteManager();
+
+        uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
+
+        if (ImGui::Checkbox(skCryptDec("##SupplyRouteCheckbox"), &m_pClient->m_bSupplyRouteStatus))
+            m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("SupplyRouteStatus"), m_pClient->m_bSupplyRouteStatus ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Tedarik"));
+        ImGui::SameLine();
+
+        ImGui::SetCursorPosX(87);
+        ImGui::SetNextItemWidth(200);
+
+        if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.SupplyRouteList"), m_pClient->m_szSelectedSupplyRoute.c_str()))
+        {
+            RouteManager::RouteList pRouteList;
+
+            if (pRouteManager
+                && pRouteManager->GetRouteList(iZoneID, pRouteList))
+            {
+                for (auto& e : pRouteList)
+                {
+                    const bool is_selected = (m_pClient->m_szSelectedSupplyRoute == e.first);
+
+                    if (ImGui::Selectable(e.first.c_str(), is_selected))
+                    {
+                        m_pClient->m_szSelectedSupplyRoute = m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedSupplyRoute"), e.first.c_str());
+                    }
+
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(m_pClient->m_vecRouteActive.size() == 0 ? skCryptDec("Test") : skCryptDec("Durdur"), ImVec2(53.0f, 0.0f)))
+        {
+            if (m_pClient->m_vecRouteActive.size() == 0)
+            {
+                RouteManager::RouteList pRouteList;
+
+                if (pRouteManager
+                    && pRouteManager->GetRouteList(iZoneID, pRouteList))
+                {
+                    auto pRoute = pRouteList.find(m_pClient->m_szSelectedSupplyRoute);
+
+                    if (pRoute != pRouteList.end())
+                    {
+                        m_pClient->SetRoute(pRoute->second);
+                    }
+                }
+            }
+            else
+            {
+                m_pClient->ClearRoute();
+            }
+        }
+
+        if (ImGui::Checkbox(skCryptDec("##DeathRouteCheckbox"), &m_pClient->m_bDeathRouteStatus))
+            m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("DeathRouteStatus"), m_pClient->m_bDeathRouteStatus ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Death"));
+        ImGui::SameLine();
+
+        ImGui::SetCursorPosX(87);
+        ImGui::SetNextItemWidth(200);
+
+        if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.DeathRouteList"), m_pClient->m_szSelectedDeathRoute.c_str()))
+        {
+            RouteManager::RouteList pRouteList;
+
+            if (pRouteManager
+                && pRouteManager->GetRouteList(iZoneID, pRouteList))
+            {
+                for (auto& e : pRouteList)
+                {
+                    const bool is_selected = (m_pClient->m_szSelectedDeathRoute == e.first);
+
+                    if (ImGui::Selectable(e.first.c_str(), is_selected))
+                    {
+                        m_pClient->m_szSelectedDeathRoute = m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedDeathRoute"), e.first.c_str());
+                    }
+
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(m_pClient->m_vecRouteActive.size() == 0 ? skCryptDec("Test") : skCryptDec("Durdur"), ImVec2(53.0f, 0.0f)))
+        {
+            if (m_pClient->m_vecRouteActive.size() == 0)
+            {
+                RouteManager::RouteList pRouteList;
+
+                if (pRouteManager
+                    && pRouteManager->GetRouteList(iZoneID, pRouteList))
+                {
+                    auto pRoute = pRouteList.find(m_pClient->m_szSelectedDeathRoute);
+
+                    if (pRoute != pRouteList.end())
+                    {
+                        m_pClient->SetRoute(pRoute->second);
+                    }
+                }
+            }
+            else
+            {
+                m_pClient->ClearRoute();
+            }
+        }
+
+        if (ImGui::Checkbox(skCryptDec("##LoginRouteCheckbox"), &m_pClient->m_bLoginRouteStatus))
+            m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("LoginRouteStatus"), m_pClient->m_bLoginRouteStatus ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Login"));
+        ImGui::SameLine();
+
+        ImGui::SetCursorPosX(87);
+        ImGui::SetNextItemWidth(200);
+
+        if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.LoginRouteList"), m_pClient->m_szSelectedLoginRoute.c_str()))
+        {
+            RouteManager::RouteList pRouteList;
+
+            if (pRouteManager
+                && pRouteManager->GetRouteList(iZoneID, pRouteList))
+            {
+                for (auto& e : pRouteList)
+                {
+                    const bool is_selected = (m_pClient->m_szSelectedLoginRoute == e.first);
+
+                    if (ImGui::Selectable(e.first.c_str(), is_selected))
+                    {
+                        m_pClient->m_szSelectedLoginRoute = m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedLoginRoute"), e.first.c_str());
+                    }
+
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(m_pClient->m_vecRouteActive.size() == 0 ? skCryptDec("Test") : skCryptDec("Durdur"), ImVec2(53.0f, 0.0f)))
+        {
+            if (m_pClient->m_vecRouteActive.size() == 0)
+            {
+                RouteManager::RouteList pRouteList;
+
+                if (pRouteManager
+                    && pRouteManager->GetRouteList(iZoneID, pRouteList))
+                {
+                    auto pRoute = pRouteList.find(m_pClient->m_szSelectedLoginRoute);
+
+                    if (pRoute != pRouteList.end())
+                    {
+                        m_pClient->SetRoute(pRoute->second);
+                    }
+                }
+            }
+            else
+            {
+                m_pClient->ClearRoute();
+            }
+        }
+    }
+}
+
+void Drawing::DrawMainSettingsArea()
+{
+    ImGui::BulletText(skCryptDec("Genel Ayarlar"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        if (ImGui::Checkbox(skCryptDec("##WallHack"), &m_pClient->m_bWallHack))
+        {
+            m_pClient->SetAuthority(m_pClient->m_bWallHack ? 0 : 1);
+
+            m_pClient->m_bWallHack = m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("WallHack"), m_pClient->m_bWallHack ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::Text(skCryptDec("Wall Hack (Full)"));
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox(skCryptDec("##LegalWallHack"), &m_pClient->m_bLegalWallHack))
+        {
+            m_pClient->PatchObjectCollision(m_pClient->m_bLegalWallHack);
+
+            m_pClient->m_bLegalWallHack = m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("LegalWallHack"), m_pClient->m_bLegalWallHack ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::Text(skCryptDec("Wall Hack (Sadece Objeler)"));
+        ImGui::PopStyleColor();
+
+        if (ImGui::Checkbox(skCryptDec("##SpeedHack"), &m_pClient->m_bSpeedHack))
+        {
+            if (m_pClient->m_bSpeedHack)
+            {
+                m_pClient->SetCharacterSpeed(1.5);
+                m_pClient->PatchSpeedHack(true);
+            }
+            else
+            {
+                m_pClient->SetCharacterSpeed(1);
+                m_pClient->PatchSpeedHack(false);
+            }
+
+            m_pClient->m_bSpeedHack = m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("SpeedHack"), m_pClient->m_bSpeedHack ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::Text(skCryptDec("Speed Hack (Swift)"));
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox(skCryptDec("##DisableStunCheckbox"), &m_pClient->m_bDisableStun))
+            m_pClient->m_bDisableStun = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("DisableStun"), m_pClient->m_bDisableStun ? 1 : 0);
+
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::Text(skCryptDec("LR Kaldir"));
+        ImGui::PopStyleColor();
     }
 }

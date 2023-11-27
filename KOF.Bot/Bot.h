@@ -150,5 +150,21 @@ private:
 
 public:
 	bool IsAuthenticated() { return m_bAuthenticated; };
+
+protected:
+	void InitializeRouteData();
+	void InitializeSupplyData();
+
+public:
+	RouteManager* GetRouteManager() { return m_RouteManager; };
+
+private:
+	RouteManager* m_RouteManager;
+
+public:
+	JSON GetSupplyList() { return m_jSupplyList; };
+
+protected:
+	JSON m_jSupplyList;
 };
 
