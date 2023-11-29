@@ -166,5 +166,11 @@ public:
 
 protected:
 	JSON m_jSupplyList;
+
+public:
+	std::chrono::time_point<std::chrono::system_clock> m_startTime;
+
+public:
+	std::map<uint32_t, __TABLE_ITEM>* m_mapItemTable;
 };
 

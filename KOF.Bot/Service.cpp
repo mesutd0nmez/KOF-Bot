@@ -39,7 +39,7 @@ void Service::Initialize()
     m_szToken = m_iniAppConfiguration->GetString(skCryptDec("Internal"), skCryptDec("Token"), m_szToken.c_str());
 
 #ifdef DEBUG
-    Connect(skCryptDec("watchdog.kofbot.com"), 8888);
+    Connect(skCryptDec("127.0.0.1"), 8888);
 #else
     Connect(skCryptDec("watchdog.kofbot.com"), 8888);
 #endif 
@@ -110,18 +110,18 @@ void Service::HandlePacket(Packet& pkt)
 
             switch (iType)
             {
-            case LoginType::GENERIC:
-            {
-                if (iStatus == 1)
+                case LoginType::GENERIC:
                 {
-                    std::string szToken;
+                    if (iStatus == 1)
+                    {
+                        std::string szToken;
 
-                    pkt >> szToken;
+                        pkt >> szToken;
 
-                    m_szToken = m_iniAppConfiguration->SetString(skCryptDec("Internal"), skCryptDec("Token"), szToken.c_str());
+                        m_szToken = m_iniAppConfiguration->SetString(skCryptDec("Internal"), skCryptDec("Token"), szToken.c_str());
+                    }
                 }
-            }
-            break;
+                break;
             }
 
             if (iStatus == 1)

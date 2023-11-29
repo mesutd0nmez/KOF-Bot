@@ -74,14 +74,13 @@ private:
 	void PotionProcess();
 	void CharacterProcess();
 
-	void PartySwiftProcess();
-	void PriestCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false, uint16_t iMaxHp = 0, uint16_t iHp = 0);
-
 	bool HealthPotionProcess();
 	bool ManaPotionProcess();
 
 	void RouteProcess();
 	void SupplyProcess();
+	void StatisticsProcess();
+	void RemoveItemProcess();
 
 	void LevelDownerProcess();
 
@@ -90,9 +89,6 @@ private:
 
 	void TransformationProcess();
 	void FlashProcess();
-	void PartyProcess();
-
-	void VipWarehouseProcess();
 
 	void RegionProcess();
 
@@ -116,11 +112,6 @@ protected:
 	std::chrono::milliseconds m_msLastSelectedTargetTime;
 
 public:
-	void Test1();
-	void Test2();
-	void Test3();
-
-public:
 	int GetRegionUserCount(bool bExceptPartyMember = false);
 
 protected:
@@ -141,6 +132,11 @@ protected:
 	float m_fLastMoveToTargetProcessTime;
 	float m_fLastLootRequestTime;
 	float m_fLastPotionProcessTime;
+	float m_fLastStatisticsProcessTime;
+	float m_fLastRemoveItemProcessTime;
+	float m_fLastLevelDownerProcessTime;
+	float m_fLastSupplyProcessTime;
+	float m_fLastRouteProcessTime;
 
 protected:
 	int32_t PartyMemberNeedSwift();
@@ -154,7 +150,7 @@ public:
 	bool m_bAttackSpeed;
 	int m_iAttackSpeedValue;
 	bool m_bAttackStatus;
-	std::vector<int> m_vecAttackSkillList;
+	std::unordered_set<int> m_vecAttackSkillList;
 	bool m_bCharacterStatus;
 	bool m_bSearchTargetSpeed;
 	int m_iSearchTargetSpeedValue;
@@ -162,13 +158,13 @@ public:
 	bool m_bAutoTarget;
 	bool m_bRangeLimit;
 	int m_iRangeLimitValue;
-	std::vector<int> m_vecSelectedNpcList;
-	std::vector<int> m_vecSelectedNpcIDList;
+	std::unordered_set<int> m_vecSelectedNpcList;
+	std::unordered_set<int> m_vecSelectedNpcIDList;
 	bool m_bMoveToTarget;
 	bool m_bDisableStun;
 	bool m_bStartGenieIfUserInRegion;
 
-	std::vector<int> m_vecCharacterSkillList;
+	std::unordered_set<int> m_vecCharacterSkillList;
 	bool m_bPartySwift;
 	bool m_bPriestPartyHeal;
 	bool m_bHealProtection;
@@ -219,9 +215,9 @@ public:
 	bool m_bTeleportRequest;
 	std::string m_szTeleportRequestMessage;
 
-	bool m_bTownStopBot = true;
-	bool m_bTownOrTeleportStopBot = false;
-	bool m_bSyncWithGenie = false;
+	bool m_bTownStopBot;
+	bool m_bTownOrTeleportStopBot;
+	bool m_bSyncWithGenie;
 
 	bool m_bLegalMode;
 	bool m_bSpeedMode;
@@ -245,17 +241,38 @@ public:
 
 	bool m_bAutoRepair;
 
-	bool m_bAutoSellSlotRange;
-	int m_iAutoSellSlotRangeStart;
-	int m_iAutoSellSlotRangeEnd;
-
-	std::vector<int> m_vecSupplyList;
+	std::unordered_set<int> m_vecSupplyList;
 
 	bool m_bAutoSupply;
 
 	int m_iSlotExpLimit;
 	bool m_bSlotExpLimitEnable;
 	bool m_bPartyLeaderSelect;
+
+	std::unordered_set<int> m_vecLootItemList;
+	std::unordered_set<int> m_vecSellItemList;
+	std::unordered_set<int> m_vecInnItemList;
+	std::unordered_set<int> m_vecDeleteItemList;
+
+	int m_iLootType;
+	bool m_bMinPriceLootEnable;
+
+	uint32_t m_iStartCoin;
+	uint64_t m_iCoinCounter;
+	uint64_t m_iExpCounter;
+
+	uint64_t m_iEveryMinuteCoinPrevCounter;
+	uint64_t m_iEveryMinuteCoinCounter;
+	uint64_t m_iEveryMinuteExpPrevCounter;
+	uint64_t m_iEveryMinuteExpCounter;
+
+	bool m_bHidePlayer;
+
+	bool m_bLevelDownerEnable;
+	int m_iLevelDownerNpcId;
+	bool m_bLevelDownerLevelLimitEnable;
+	int m_iLevelDownerLevelLimit;
+	bool m_bLevelDownerStopNearbyPlayer;
 
 public:
 	void InitializeUserConfiguration();
@@ -273,18 +290,15 @@ protected:
 	std::queue<TABLE_UPC_SKILL> m_qAttackSkillQueue;
 
 public:
-		void SetRoute(std::vector<Route> vecRoute);
-		bool IsRouting() { return m_vecRouteActive.size() > 0; };
-		RouteStepType GetRouteStep() { return m_iRouteStep; };
-		void ClearRoute();
-		bool m_bIsRoutePlanning;
-
-protected:
-	RouteStepType m_iRouteStep;
+	void SetRoute(std::vector<Route> vecRoute);
+	bool IsRouting() { return m_vecRouteActive.size() > 0; };
+	void ClearRoute();
+	bool m_bIsRoutePlanning;
 
 public:
 	std::vector<Route> m_vecRouteActive;
 	std::vector<Route> m_vecRoutePlan;
+	Route* m_pCurrentRunningRoute;
 
 protected:
 	bool m_bRouteWarpListLoaded;

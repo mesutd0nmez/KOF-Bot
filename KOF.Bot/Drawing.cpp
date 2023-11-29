@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "Drawing.h"
 #include "ClientHandler.h"
+#include <algorithm>
+#include <cstring>
+#include <iostream>
 
 LPCSTR Drawing::lpWindowName = "   ";
 ImVec2 Drawing::vWindowSize = { 0, 0 };
@@ -19,6 +22,10 @@ char m_szEmail[255] = "";
 char m_szPassword[255] = "";
 
 char m_szPlannedRouteName[255] = "";
+
+char m_szItemSearchName[255] = "";
+
+int m_iInventoryManagementWindow = 0;
 
 /**
 	@brief : function that check if the menu is drawed.
@@ -141,7 +148,7 @@ void Drawing::Draw()
         {
             if (Drawing::Bot->GetUserConfiguration() != nullptr)
             {
-                vWindowSize = { 630, 600 };
+                vWindowSize = { 800, 650 };
 
                 RECT rect;
                 GetWindowRect(UI::hTargetWindow, &rect);
@@ -167,9 +174,13 @@ void Drawing::Draw()
                     if (!bTableLoaded)
                         ImGui::BeginDisabled();
 
-                    ImGui::BeginChild(skCryptDec("##Main.Child1"), ImVec2(248, 560), true);
+                    ImGui::BeginChild(skCryptDec("##Main.Child1"), ImVec2(288, 610), true);
                     {
+
                         DrawMainController();
+                        ImGui::Separator();
+                        DrawStatisticsController();
+                       
                         ImGui::Separator();
                         DrawModeController();
                     }
@@ -177,7 +188,7 @@ void Drawing::Draw()
 
                     ImGui::SameLine();
 
-                    ImGui::BeginChild(skCryptDec("##Main.Child2"), ImVec2(358, 560), true);
+                    ImGui::BeginChild(skCryptDec("##Main.Child2"), ImVec2(488, 610), true);
                     {
                         if (ImGui::BeginTabBar(skCryptDec("##Main.TabBar"), ImGuiTabBarFlags_None))
                         {
@@ -192,13 +203,19 @@ void Drawing::Draw()
                                 DrawTransformationController();
                                 ImGui::Separator();
 
-                                DrawAutoLootController();
-
-                                ImGui::Separator();
                                 DrawPartyController();
-
                                 ImGui::Separator();
+
                                 DrawFlashController();
+                                ImGui::Separator();
+
+                                DrawSizeController();
+                                ImGui::Separator();
+
+                                DrawSaveCPUController();
+                                ImGui::Separator();
+
+                                DrawListenerController();
 
                                 ImGui::EndTabItem();
                             }
@@ -239,6 +256,15 @@ void Drawing::Draw()
                                 ImGui::EndTabItem();
                             }
 
+                            if (ImGui::BeginTabItem(skCryptDec("Item")))
+                            {
+                                DrawAutoLootController();
+                                ImGui::Separator();
+                                DrawItemListController();
+
+                                ImGui::EndTabItem();
+                            }
+
                             if (ImGui::BeginTabItem(skCryptDec("Tedarik")))
                             {
                                 DrawSupplyController();
@@ -250,11 +276,17 @@ void Drawing::Draw()
 
                             if (ImGui::BeginTabItem(skCryptDec("Sistem")))
                             {
-                                DrawSaveCPUController();
-                                ImGui::Separator();
-                                DrawListenerController();
-                                ImGui::Separator();
                                 DrawSettingsController();
+
+                                ImGui::EndTabItem();
+                            }
+
+                            if (ImGui::BeginTabItem(skCryptDec("Ekstra")))
+                            {
+                                DrawExtraController();
+                                ImGui::Separator();
+
+                                DrawLevelDownerController();
 
                                 ImGui::EndTabItem();
                             }
@@ -295,6 +327,107 @@ void Drawing::DrawFilledRectangle(const int x, const int y, const int w, const i
 	pD3DDevice->Clear(1, &BarRect, D3DCLEAR_TARGET | D3DCLEAR_TARGET, rectColor, 0, 0);
 }
 
+void Drawing::DrawStatisticsController()
+{
+    ImGui::BulletText(skCryptDec("Kontrol Paneli"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        ImGui::Text(skCryptDec("Uptime"));
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(145);
+        ImGui::Text(skCryptDec(":"));
+        ImGui::SameLine();
+        ImGui::Text(calculateElapsedTime(Drawing::Bot->m_startTime).c_str());
+
+        ImGui::Text(skCryptDec("Baslangic Coin"));
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(145);
+        ImGui::Text(skCryptDec(":"));
+        ImGui::SameLine();
+
+        std::ostringstream iStartCoinFormatted;
+        iStartCoinFormatted.imbue(std::locale(skCryptDec("tr_TR")));
+        iStartCoinFormatted << std::fixed << m_pClient->m_iStartCoin;
+        ImGui::Text("%s", iStartCoinFormatted.str().c_str());
+
+        ImGui::Text(skCryptDec("Kazanilan Coin"));
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(145);
+        ImGui::Text(skCryptDec(":"));
+        ImGui::SameLine();
+
+        std::ostringstream iCoinCounterFormatted;
+        iCoinCounterFormatted.imbue(std::locale(skCryptDec("tr_TR")));
+        iCoinCounterFormatted << std::fixed << m_pClient->m_iCoinCounter;
+        ImGui::Text("%s", iCoinCounterFormatted.str().c_str());
+
+        ImGui::Text(skCryptDec("Kazanilan Exp"));
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(145);
+        ImGui::Text(skCryptDec(":"));
+        ImGui::SameLine();
+
+        std::ostringstream iExpCounterFormatted;
+        iExpCounterFormatted.imbue(std::locale(skCryptDec("tr_TR")));
+        iExpCounterFormatted << std::fixed << m_pClient->m_iExpCounter;
+        ImGui::Text("%s", iExpCounterFormatted.str().c_str());
+
+        ImGui::Text(skCryptDec("Dakikada Gelen Coin"));
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(145);
+        ImGui::Text(skCryptDec(":"));
+        ImGui::SameLine();
+
+        std::ostringstream iEveryMinuteCoinCounterFormatted;
+        iEveryMinuteCoinCounterFormatted.imbue(std::locale(skCryptDec("tr_TR")));
+        iEveryMinuteCoinCounterFormatted << std::fixed << m_pClient->m_iEveryMinuteCoinCounter - m_pClient->m_iEveryMinuteCoinPrevCounter;
+        ImGui::Text("%s", iEveryMinuteCoinCounterFormatted.str().c_str());
+
+        ImGui::Text(skCryptDec("Dakikada Gelen Exp"));
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(145);
+        ImGui::Text(skCryptDec(":"));
+        ImGui::SameLine();
+
+        std::ostringstream iEveryMinuteExpCounterFormatted;
+        iEveryMinuteExpCounterFormatted.imbue(std::locale(skCryptDec("tr_TR")));
+        iEveryMinuteExpCounterFormatted << std::fixed << m_pClient->m_iEveryMinuteExpCounter - m_pClient->m_iEveryMinuteExpPrevCounter;
+        ImGui::Text("%s", iEveryMinuteExpCounterFormatted.str().c_str());
+
+        ImGui::Separator();
+
+        if (ImGui::Button(skCryptDec("Sayaclari Sifirla"), ImVec2(272.0f, 0.0f)))
+        {
+            m_pClient->m_iStartCoin = m_pClient->m_PlayerMySelf.iGold;
+            m_pClient->m_iCoinCounter = 0;
+            m_pClient->m_iExpCounter = 0;
+            m_pClient->m_iEveryMinuteCoinPrevCounter = 0;
+            m_pClient->m_iEveryMinuteExpPrevCounter = 0;
+            m_pClient->m_iEveryMinuteCoinCounter = 0;
+            m_pClient->m_iEveryMinuteExpCounter = 0;
+
+            m_pClient->RemoveItem(0);
+        }
+
+        if (ImGui::Button(skCryptDec("Tum Ayarlari Sifirla"), ImVec2(272.0f, 0.0f)))
+        {
+            m_pUserConfiguration->Reset();
+            m_pClient->ClearUserConfiguration();
+        }
+
+        if (ImGui::Button(skCryptDec("Skill Listesini Sifirla"), ImVec2(272.0f, 0.0f)))
+        {
+            m_pClient->m_vecAttackSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::unordered_set<int>());
+            m_pClient->m_vecCharacterSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::unordered_set<int>());
+
+            m_pClient->LoadSkillData();
+        }
+    };
+}
+
 void Drawing::DrawMainController()
 {
     ImGui::BulletText(skCryptDec("Ana Kontroller"));
@@ -307,7 +440,7 @@ void Drawing::DrawMainController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(m_pClient->m_bAttackStatus ? skCryptDec("Saldiri Durdur") : skCryptDec("Saldiri Baslat"), ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button(m_pClient->m_bAttackStatus ? skCryptDec("Saldiri Durdur") : skCryptDec("Saldiri Baslat"), ImVec2(132.0f, 0.0f)))
         {
             m_pClient->m_bAttackStatus = !m_pClient->m_bAttackStatus;
             m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), m_pClient->m_bAttackStatus);
@@ -321,7 +454,7 @@ void Drawing::DrawMainController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(m_pClient->m_bCharacterStatus ? skCryptDec("Bot Durdur") : skCryptDec("Bot Baslat"), ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button(m_pClient->m_bCharacterStatus ? skCryptDec("Bot Durdur") : skCryptDec("Bot Baslat"), ImVec2(132.0f, 0.0f)))
         {
             m_pClient->m_bCharacterStatus = !m_pClient->m_bCharacterStatus;
             m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("Character"), m_pClient->m_bCharacterStatus);
@@ -329,14 +462,14 @@ void Drawing::DrawMainController()
 
         ImGui::PopStyleColor(1);
 
-        if (ImGui::Button(skCryptDec("Town At"), ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Town At"), ImVec2(132.0f, 0.0f)))
         {
             m_pClient->SendTownPacket();
         }
 
         ImGui::SameLine();
 
-        if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(132.0f, 0.0f)))
         {
             TerminateMyProcess(Drawing::Bot->GetInjectedProcessId(), -1);
         }
@@ -486,6 +619,8 @@ void Drawing::DrawSpeedController()
 
         ImGui::PopItemWidth();
 
+        ImGui::SameLine();
+
         if (ImGui::Checkbox(skCryptDec("##AttackSpeedCheckbox"), &m_pClient->m_bAttackSpeed))
             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeed"), m_pClient->m_bAttackSpeed ? 1 : 0);
 
@@ -527,6 +662,8 @@ void Drawing::DrawDistanceController()
             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), m_pClient->m_iRangeLimitValue);
 
         ImGui::PopItemWidth();
+
+        ImGui::SameLine();
 
         if (ImGui::Checkbox(skCryptDec("##AttackRangeLimitCheckbox"), &m_pClient->m_bAttackRangeLimit))
             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), m_pClient->m_bAttackRangeLimit ? 1 : 0);
@@ -665,17 +802,16 @@ void Drawing::DrawAutoLootController()
                 m_pClient->SetMovingToLoot(false);
             }
 
-            m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), m_pClient->m_bMoveToLoot ? 1 : 0);
+            m_pClient->m_bMoveToLoot = m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MoveToLoot"), m_pClient->m_bMoveToLoot ? 1 : 0);
         }
 
         ImGui::SameLine();
 
         ImGui::Text(skCryptDec("Kutuya Kos"));
 
-        bool bTodo = true;
-        if (ImGui::Checkbox(skCryptDec("##MinPriceEnable"), &bTodo))
+        if (ImGui::Checkbox(skCryptDec("##MinPriceEnable"), &m_pClient->m_bMinPriceLootEnable))
         {
-            //TODO: Implement here
+            m_pClient->m_bMinPriceLootEnable =  m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MinPriceLootEnable"), m_pClient->m_bMinPriceLootEnable ? 1 : 0);
         }
 
         ImGui::SameLine();
@@ -690,6 +826,283 @@ void Drawing::DrawAutoLootController()
             m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("MinPrice"), m_pClient->m_iLootMinPrice);
 
         ImGui::PopItemWidth();
+
+        if(ImGui::RadioButton("Hepsini Topla", &m_pClient->m_iLootType, 0))
+            m_pClient->m_iLootType = m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("LootType"), m_pClient->m_iLootType);
+
+        ImGui::SameLine();
+
+        if (ImGui::RadioButton("Sadece Coin Topla", &m_pClient->m_iLootType, 1))
+            m_pClient->m_iLootType = m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("LootType"), m_pClient->m_iLootType);
+
+        ImGui::SameLine();
+
+        if (ImGui::RadioButton("Item Listesine Gore Topla", &m_pClient->m_iLootType, 2))
+            m_pClient->m_iLootType = m_pUserConfiguration->SetInt(skCryptDec("AutoLoot"), skCryptDec("LootType"), m_pClient->m_iLootType);
+    }
+}
+
+void Drawing::DrawItemListController()
+{
+    ImGui::BulletText(skCryptDec("Item Listesi Yonetimi"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        ImGui::PushItemWidth(240);
+        ImGui::InputTextWithHint(skCryptDec("##ItemSearchName"), skCryptDec("Bir esyayi adiyla ara"), & m_szItemSearchName[0], 100);
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+
+        ImGui::RadioButton("Item Listesi", &m_iInventoryManagementWindow, 0); 
+        ImGui::SameLine();
+        ImGui::RadioButton("Inventory", &m_iInventoryManagementWindow, 1);
+
+        if (ImGui::Button(skCryptDec("Tum Itemleri Topla"), ImVec2(151.0f, 0.0f)))
+        {
+            std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+
+            if (Drawing::Bot->GetItemTable(&pItemTable))
+            {
+                m_pClient->m_vecLootItemList.clear();
+
+                for (auto it = pItemTable->begin(); it != pItemTable->end(); it++)
+                {
+                    m_pClient->m_vecLootItemList.insert(it->second.iID);
+                }
+
+                m_pClient->m_vecLootItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("LootItemList"), m_pClient->m_vecLootItemList);
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(skCryptDec("Tum Itemleri Sat"), ImVec2(151.0f, 0.0f)))
+        {
+            std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+
+            if (Drawing::Bot->GetItemTable(&pItemTable))
+            {
+                m_pClient->m_vecSellItemList.clear();
+
+                for (auto it = pItemTable->begin(); it != pItemTable->end(); it++)
+                {
+                    m_pClient->m_vecSellItemList.insert(it->second.iID);
+                }
+
+                m_pClient->m_vecSellItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("SellItemList"), m_pClient->m_vecSellItemList);
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(skCryptDec("Listeyi Sifirla"), ImVec2(151.0f, 0.0f)))
+        {
+            m_pClient->m_vecLootItemList.clear();
+            m_pClient->m_vecLootItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("LootItemList"), m_pClient->m_vecLootItemList);
+
+            m_pClient->m_vecSellItemList.clear();
+            m_pClient->m_vecSellItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("SellItemList"), m_pClient->m_vecSellItemList);
+
+            m_pClient->m_vecInnItemList.clear();
+            m_pClient->m_vecInnItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("InnItemList"), m_pClient->m_vecInnItemList);
+
+            m_pClient->m_vecDeleteItemList.clear();
+            m_pClient->m_vecDeleteItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("DeleteItemList"), m_pClient->m_vecDeleteItemList);
+        }
+
+        ImGui::BeginChild(skCryptDec("ItemListChild"), ImVec2(472, 320), true);
+        {
+            if (ImGui::BeginTable(skCryptDec("ItemList.Table"), 5, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
+            {
+                ImGui::TableSetupColumn(skCryptDec("Item"), ImGuiTableColumnFlags_WidthFixed, 270);
+                ImGui::TableSetupColumn(skCryptDec("Topla"), ImGuiTableColumnFlags_WidthFixed, 35);
+                ImGui::TableSetupColumn(skCryptDec("Sat"), ImGuiTableColumnFlags_WidthFixed, 35);
+                ImGui::TableSetupColumn(skCryptDec("Banka"), ImGuiTableColumnFlags_WidthFixed, 35);
+                ImGui::TableSetupColumn(skCryptDec("Sil"), ImGuiTableColumnFlags_WidthFixed, 35);
+                ImGui::TableHeadersRow();
+
+                std::map<uint32_t, __TABLE_ITEM>* pItemTable;
+                if (Drawing::Bot->GetItemTable(&pItemTable))
+                {
+                    if (m_iInventoryManagementWindow == 0)
+                    {
+                        int i = 0;
+                        for (auto it = pItemTable->begin(); it != pItemTable->end(); it++)
+                        {
+                            bool bRenderRow = false;
+
+                            bool bLootSelected = m_pClient->m_vecLootItemList.count(it->second.iID) > 0;
+                            bool bSellSelected = m_pClient->m_vecSellItemList.count(it->second.iID) > 0;
+                            bool bInnSelected = m_pClient->m_vecInnItemList.count(it->second.iID) > 0;
+                            bool bDeleteSelected = m_pClient->m_vecDeleteItemList.count(it->second.iID) > 0;
+
+                            if (strlen(m_szItemSearchName) == 0)
+                            {
+                                if (bLootSelected || bSellSelected || bInnSelected || bDeleteSelected)
+                                {
+                                    bRenderRow = true;
+                                }
+                            }
+                            else
+                            {
+                                if (stristr(it->second.szName.c_str(), m_szItemSearchName) != nullptr)
+                                {
+                                    bRenderRow = true;
+                                }
+                            }
+
+                            if (bRenderRow)
+                            {
+                                ImGui::PushID(i++);
+                                ImGui::TableNextRow();
+                                ImGui::TableNextColumn();
+                                ImGui::Text(it->second.szName.c_str());
+                                ImGui::TableNextColumn();
+
+                                if (ImGui::Checkbox(skCryptDec("##LootItemList"), &bLootSelected))
+                                {
+                                    if (bLootSelected)
+                                        m_pClient->m_vecLootItemList.insert(it->second.iID);
+                                    else
+                                        m_pClient->m_vecLootItemList.erase(std::find(m_pClient->m_vecLootItemList.begin(), m_pClient->m_vecLootItemList.end(), it->second.iID));
+
+                                    m_pClient->m_vecLootItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("LootItemList"), m_pClient->m_vecLootItemList);
+                                }
+
+                                ImGui::TableNextColumn();
+
+                                if (ImGui::Checkbox(skCryptDec("##SellItemList"), &bSellSelected))
+                                {
+                                    if (bSellSelected)
+                                        m_pClient->m_vecSellItemList.insert(it->second.iID);
+                                    else
+                                        m_pClient->m_vecSellItemList.erase(std::find(m_pClient->m_vecSellItemList.begin(), m_pClient->m_vecSellItemList.end(), it->second.iID));
+
+                                    m_pClient->m_vecSellItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("SellItemList"), m_pClient->m_vecSellItemList);
+                                }
+
+                                ImGui::TableNextColumn();
+
+                                if (ImGui::Checkbox(skCryptDec("##InnItemList"), &bInnSelected))
+                                {
+                                    if (bInnSelected)
+                                        m_pClient->m_vecInnItemList.insert(it->second.iID);
+                                    else
+                                        m_pClient->m_vecInnItemList.erase(std::find(m_pClient->m_vecInnItemList.begin(), m_pClient->m_vecInnItemList.end(), it->second.iID));
+
+                                    m_pClient->m_vecInnItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("InnItemList"), m_pClient->m_vecInnItemList);
+                                }
+
+                                ImGui::TableNextColumn();
+
+                                if (ImGui::Checkbox(skCryptDec("##DeleteItemList"), &bDeleteSelected))
+                                {
+                                    if (bDeleteSelected)
+                                        m_pClient->m_vecDeleteItemList.insert(it->second.iID);
+                                    else
+                                        m_pClient->m_vecDeleteItemList.erase(std::find(m_pClient->m_vecDeleteItemList.begin(), m_pClient->m_vecDeleteItemList.end(), it->second.iID));
+
+                                    m_pClient->m_vecDeleteItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("DeleteItemList"), m_pClient->m_vecDeleteItemList);
+                                }
+
+                                ImGui::PopID();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        std::vector<TItemData> vecInventoryItemList;
+                        m_pClient->GetInventoryItemList(vecInventoryItemList);
+
+                        int i = 0;
+                        for (const TItemData& pItem : vecInventoryItemList)
+                        {
+                            if (pItem.iItemID == 0)
+                                continue;
+
+                            __TABLE_ITEM* pItemData;
+                            if (!Drawing::Bot->GetItemData(pItem.iItemID, pItemData))
+                                continue;
+
+                            if (strlen(m_szItemSearchName) > 0 
+                                && stristr(pItemData->szName.c_str(), m_szItemSearchName) == nullptr)
+                                continue;
+
+
+                            uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+
+                            bool bLootSelected = m_pClient->m_vecLootItemList.count(iItemBaseID) > 0;
+                            bool bSellSelected = m_pClient->m_vecSellItemList.count(iItemBaseID) > 0;
+                            bool bInnSelected = m_pClient->m_vecInnItemList.count(iItemBaseID) > 0;
+                            bool bDeleteSelected = m_pClient->m_vecDeleteItemList.count(iItemBaseID) > 0;
+
+                            ImGui::PushID(i++);
+                            ImGui::TableNextRow();
+                            ImGui::TableNextColumn();
+                            ImGui::Text(pItemData->szName.c_str());
+                            ImGui::TableNextColumn();
+
+                            if (ImGui::Checkbox(skCryptDec("##LootItemList"), &bLootSelected))
+                            {
+                                if (bLootSelected)
+                                    m_pClient->m_vecLootItemList.insert(iItemBaseID);
+                                else
+                                    m_pClient->m_vecLootItemList.erase(std::find(m_pClient->m_vecLootItemList.begin(), m_pClient->m_vecLootItemList.end(), iItemBaseID));
+
+                                m_pClient->m_vecLootItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("LootItemList"), m_pClient->m_vecLootItemList);
+                            }
+
+                            ImGui::TableNextColumn();
+
+                            if (ImGui::Checkbox(skCryptDec("##SellItemList"), &bSellSelected))
+                            {
+                                if (bSellSelected)
+                                    m_pClient->m_vecSellItemList.insert(iItemBaseID);
+                                else
+                                    m_pClient->m_vecSellItemList.erase(std::find(m_pClient->m_vecSellItemList.begin(), m_pClient->m_vecSellItemList.end(), iItemBaseID));
+
+                                m_pClient->m_vecSellItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("SellItemList"), m_pClient->m_vecSellItemList);
+                            }
+
+                            ImGui::TableNextColumn();
+
+                            if (ImGui::Checkbox(skCryptDec("##InnItemList"), &bInnSelected))
+                            {
+                                if (bInnSelected)
+                                    m_pClient->m_vecInnItemList.insert(iItemBaseID);
+                                else
+                                    m_pClient->m_vecInnItemList.erase(std::find(m_pClient->m_vecInnItemList.begin(), m_pClient->m_vecInnItemList.end(), iItemBaseID));
+
+                                m_pClient->m_vecInnItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("InnItemList"), m_pClient->m_vecInnItemList);
+                            }
+
+                            ImGui::TableNextColumn();
+
+                            if (ImGui::Checkbox(skCryptDec("##DeleteItemList"), &bDeleteSelected))
+                            {
+                                if (bDeleteSelected)
+                                    m_pClient->m_vecDeleteItemList.insert(iItemBaseID);
+                                else
+                                    m_pClient->m_vecDeleteItemList.erase(std::find(m_pClient->m_vecDeleteItemList.begin(), m_pClient->m_vecDeleteItemList.end(), iItemBaseID));
+
+                                m_pClient->m_vecDeleteItemList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("DeleteItemList"), m_pClient->m_vecDeleteItemList);
+                            }
+
+                            ImGui::PopID();
+                        }
+
+                    }
+                    
+                }
+
+                
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::EndChild();
     }
 }
 
@@ -739,15 +1152,7 @@ void Drawing::DrawTargetListController()
 
         ImGui::Text(skCryptDec("Hedefe Kos"));
 
-        if (ImGui::Checkbox(skCryptDec("##DeathEffect"), &m_pClient->m_bDeathEffect))
-        {
-            m_pClient->PatchDeathEffect(m_pClient->m_bDeathEffect);
-            m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DeathEffect"), m_pClient->m_bDeathEffect ? 1 : 0);
-        }
-
         ImGui::SameLine();
-
-        ImGui::Text(skCryptDec("Death Animasyonu Kaldir"));
 
         if (ImGui::Checkbox(skCryptDec("##ClosestTargetCheckbox"), &m_pClient->m_bClosestTarget))
             m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), m_pClient->m_bClosestTarget ? 1 : 0);
@@ -770,7 +1175,7 @@ void Drawing::DrawTargetListController()
         if (m_pClient->m_bAutoTarget)
             ImGui::BeginDisabled();
 
-        if (ImGui::Button(skCryptDec("Listeye Mob ID Ekle"), ImVec2(340.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Listeye Mob ID Ekle"), ImVec2(470.0f, 0.0f)))
         {
             int32_t iTargetID = m_pClient->GetTarget();
 
@@ -781,7 +1186,7 @@ void Drawing::DrawTargetListController()
 
                 if (pFindedID == m_pClient->m_vecSelectedNpcIDList.end())
                 {
-                    m_pClient->m_vecSelectedNpcIDList.push_back(iTargetID);
+                    m_pClient->m_vecSelectedNpcIDList.insert(iTargetID);
                     m_pClient->m_vecSelectedNpcIDList = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("NpcIDList"), m_pClient->m_vecSelectedNpcIDList);
                 }
             }
@@ -790,7 +1195,7 @@ void Drawing::DrawTargetListController()
         if (m_pClient->m_bAutoTarget)
             ImGui::EndDisabled();
 
-        ImGui::BeginChild(skCryptDec("TargetListController"), ImVec2(340.0f, 276), true);
+        ImGui::BeginChild(skCryptDec("TargetListController"), ImVec2(470.0f, 276), true);
         {
             if (m_pClient->m_bAutoTarget)
                 ImGui::BeginDisabled();
@@ -876,7 +1281,7 @@ void Drawing::DrawTargetListController()
                     if (ImGui::Selectable(szNpcName.c_str(), &bSelected))
                     {
                         if (bSelected)
-                            m_pClient->m_vecSelectedNpcList.push_back(x.iProtoID);
+                            m_pClient->m_vecSelectedNpcList.insert(x.iProtoID);
                         else
                             m_pClient->m_vecSelectedNpcList.erase(std::find(m_pClient->m_vecSelectedNpcList.begin(), m_pClient->m_vecSelectedNpcList.end(), x.iProtoID));
 
@@ -917,6 +1322,8 @@ void Drawing::DrawSkillController()
         if (!m_pClient->m_bUseSkillWithPacket)
             ImGui::BeginDisabled();
 
+        ImGui::SameLine();
+
         if (ImGui::Checkbox(skCryptDec("##OnlyAttackSkillUseWithPacket"), &m_pClient->m_bOnlyAttackSkillUseWithPacket))
         {
             m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("OnlyAttackSkillUseWithPacket"), m_pClient->m_bOnlyAttackSkillUseWithPacket ? 1 : 0);
@@ -930,89 +1337,30 @@ void Drawing::DrawSkillController()
         if (!m_pClient->m_bUseSkillWithPacket)
             ImGui::EndDisabled();
 
-        if (ImGui::Checkbox(skCryptDec("##DisableCasting"), &m_pClient->m_bDisableCasting))
-        {
-            m_pClient->UpdateSkillSuccessRate(m_pClient->m_bDisableCasting);
-
-            m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DisableCasting"), m_pClient->m_bDisableCasting ? 1 : 0);
-        }
-
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
-        ImGui::Text(skCryptDec("El Dusurmeyi Kaldir"));
-        ImGui::PopStyleColor();
-
-        if (ImGui::Button(skCryptDec("Skill Listesini Sifirla"), ImVec2(340.0f, 0.0f)))
-        {
-            m_pClient->m_vecAttackSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-            m_pClient->m_vecCharacterSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
-
-            m_pClient->LoadSkillData();
-        }
-
-        ImGui::BeginChild(skCryptDec("SkillController"), ImVec2(340.0f, 386), true);
+        ImGui::BeginChild(skCryptDec("SkillController1"), ImVec2(232.0f, 386), true);
         {
             if (ImGui::TreeNodeEx(skCryptDec("Saldiri Skilleri"), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Framed))
             {
-                std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-                if (m_pClient->GetAvailableSkill(&vecAvailableSkills))
+                for (const auto& x : m_pClient->m_vecAvailableSkill)
                 {
-                    for (const auto& x : *vecAvailableSkills)
+                    if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+                        continue;
+
+                    ImGui::PushID(x.iID);
+
+                    bool bSelected = std::find(m_pClient->m_vecAttackSkillList.begin(), m_pClient->m_vecAttackSkillList.end(), x.iID) != m_pClient->m_vecAttackSkillList.end();
+
+                    if (ImGui::Selectable(x.szName.c_str(), &bSelected))
                     {
-                        if (x.iTarget != SkillTargetType::TARGET_ENEMY_ONLY && x.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
-                            continue;
+                        if (bSelected)
+                            m_pClient->m_vecAttackSkillList.insert(x.iID);
+                        else
+                            m_pClient->m_vecAttackSkillList.erase(std::find(m_pClient->m_vecAttackSkillList.begin(), m_pClient->m_vecAttackSkillList.end(), x.iID));
 
-                        ImGui::PushID(x.iID);
-
-                        bool bSelected = std::find(m_pClient->m_vecAttackSkillList.begin(), m_pClient->m_vecAttackSkillList.end(), x.iID) != m_pClient->m_vecAttackSkillList.end();
-
-                        if (ImGui::Selectable(x.szName.c_str(), &bSelected))
-                        {
-                            if (bSelected)
-                                m_pClient->m_vecAttackSkillList.push_back(x.iID);
-                            else
-                                m_pClient->m_vecAttackSkillList.erase(std::find(m_pClient->m_vecAttackSkillList.begin(), m_pClient->m_vecAttackSkillList.end(), x.iID));
-
-                            m_pClient->m_vecAttackSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), m_pClient->m_vecAttackSkillList);
-                        }
-
-                        ImGui::PopID();
+                        m_pClient->m_vecAttackSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), m_pClient->m_vecAttackSkillList);
                     }
-                }
 
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNodeEx(skCryptDec("Karakter Skilleri"), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Framed))
-            {
-                std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-                if (m_pClient->GetAvailableSkill(&vecAvailableSkills))
-                {
-                    for (const auto& x : *vecAvailableSkills)
-                    {
-                        if (x.iTarget != SkillTargetType::TARGET_SELF
-                            && x.iTarget != SkillTargetType::TARGET_PARTY
-                            && x.iTarget != SkillTargetType::TARGET_PARTY_ALL
-                            && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME
-                            && x.iTarget != SkillTargetType::TARGET_FRIEND_ONLY)
-                            continue;
-
-                        ImGui::PushID(x.iID);
-
-                        bool bSelected = std::find(m_pClient->m_vecCharacterSkillList.begin(), m_pClient->m_vecCharacterSkillList.end(), x.iID) != m_pClient->m_vecCharacterSkillList.end();
-
-                        if (ImGui::Selectable(x.szName.c_str(), &bSelected))
-                        {
-                            if (bSelected)
-                                m_pClient->m_vecCharacterSkillList.push_back(x.iID);
-                            else
-                                m_pClient->m_vecCharacterSkillList.erase(std::find(m_pClient->m_vecCharacterSkillList.begin(), m_pClient->m_vecCharacterSkillList.end(), x.iID));
-
-                            m_pClient->m_vecCharacterSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), m_pClient->m_vecCharacterSkillList);
-                        }
-
-                        ImGui::PopID();
-                    }
+                    ImGui::PopID();
                 }
 
                 ImGui::TreePop();
@@ -1020,45 +1368,103 @@ void Drawing::DrawSkillController()
 
             ImGui::EndChild();
         }
+
+        ImGui::SameLine();
+
+        ImGui::BeginChild(skCryptDec("SkillController2"), ImVec2(232.0f, 386), true);
+        {
+            if (ImGui::TreeNodeEx(skCryptDec("Karakter Skilleri"), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Framed))
+            {
+                for (const auto& x : m_pClient->m_vecAvailableSkill)
+                {
+                    if (x.iTarget != SkillTargetType::TARGET_SELF
+                        && x.iTarget != SkillTargetType::TARGET_PARTY
+                        && x.iTarget != SkillTargetType::TARGET_PARTY_ALL
+                        && x.iTarget != SkillTargetType::TARGET_FRIEND_WITHME
+                        && x.iTarget != SkillTargetType::TARGET_FRIEND_ONLY)
+                        continue;
+
+                    ImGui::PushID(x.iID);
+
+                    bool bSelected = std::find(m_pClient->m_vecCharacterSkillList.begin(), m_pClient->m_vecCharacterSkillList.end(), x.iID) != m_pClient->m_vecCharacterSkillList.end();
+
+                    if (ImGui::Selectable(x.szName.c_str(), &bSelected))
+                    {
+                        if (bSelected)
+                            m_pClient->m_vecCharacterSkillList.insert(x.iID);
+                        else
+                            m_pClient->m_vecCharacterSkillList.erase(std::find(m_pClient->m_vecCharacterSkillList.begin(), m_pClient->m_vecCharacterSkillList.end(), x.iID));
+
+                        m_pClient->m_vecCharacterSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), m_pClient->m_vecCharacterSkillList);
+                    }
+
+                    ImGui::PopID();
+                }
+
+                ImGui::TreePop();
+            }
+
+            ImGui::EndChild();
+        }
+
     }
 }
 
 void Drawing::DrawSizeController()
 {
-    ImGui::BulletText(skCryptDec("Boyut Ayarlari"));
+    ImGui::BulletText(skCryptDec("Buyutme Ayarlari"));
     ImGui::Separator();
 
     ImGui::Spacing();
     {
         if (ImGui::Checkbox(skCryptDec("##TargetSizeCheckbox"), &m_pClient->m_bTargetSizeEnable))
-            m_pUserConfiguration->SetInt(skCryptDec("Target"), skCryptDec("SizeEnable"), m_pClient->m_bTargetSizeEnable ? 1 : 0);
+            m_pClient->m_bTargetSizeEnable = m_pUserConfiguration->SetInt(skCryptDec("Target"), skCryptDec("SizeEnable"), m_pClient->m_bTargetSizeEnable ? 1 : 0);
 
         ImGui::SameLine();
 
-        ImGui::Text(skCryptDec("Hedef Boyutu"));
+        ImGui::Text(skCryptDec("Hedef"));
 
         ImGui::SameLine();
 
-        ImGui::PushItemWidth(139);
+        ImGui::PushItemWidth(125);
 
         if (ImGui::SliderInt(skCryptDec("##TargetSize"), &m_pClient->m_iTargetSize, 1, 10))
-            m_pUserConfiguration->SetInt(skCryptDec("Target"), skCryptDec("Size"), m_pClient->m_iTargetSize);
+            m_pClient->m_iTargetSize = m_pUserConfiguration->SetInt(skCryptDec("Target"), skCryptDec("Size"), m_pClient->m_iTargetSize);
 
         ImGui::PopItemWidth();
 
+        ImGui::SameLine();
+
         if (ImGui::Checkbox(skCryptDec("##CharacterSizeCheckbox"), &m_pClient->m_bCharacterSizeEnable))
-            m_pUserConfiguration->SetInt(skCryptDec("Character"), skCryptDec("SizeEnable"), m_pClient->m_bCharacterSizeEnable ? 1 : 0);
+        {
+            m_pClient->m_bCharacterSizeEnable = m_pUserConfiguration->SetInt(skCryptDec("Character"), skCryptDec("SizeEnable"), m_pClient->m_bCharacterSizeEnable ? 1 : 0);
+
+            DWORD iMyBase = Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_CHR")));
+
+            if (m_pClient->m_bCharacterSizeEnable)
+                m_pClient->SetScale(iMyBase, (float)m_pClient->m_iCharacterSize, (float)m_pClient->m_iCharacterSize, (float)m_pClient->m_iCharacterSize);
+            else
+                m_pClient->SetScale(iMyBase, 1.0f, 1.0f, 1.0f);
+        }
 
         ImGui::SameLine();
 
-        ImGui::Text(skCryptDec("Karakter Boyutu"));
+        ImGui::Text(skCryptDec("Karakter"));
 
         ImGui::SameLine();
 
         ImGui::PushItemWidth(125);
 
         if (ImGui::SliderInt(skCryptDec("##CharacterSize"), &m_pClient->m_iCharacterSize, 1, 10))
-            m_pUserConfiguration->SetInt(skCryptDec("Character"), skCryptDec("Size"), m_pClient->m_iCharacterSize);
+        {
+            m_pClient->m_iCharacterSize = m_pUserConfiguration->SetInt(skCryptDec("Character"), skCryptDec("Size"), m_pClient->m_iCharacterSize);
+
+            if (m_pClient->m_bCharacterSizeEnable)
+            {
+                DWORD iMyBase = Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_CHR")));
+                m_pClient->SetScale(iMyBase, (float)m_pClient->m_iCharacterSize, (float)m_pClient->m_iCharacterSize, (float)m_pClient->m_iCharacterSize);
+            }
+        }
 
         ImGui::PopItemWidth();
     }
@@ -1121,15 +1527,6 @@ void Drawing::DrawSupplyController()
 
         ImGui::Text(skCryptDec("Oto Tedarik"));
 
-        if (ImGui::Checkbox(skCryptDec("##AutoRepairMagicHammer"), &m_pClient->m_bAutoRepairMagicHammer))
-        {
-            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), m_pClient->m_bAutoRepairMagicHammer ? 1 : 0);
-        }
-
-        ImGui::SameLine();
-
-        ImGui::Text(skCryptDec("Oto RPR (Magic Hammer)"));
-
         ImGui::SameLine();
 
         if (ImGui::Checkbox(skCryptDec("##AutoRepair"), &m_pClient->m_bAutoRepair))
@@ -1139,43 +1536,17 @@ void Drawing::DrawSupplyController()
 
         ImGui::Text(skCryptDec("Oto RPR (NPC)"));
 
+        ImGui::SameLine();
 
-        if (ImGui::Checkbox(skCryptDec("##AutoSellSlotRange"), &m_pClient->m_bAutoSellSlotRange))
+        if (ImGui::Checkbox(skCryptDec("##AutoRepairMagicHammer"), &m_pClient->m_bAutoRepairMagicHammer))
         {
-            m_pClient->m_bAutoSellSlotRange = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), m_pClient->m_bAutoSellSlotRange ? 1 : 0);
+            m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRepairMagicHammer"), m_pClient->m_bAutoRepairMagicHammer ? 1 : 0);
         }
 
         ImGui::SameLine();
 
-        ImGui::Text(skCryptDec("Oto Satis (Inventory) Slot"));
+        ImGui::Text(skCryptDec("Oto RPR (Magic Hammer)"));
 
-        ImGui::SameLine();
-
-        ImGui::PushItemWidth(50);
-        if (ImGui::DragInt(skCryptDec("##AutoSellSlotRangeStart"), &m_pClient->m_iAutoSellSlotRangeStart, 1, 1, 28))
-        {
-            if (m_pClient->m_iAutoSellSlotRangeStart <= m_pClient->m_iAutoSellSlotRangeEnd)
-            {
-                m_pClient->m_iAutoSellSlotRangeStart = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), m_pClient->m_iAutoSellSlotRangeStart);
-            }
-        }
-        ImGui::PopItemWidth();
-
-        ImGui::SameLine();
-
-        ImGui::Text(skCryptDec("~"));
-
-        ImGui::SameLine();
-
-        ImGui::PushItemWidth(50);
-        if (ImGui::DragInt(skCryptDec("##AutoSellSlotRangeEnd"), &m_pClient->m_iAutoSellSlotRangeEnd, 1, 1, 28))
-        {
-            if (m_pClient->m_iAutoSellSlotRangeEnd >= m_pClient->m_iAutoSellSlotRangeStart)
-            {
-                m_pClient->m_iAutoSellSlotRangeEnd = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), m_pClient->m_iAutoSellSlotRangeEnd);
-            }
-        }
-        ImGui::PopItemWidth();
     }
 }
 
@@ -1201,7 +1572,7 @@ void Drawing::DrawSupplyListController()
             if (ImGui::Checkbox(skCryptDec("##Enable"), &bSelected))
             {
                 if (bSelected)
-                    m_pClient->m_vecSupplyList.push_back(jSupplyList[i][szItemIdAttribute.c_str()].get<int>());
+                    m_pClient->m_vecSupplyList.insert(jSupplyList[i][szItemIdAttribute.c_str()].get<int>());
                 else
                     m_pClient->m_vecSupplyList.erase(std::find(m_pClient->m_vecSupplyList.begin(), m_pClient->m_vecSupplyList.end(), jSupplyList[i][szItemIdAttribute.c_str()].get<int>()));
 
@@ -1231,7 +1602,7 @@ void Drawing::DrawSupplyListController()
 
 void Drawing::DrawListenerController()
 {
-    ImGui::BulletText(skCryptDec("Dinleyici Ayarlari"));
+    ImGui::BulletText(skCryptDec("Dinleme Ayarlari"));
     ImGui::Separator();
 
     ImGui::Spacing();
@@ -1245,7 +1616,7 @@ void Drawing::DrawListenerController()
 
         ImGui::SameLine();
 
-        ImGui::PushItemWidth(169);
+        ImGui::PushItemWidth(125);
 
         if (ImGui::InputText(skCryptDec("##PartyRequestMessage"), &m_pClient->m_szPartyRequestMessage[0], 100))
         {
@@ -1253,6 +1624,8 @@ void Drawing::DrawListenerController()
         }
 
         ImGui::PopItemWidth();
+
+        ImGui::SameLine();
 
         if (!m_pClient->IsMage())
             ImGui::BeginDisabled();
@@ -1265,6 +1638,8 @@ void Drawing::DrawListenerController()
         ImGui::Text(skCryptDec("Oto TP"));
 
         ImGui::SameLine();
+
+        ImGui::PushItemWidth(125);
 
         if (ImGui::InputText(skCryptDec("##TeleportRequestMessage"), &m_pClient->m_szTeleportRequestMessage[0], 100))
         {
@@ -1390,14 +1765,9 @@ void Drawing::DrawSettingsController()
 
         ImGui::SameLine();
 
-        ImGui::Text(skCryptDec(" altindaysa illegal vur"));
-        ImGui::Text(skCryptDec("Aksi durumda legal vur"));
+        ImGui::Text(skCryptDec(" altindaysa illegal vur, aksi durumda legal vur"));
 
-        if (ImGui::Button(skCryptDec("Tum Ayarlari Sifirla"), ImVec2(340.0f, 0.0f)))
-        {
-            m_pUserConfiguration->Reset();
-            m_pClient->ClearUserConfiguration();
-        }
+
     }
 }
 
@@ -1468,7 +1838,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button("Illegal Mod", ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button("Illegal Mod", ImVec2(132.0f, 0.0f)))
         {
             m_pClient->m_bLegalMode = false;
             SetLegalModeSettings(m_pClient->m_bLegalMode);
@@ -1483,7 +1853,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(skCryptDec("Legal Mod"), ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Legal Mod"), ImVec2(132.0f, 0.0f)))
         {
             m_pClient->m_bLegalMode = true;
             SetLegalModeSettings(m_pClient->m_bLegalMode);
@@ -1496,7 +1866,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button(skCryptDec("Hizli Mod"), ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button(skCryptDec("Hizli Mod"), ImVec2(132.0f, 0.0f)))
         {
             m_pClient->m_bSpeedMode = true;
             SetSpeedModeSettings(m_pClient->m_bSpeedMode);
@@ -1510,7 +1880,7 @@ void Drawing::DrawModeController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
 
-        if (ImGui::Button("Yavas Mod", ImVec2(112.0f, 0.0f)))
+        if (ImGui::Button("Yavas Mod", ImVec2(132.0f, 0.0f)))
         {
             m_pClient->m_bSpeedMode = false;
             SetSpeedModeSettings(m_pClient->m_bSpeedMode);
@@ -1536,12 +1906,14 @@ void Drawing::DrawFlashController()
 
         ImGui::SameLine();
 
-        ImGui::PushItemWidth(100);
+        ImGui::PushItemWidth(35);
 
         if (ImGui::DragInt(skCryptDec("##AutoDCFlashCount"), &m_pClient->m_iAutoDCFlashCount, 10, 1, 10))
             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("AutoDCFlashCount"), m_pClient->m_iAutoDCFlashCount);
 
         ImGui::PopItemWidth();
+
+        ImGui::SameLine();
 
         if (ImGui::Checkbox(skCryptDec("##AutoWarFlash"), &m_pClient->m_bAutoWarFlash))
             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("AutoWarFlash"), m_pClient->m_bAutoWarFlash ? 1 : 0);
@@ -1552,12 +1924,14 @@ void Drawing::DrawFlashController()
 
         ImGui::SameLine();
 
-        ImGui::PushItemWidth(100);
+        ImGui::PushItemWidth(35);
 
         if (ImGui::DragInt(skCryptDec("##AutoWarFlashCount"), &m_pClient->m_iAutoWarFlashCount, 10, 1, 10))
             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("AutoWarFlashCount"), m_pClient->m_iAutoWarFlashCount);
 
         ImGui::PopItemWidth();
+
+        ImGui::SameLine();
 
         if (ImGui::Checkbox(skCryptDec("##AutoExpFlash"), &m_pClient->m_bAutoExpFlash))
             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("AutoExpFlash"), m_pClient->m_bAutoExpFlash ? 1 : 0);
@@ -1568,7 +1942,7 @@ void Drawing::DrawFlashController()
 
         ImGui::SameLine();
 
-        ImGui::PushItemWidth(100);
+        ImGui::PushItemWidth(35);
 
         if (ImGui::DragInt(skCryptDec("##AutoExpFlashCount"), &m_pClient->m_iAutoExpFlashCount, 10, 1, 10))
             m_pUserConfiguration->SetInt(skCryptDec("Settings"), skCryptDec("AutoExpFlashCount"), m_pClient->m_iAutoExpFlashCount);
@@ -1589,7 +1963,7 @@ void Drawing::DrawRoutePlannerController()
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
 
-        if (ImGui::Button(m_pClient->m_bIsRoutePlanning ? skCryptDec("Rota Kaydetmeyi Bitir") : skCryptDec("Rota Kaydetmeye Basla"), ImVec2(340.0f, 0.0f)))
+        if (ImGui::Button(m_pClient->m_bIsRoutePlanning ? skCryptDec("Rota Kaydetmeyi Bitir") : skCryptDec("Rota Kaydetmeye Basla"), ImVec2(470.0f, 0.0f)))
         {
             if (m_pClient->m_bIsRoutePlanning)
             {
@@ -1646,13 +2020,13 @@ void Drawing::DrawRoutePlannerController()
             ImGui::EndPopup();
         }
 
-        ImGui::BeginChild(skCryptDec("RoutePlannerChild"), ImVec2(340, 200), true);
+        ImGui::BeginChild(skCryptDec("RoutePlannerChild"), ImVec2(470, 200), true);
         {
             if (ImGui::BeginTable(skCryptDec("RoutePlanner.Table"), 4, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
             {
-                ImGui::TableSetupColumn(skCryptDec("Adim"), ImGuiTableColumnFlags_WidthFixed, 50);
-                ImGui::TableSetupColumn(skCryptDec("X"), ImGuiTableColumnFlags_WidthFixed, 50);
-                ImGui::TableSetupColumn(skCryptDec("Y"), ImGuiTableColumnFlags_WidthFixed, 50);
+                ImGui::TableSetupColumn(skCryptDec("Adim"), ImGuiTableColumnFlags_WidthFixed, 100);
+                ImGui::TableSetupColumn(skCryptDec("X"), ImGuiTableColumnFlags_WidthFixed, 100);
+                ImGui::TableSetupColumn(skCryptDec("Y"), ImGuiTableColumnFlags_WidthFixed, 100);
                 ImGui::TableSetupColumn(skCryptDec("Hareket"), ImGuiTableColumnFlags_WidthFixed, 100);
                 ImGui::TableHeadersRow();
 
@@ -1722,9 +2096,9 @@ void Drawing::DrawRoutePlannerController()
             if (!m_pClient->m_bIsRoutePlanning)
                 ImGui::BeginDisabled();
 
-            ImGui::BeginChild(skCryptDec("RoutePlannerStepChild"), ImVec2(340, 90), true);
+            ImGui::BeginChild(skCryptDec("RoutePlannerStepChild"), ImVec2(470, 90), true);
             {
-                if (ImGui::Button(skCryptDec("Potcu Noktasi"), ImVec2(158.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Potcu Noktasi"), ImVec2(145.0f, 0.0f)))
                 {
                     Route pAutoRoute{};
                     pAutoRoute.fX = m_pClient->GetX();
@@ -1736,7 +2110,7 @@ void Drawing::DrawRoutePlannerController()
 
                 ImGui::SameLine();
 
-                if (ImGui::Button(skCryptDec("Sundries Noktasi"), ImVec2(158.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Sundries Noktasi"), ImVec2(145.0f, 0.0f)))
                 {
                     Route pAutoRoute{};
                     pAutoRoute.fX = m_pClient->GetX();
@@ -1746,7 +2120,9 @@ void Drawing::DrawRoutePlannerController()
                     m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
                 }
 
-                if (ImGui::Button(skCryptDec("Inn Hostess Noktasi"), ImVec2(158.0f, 0.0f)))
+                ImGui::SameLine();
+
+                if (ImGui::Button(skCryptDec("Inn Hostess Noktasi"), ImVec2(145.0f, 0.0f)))
                 {
                     Route pAutoRoute{};
                     pAutoRoute.fX = m_pClient->GetX();
@@ -1756,9 +2132,7 @@ void Drawing::DrawRoutePlannerController()
                     m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
                 }
 
-                ImGui::SameLine();
-
-                if (ImGui::Button(skCryptDec("Bot Baslama Noktasi"), ImVec2(158.0f, 0.0f)))
+                if (ImGui::Button(skCryptDec("Bot Baslama Noktasi"), ImVec2(145.0f, 0.0f)))
                 {
                     Route pAutoRoute{};
                     pAutoRoute.fX = m_pClient->GetX();
@@ -1768,7 +2142,9 @@ void Drawing::DrawRoutePlannerController()
                     m_pClient->m_vecRoutePlan.push_back(pAutoRoute);
                 }
 
-                if (ImGui::Button(skCryptDec("Genie Baslama Noktasi"), ImVec2(158.0f, 0.0f)))
+                ImGui::SameLine();
+
+                if (ImGui::Button(skCryptDec("Genie Baslama Noktasi"), ImVec2(145.0f, 0.0f)))
                 {
                     Route pAutoRoute{};
                     pAutoRoute.fX = m_pClient->GetX();
@@ -1806,7 +2182,7 @@ void Drawing::DrawRouteListController()
         ImGui::SameLine();
 
         ImGui::SetCursorPosX(87);
-        ImGui::SetNextItemWidth(200);
+        ImGui::SetNextItemWidth(332);
 
         if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.SupplyRouteList"), m_pClient->m_szSelectedSupplyRoute.c_str()))
         {
@@ -1866,7 +2242,7 @@ void Drawing::DrawRouteListController()
         ImGui::SameLine();
 
         ImGui::SetCursorPosX(87);
-        ImGui::SetNextItemWidth(200);
+        ImGui::SetNextItemWidth(332);
 
         if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.DeathRouteList"), m_pClient->m_szSelectedDeathRoute.c_str()))
         {
@@ -1926,7 +2302,7 @@ void Drawing::DrawRouteListController()
         ImGui::SameLine();
 
         ImGui::SetCursorPosX(87);
-        ImGui::SetNextItemWidth(200);
+        ImGui::SetNextItemWidth(332);
 
         if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.LoginRouteList"), m_pClient->m_szSelectedLoginRoute.c_str()))
         {
@@ -2045,5 +2421,126 @@ void Drawing::DrawMainSettingsArea()
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
         ImGui::Text(skCryptDec("LR Kaldir"));
         ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox(skCryptDec("##DisableCasting"), &m_pClient->m_bDisableCasting))
+        {
+            m_pClient->UpdateSkillSuccessRate(m_pClient->m_bDisableCasting);
+
+            m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DisableCasting"), m_pClient->m_bDisableCasting ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+        ImGui::Text(skCryptDec("El Dusurmeyi Kaldir"));
+        ImGui::PopStyleColor();
+
+        if (ImGui::Checkbox(skCryptDec("##DeathEffect"), &m_pClient->m_bDeathEffect))
+        {
+            m_pClient->PatchDeathEffect(m_pClient->m_bDeathEffect);
+            m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("DeathEffect"), m_pClient->m_bDeathEffect ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Death Animasyonu Kaldir"));
+
+        ImGui::SameLine();
+
+        if (ImGui::Checkbox(skCryptDec("##HidePlayer"), &m_pClient->m_bHidePlayer))
+        {
+            m_pClient->HidePlayer(m_pClient->m_bHidePlayer);
+            m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("HidePlayer"), m_pClient->m_bHidePlayer ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Oyunculari Gizle"));
+    }
+}
+
+void Drawing::DrawExtraController()
+{
+    ImGui::BulletText(skCryptDec("Magic Bag"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        ImGui::Text("Sol banka, 1. ve 2. slota +1 Dagger koy ve Magic Bag Tak dugmesine bas");
+
+        if (ImGui::Button(skCryptDec("Magic Bag Tak"), ImVec2(150.0f, 0.0f)))
+        {
+            std::vector<TNpc> tmpVecNpc = m_pClient->m_vecNpc;
+
+            auto findedNpc = std::find_if(tmpVecNpc.begin(), tmpVecNpc.end(),
+                [&](const TNpc& a) { return a.iProtoID == 16096; });
+
+            if (findedNpc != tmpVecNpc.end())
+            {
+                m_pClient->SendWarehouseGetOut(findedNpc->iID, 110110001, 0, 0, 54, 1);
+                m_pClient->SendWarehouseGetOut(findedNpc->iID, 110110001, 0, 1, 68, 1);
+            }
+        }
+    }
+}
+
+void Drawing::DrawLevelDownerController()
+{
+    ImGui::BulletText(skCryptDec("Level Dusurme"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        if (ImGui::Checkbox(skCryptDec("##LevelDownerEnableCheckBox"), &m_pClient->m_bLevelDownerEnable))
+            m_pClient->m_bLevelDownerEnable = m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("Enable"), m_pClient->m_bLevelDownerEnable ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Npc ID"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(100);
+        if (ImGui::DragInt(skCryptDec("##LevelDownerNpcId"), &m_pClient->m_iLevelDownerNpcId, 1, -1, 100000))
+        {
+            m_pClient->m_iLevelDownerNpcId = m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), m_pClient->m_iLevelDownerNpcId);
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(skCryptDec("Npc ID Ekle"), ImVec2(150.0f, 0.0f)))
+        {
+            if (m_pClient->GetTarget() != -1)
+            {
+                m_pClient->m_iLevelDownerNpcId = m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), m_pClient->GetTarget());
+            }
+        }
+
+        if (ImGui::Checkbox(skCryptDec("##LevelDownerLevelLimitCheckBox"), &m_pClient->m_bLevelDownerLevelLimitEnable))
+            m_pClient->m_bLevelDownerLevelLimitEnable = m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimitEnable"), m_pClient->m_bLevelDownerLevelLimitEnable ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Level Limit"));
+
+        ImGui::SameLine();
+
+        ImGui::PushItemWidth(100);
+
+        if (ImGui::DragInt(skCryptDec("##LevelDownerLevelLimit"), &m_pClient->m_iLevelDownerLevelLimit, 1, 1, 83))
+        {
+            m_pClient->m_iLevelDownerLevelLimit = m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimit"), m_pClient->m_iLevelDownerLevelLimit);
+        }
+
+        ImGui::PopItemWidth();
+
+        if (ImGui::Checkbox(skCryptDec("##LevelDownerStopIfNearbyPlayerCheckBox"), &m_pClient->m_bLevelDownerStopNearbyPlayer))
+            m_pClient->m_bLevelDownerStopNearbyPlayer = m_pUserConfiguration->SetInt(skCryptDec("LevelDowner"), skCryptDec("StopIfNearbyPlayer"), m_pClient->m_bLevelDownerStopNearbyPlayer ? 1 : 0);
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Yakinlarda Oyuncu Varsa Durdur"));
     }
 }

@@ -62,11 +62,6 @@ public:
 	bool IsWarrior(int32_t eClass = CLASS_UNKNOWN);
 	bool IsPriest(int32_t eClass = CLASS_UNKNOWN);
 
-	uint32_t GetProperHealthBuff(int MaxHp);
-	uint32_t GetProperDefenceBuff();
-	uint32_t GetProperMindBuff();
-	uint32_t GetProperHeal();
-
 	float GetSkillNextUseTime(int32_t iSkillID);
 	void SetSkillNextUseTime(int32_t iSkillID, float fSkillNextUseTime);
 
@@ -82,8 +77,6 @@ public:
 
 	uint8_t GetSkillPoint(int32_t Slot);
 
-	bool GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills);
-
 	int32_t GetInventoryItemCount(uint32_t iItemID);
 	TItemData GetInventoryItem(uint32_t iItemID);
 	TItemData GetInventoryItemSlot(uint8_t iSlotPosition);
@@ -91,9 +84,6 @@ public:
 
 	int32_t GetInventoryEmptySlot();
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
-
-	int SearchMob(std::vector<EntityInfo>& vecOutMobList);
-	int SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList);
 
 protected:
 	Ini* GetUserConfiguration();
@@ -105,9 +95,10 @@ protected:
 public:
 	TPlayer m_PlayerMySelf;
 
+	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
+
 protected:
 	std::map<int32_t, float> m_mapSkillUseTime;
-	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
 	std::vector<TNpc> m_vecNpc;
@@ -130,7 +121,6 @@ public:
 	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool bWaitCastTime = true);
 
 protected:
-	bool IsEnemy(DWORD iBase);
 	void StepCharacterForward(bool bStart);
 	void BasicAttack();
 	void BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval);
@@ -142,7 +132,6 @@ protected:
 	void SelectServer(uint8_t iIndex);
 	void ShowChannel();
 	void SelectChannel(uint8_t iIndex);
-	void ConnectGameServer(BYTE byServerId);
 	void ConnectServer();
 
 	void SelectCharacterSkip();
@@ -159,8 +148,6 @@ public:
 	void SetSaveCPUSleepTime(int32_t iValue);
 
 protected:
-	
-
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
 	void SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex = 0);
@@ -205,11 +192,6 @@ public:
 	void SendCaptcha(std::string szCode);
 
 public:
-	int32_t GetPartyMemberCount();
-	bool GetPartyList(std::vector<Party>& vecParty);
-	bool GetPartyMember(int32_t iID, Party& pPartyMember);
-
-public:
 	void SendWarehouseOpen(uint32_t iNpcID);
 	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 	void SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
@@ -241,7 +223,7 @@ protected:
 	bool m_bLunarWarDressUp;
 
 protected:
-	std::vector<int32_t> m_vecRegionUserList;
+	std::unordered_set<int32_t> m_vecRegionUserList;
 
 protected:
 	float m_fAttackDelta;
@@ -313,13 +295,13 @@ public:
 public:
 	void SendSelectMessage(uint8_t iMenuIndex, std::string szLuaName, bool bAccept = false);
 
-
 public:
 	std::chrono::milliseconds m_msLastDisconnectTime;
 
 protected:
-	std::vector<std::thread> m_vecThreadSkillPacket;
-
-protected:
 	bool m_bSkillCasting;
+
+public:
+	void RemoveItem(int32_t iItemSlot);
+	void HidePlayer(bool bHide);
 };

@@ -22,6 +22,9 @@ struct Route
     std::string szPacket;
     bool bReRouted;
     uint32_t pNpcID;
+    bool bSubProcessRequested;
+    bool bSubProcessFinished;
+    std::vector<TItemData> vecInventoryItemList;
 };
 
 class RouteManager

@@ -350,3 +350,54 @@ std::string toHexString(const std::vector<uint8_t>& bytes)
 
 	return ss.str();
 }
+
+const char* stristr(const char* haystack, const char* needle)
+{
+	size_t needleLength = std::strlen(needle);
+	while (*haystack)
+	{
+		if (_strnicmp(haystack, needle, needleLength) == 0)
+		{
+			return haystack;
+		}
+		haystack++;
+	}
+	return nullptr;
+}
+
+std::string calculateElapsedTime(const std::chrono::time_point<std::chrono::system_clock>& start_time) 
+{
+	auto current_time = std::chrono::system_clock::now();
+
+	auto elapsed_time = std::chrono::duration_cast<std::chrono::minutes>(current_time - start_time);
+
+	auto minutes = elapsed_time.count() % 60;
+	auto hours = elapsed_time.count() / 60;
+
+	if (minutes == 0) 
+	{
+		minutes = 1;
+	}
+
+	std::stringstream result_stream;
+
+	if (hours > 0) 
+	{
+		result_stream << hours << " saat ";
+	}
+
+	if (minutes > 0) 
+	{
+		result_stream << minutes << " dakika";
+	}
+
+	return result_stream.str();
+}
+
+std::string formatNumber(uint64_t number) 
+{
+	std::ostringstream formatted_number_stream;
+	formatted_number_stream << std::fixed << std::setprecision(2) << number;
+	std::string formatted_number = formatted_number_stream.str();
+	return formatted_number;
+}

@@ -95,4 +95,8 @@ extern uint8_t hexCharToUint8(char c);
 extern std::vector<uint8_t> fromHexString(const std::string& hexString);
 extern std::string toHexString(const std::vector<uint8_t>&bytes);
 
+extern const char* stristr(const char* haystack, const char* needle);
+
+extern std::string calculateElapsedTime(const std::chrono::time_point<std::chrono::system_clock>&start_time);
+extern std::string formatNumber(uint64_t number);
 #endif //PCH_H

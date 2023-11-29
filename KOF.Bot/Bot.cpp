@@ -139,6 +139,8 @@ void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
 
 	InitializeRouteData();
 	InitializeSupplyData();
+
+	m_startTime = std::chrono::system_clock::now();
 }
 
 void Bot::Process()

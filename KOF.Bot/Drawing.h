@@ -16,9 +16,11 @@ private:
 
 	static void DrawFilledRectangle(int x, int y, int w, int h, unsigned char r, unsigned char g, unsigned char b);
 
+	static void DrawStatisticsController();
 	static void DrawMainController();
 	static void DrawProtectionController();
 	static void DrawAutoLootController();
+	static void DrawItemListController();
 	static void DrawTransformationController();
 	static void DrawSpeedController();
 	static void DrawDistanceController();
@@ -38,6 +40,9 @@ private:
 	static void DrawRoutePlannerController();
 	static void DrawRouteListController();
 	static void DrawMainSettingsArea();
+
+	static void DrawExtraController();
+	static void DrawLevelDownerController();
 
 public:
 	static bool isActive();

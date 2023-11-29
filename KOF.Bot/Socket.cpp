@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Socket.h"
+#include "Compression.h"
 
 Socket::Socket()
 {
@@ -68,11 +69,28 @@ void Socket::Send(Packet& pkt, bool bCompress)
 
     Packet encryptionPkt = Packet();
 
-    encryptionPkt
-        << uint8_t(0) //compression disabled
-        << uint32_t(pkt.size()); //packet size
+    if (bCompress
+        && pkt.size() > Compression::MinBytes)
+    {
+        encryptionPkt
+            << uint8_t(1) //compression enabled
+            << uint32_t(pkt.size()); //packet size
 
-    encryptionPkt.append(pkt.contents(), pkt.size()); //raw data
+        uint32_t crc = 0;
+        uint32_t outLength = 0;
+
+        uint8_t* outBuffer = Compression::CompressWithCRC32(pkt.contents(), pkt.size(), &outLength, &crc);
+
+        encryptionPkt.append(outBuffer, outLength);
+    }
+    else
+    {
+        encryptionPkt
+            << uint8_t(0) //compression disabled
+            << uint32_t(pkt.size()); //packet size
+
+        encryptionPkt.append(pkt.contents(), pkt.size()); //raw data
+    }
 
     std::vector<uint8_t> vecEncryptedPacket;
     size_t iEncryptionPacketLength = m_Cryption->Encryption(encryptionPkt.contents(), encryptionPkt.size(), vecEncryptedPacket);
@@ -139,8 +157,16 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 
     uint8_t* iPacket;
 
-    iPacket = new uint8_t[iPacketLength];
-    iPacket = (uint8_t*)&vecDecryptedPacket[5];
+    if (iFlag == 1)
+    {
+        uint32_t iPacketCompressedLength = *(uint32_t*)&vecDecryptedPacket[5];
+        iPacket = Compression::DecompressWithCRC32(&vecDecryptedPacket[9], iPacketCompressedLength, iPacketLength, 0);
+    }
+    else
+    {
+        iPacket = new uint8_t[iPacketLength];
+        iPacket = (uint8_t*)&vecDecryptedPacket[5];
+    }
 
     Packet pkt = Packet(iPacket[0], iPacketLength);
 

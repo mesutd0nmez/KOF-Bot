@@ -37,9 +37,11 @@ public:
 
 	int GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault);
 	std::vector<int> GetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault);
+	std::unordered_set<int> GetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault);
 
 	int SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault);
 	std::vector<int> SetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault);
+	std::unordered_set<int> SetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault);
 
 	bool GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefault);
 	void GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings = true);

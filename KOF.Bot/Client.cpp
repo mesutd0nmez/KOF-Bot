@@ -453,106 +453,6 @@ bool Client::IsPriest(int32_t eClass)
 	return false;
 }
 
-uint32_t Client::GetProperHealthBuff(int MaxHp)
-{
-	int32_t iUndyHpPercent = (int32_t)std::ceil((MaxHp / 100) * 60);
-
-	if (GetSkillPoint(1) >= 78)
-	{
-		if (iUndyHpPercent >= 2500)
-			return 111654;
-		else
-			return 112675;
-	}
-	else if (GetSkillPoint(1) >= 70)
-	{
-		if (iUndyHpPercent >= 2000)
-			return 111654;
-		else
-			return 112670;
-	}
-	else if (GetSkillPoint(1) >= 57)
-	{
-		if (iUndyHpPercent >= 1500)
-			return 111654;
-		else
-			return 111657;
-	}
-	else if (GetSkillPoint(1) >= 54)
-	{
-		if (iUndyHpPercent >= 1200)
-			return 111654;
-		else
-			return 111655;
-	}
-	else if (GetSkillPoint(1) >= 42)
-		return 111642;
-	else if (GetSkillPoint(1) >= 33)
-		return 111633;
-	else if (GetSkillPoint(1) >= 24)
-		return 111624;
-	else if (GetSkillPoint(1) >= 15)
-		return 111615;
-	else if (GetSkillPoint(1) >= 6)
-		return 111606;
-
-	return -1;
-}
-
-uint32_t Client::GetProperDefenceBuff()
-{
-	if (GetSkillPoint(1) >= 76)
-		return 112674;
-	else if (GetSkillPoint(1) >= 60)
-		return 111660;
-	else if (GetSkillPoint(1) >= 51)
-		return 111651;
-	else if (GetSkillPoint(1) >= 39)
-		return 111639;
-	else if (GetSkillPoint(1) >= 30)
-		return 111630;
-	else if (GetSkillPoint(1) >= 21)
-		return 111621;
-	else if (GetSkillPoint(1) >= 12)
-		return 111612;
-	else if (GetSkillPoint(1) >= 3)
-		return 111603;
-
-	return -1;
-}
-
-uint32_t Client::GetProperMindBuff()
-{
-	if (GetSkillPoint(1) >= 45 && GetSkillPoint(1) <= 80)
-		return 111645;
-	else if (GetSkillPoint(1) >= 36 && GetSkillPoint(1) <= 44)
-		return 111636;
-	else if (GetSkillPoint(1) >= 27 && GetSkillPoint(1) <= 35)
-		return 111627;
-	else if (GetSkillPoint(1) >= 9 && GetSkillPoint(1) <= 26)
-		return 111609;
-
-	return -1;
-}
-
-uint32_t Client::GetProperHeal()
-{
-	if (GetSkillPoint(0) >= 45)
-		return 111545;
-	else if (GetSkillPoint(0) >= 36)
-		return 111536;
-	else if (GetSkillPoint(0) >= 27)
-		return 111527;
-	else if (GetSkillPoint(0) >= 18)
-		return 111518;
-	else if (GetSkillPoint(0) >= 9)
-		return 111509;
-	else if (GetSkillPoint(0) >= 0)
-		return 107705;
-
-	return -1;
-}
-
 float Client::GetSkillNextUseTime(int32_t iSkillID)
 {
 	auto it = m_mapSkillUseTime.find(iSkillID);
@@ -806,16 +706,6 @@ uint8_t Client::GetSkillPoint(int32_t Slot)
 	return m_Bot->ReadByte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_SKILL_POINT_BASE")) + m_Bot->GetAddress("KO_OFF_SKILL_POINT_START") + (Slot * 4));
 }
 
-bool Client::GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills)
-{
-	if (m_vecAvailableSkill.size() == 0)
-		return false;
-
-	*vecAvailableSkills = &m_vecAvailableSkill;
-
-	return true;
-}
-
 int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 {
 	int32_t iItemCount = 0;
@@ -1021,200 +911,6 @@ bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)
 	}
 
 	return true;
-}
-
-int Client::SearchMob(std::vector<EntityInfo>& vecOutMobList)
-{
-	int Ebp = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_FLDB")) + 0x28);
-	int iMobSize = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_FLDB")) + 0x2C);
-	int Fend = m_Bot->Read4Byte(m_Bot->Read4Byte(Ebp + 0x4) + 0x4);
-	int Esi = m_Bot->Read4Byte(Ebp);
-	auto Tick = std::chrono::steady_clock::now();
-
-	auto AddEntityInfo = [&](DWORD Base)
-	{
-		DWORD id = GetID(Base);
-		DWORD proto_id = GetProtoID(Base);
-		DWORD max_hp = GetMaxHp(Base);
-		DWORD hp = GetHp(Base);
-		DWORD state = GetActionState(Base);
-		DWORD nation = GetNation(Base);
-		Vector3 pos = Vector3(GetX(Base), GetZ(Base), GetY(Base));
-		float distance = GetDistance(pos);
-		//bool enemy = IsEnemy(Base);
-		bool enemy = true;
-		float radius = GetRadius(Base) * GetScaleZ(Base);
-
-		vecOutMobList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy, radius));
-	};
-
-	while (Esi != Ebp 
-		&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
-	{
-		if (vecOutMobList.size() == iMobSize)
-			break;
-
-		DWORD base = m_Bot->Read4Byte(Esi + 0x14);
-
-		if (base == 0) break;
-
-		auto found = std::find_if(vecOutMobList.begin(), vecOutMobList.end(), [&base](const EntityInfo& target) { return target.m_iBase == base; });
-
-		if (found == vecOutMobList.end())
-		{
-			AddEntityInfo(base);
-		}
-
-		DWORD Eax = m_Bot->Read4Byte(Esi + 0x8);
-
-		if (Eax != Fend)
-		{
-			while (m_Bot->Read4Byte(Eax) != Fend 
-				&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
-			{
-				Eax = m_Bot->Read4Byte(Eax);
-			}
-
-			Esi = Eax;
-		}
-		else
-		{
-			DWORD Ebx = m_Bot->Read4Byte(Esi + 0x4);
-
-			while (Esi == m_Bot->Read4Byte(Ebx + 0x8) 
-				&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
-			{
-				Esi = Ebx;
-				Ebx = m_Bot->Read4Byte(Ebx + 0x4);
-			}
-
-			if (m_Bot->Read4Byte(Esi + 0x8) != Ebx)
-				Esi = Ebx;
-		}
-	}
-
-	return static_cast<int>(vecOutMobList.size());
-}
-
-int Client::SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList)
-{
-	int Ebp = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_FLDB")) + 0x30);
-	int iPlayerSize = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_FLDB")) + 0x34);
-	int Fend = m_Bot->Read4Byte(m_Bot->Read4Byte(Ebp + 0x4) + 0x4);
-	int Esi = m_Bot->Read4Byte(Ebp);
-	auto Tick = std::chrono::steady_clock::now();
-
-	auto AddEntityInfo = [&](DWORD Base)
-	{
-		DWORD id = GetID(Base);
-		DWORD proto_id = GetProtoID(Base);
-		DWORD max_hp = GetMaxHp(Base);
-		DWORD hp = GetHp(Base);
-		DWORD state = GetActionState(Base);
-		DWORD nation = GetNation(Base);
-		Vector3 pos = Vector3(GetX(Base), GetZ(Base), GetY(Base));
-		float distance = GetDistance(pos);
-		//bool enemy = IsEnemy(Base);
-		bool enemy = true;
-		float radius = GetRadius(Base) * GetScaleZ(Base);
-
-		vecOutPlayerList.emplace_back(EntityInfo(Base, id, proto_id, max_hp, hp, state, nation, pos, distance, enemy, radius));
-	};
-
-	while (Esi != Ebp 
-		&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
-	{
-		if (vecOutPlayerList.size() == iPlayerSize)
-			break;
-
-		DWORD base = m_Bot->Read4Byte(Esi + 0x14);
-
-		if (base == 0) break;
-
-		auto found = std::find_if(vecOutPlayerList.begin(), vecOutPlayerList.end(), [&base](const EntityInfo& target) { return target.m_iBase == base; });
-
-		if (found == vecOutPlayerList.end())
-		{
-			AddEntityInfo(base);
-		}
-
-		DWORD Eax = m_Bot->Read4Byte(Esi + 0x8);
-
-		if (Eax != Fend)
-		{
-			while (m_Bot->Read4Byte(Eax) != Fend
-				&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
-			{
-				Eax = m_Bot->Read4Byte(Eax);
-			}
-
-			Esi = Eax;
-		}
-		else
-		{
-			DWORD Ebx = m_Bot->Read4Byte(Esi + 0x4);
-
-			while (Esi == m_Bot->Read4Byte(Ebx + 0x8)
-				&& std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - Tick).count() < 50)
-			{
-				Esi = Ebx;
-				Ebx = m_Bot->Read4Byte(Ebx + 0x4);
-			}
-
-			if (m_Bot->Read4Byte(Esi + 0x8) != Ebx)
-				Esi = Ebx;
-		}
-	}
-
-	return static_cast<int>(vecOutPlayerList.size());
-}
-
-bool Client::IsEnemy(DWORD iBase)
-{
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
-		0x68, 0x00, 0x00, 0x00, 0x00,
-		0xBF, 0x00, 0x00, 0x00, 0x00,
-		0xFF, 0xD7,
-		0xA3, 0x00, 0x00, 0x00, 0x00,
-		0x61,
-		0xC3,
-	};
-
-	DWORD iChr = m_Bot->GetAddress(skCryptDec("KO_PTR_CHR"));
-	DWORD iIsEnemy = m_Bot->GetAddress(skCryptDec("KO_PTR_ENEMY"));
-
-	memcpy(byCode + 3, &iChr, sizeof(iChr));
-	memcpy(byCode + 8, &iBase, sizeof(iBase));
-	memcpy(byCode + 13, &iIsEnemy, sizeof(iIsEnemy));
-
-	LPVOID pBaseAddress = VirtualAllocEx(hProcess, nullptr, sizeof(DWORD), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
-	if (!pBaseAddress)
-	{
-		return false;
-	}
-
-	memcpy(byCode + 20, &pBaseAddress, sizeof(pBaseAddress));
-
-	DWORD iEnemyBase = 0;
-	SIZE_T bytesRead = 0;
-
-	if (m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode)))
-	{
-		if (ReadProcessMemory(hProcess, pBaseAddress, &iEnemyBase, sizeof(iEnemyBase), &bytesRead) && bytesRead == sizeof(iEnemyBase))
-		{
-			VirtualFreeEx(hProcess, pBaseAddress, 0, MEM_RELEASE);
-			return iEnemyBase > 0;
-		}
-	}
-
-	VirtualFreeEx(hProcess, pBaseAddress, 0, MEM_RELEASE);
-	return false;
 }
 
 void Client::StepCharacterForward(bool bStart)
@@ -1437,34 +1133,6 @@ void Client::SetSaveCPUSleepTime(int32_t iValue)
 	Packet pkt = Packet(PIPE_SAVE_CPU);
 	pkt << int32_t(iValue);
 	m_Bot->SendInternalMailslot(pkt);
-}
-
-void Client::ConnectGameServer(BYTE byServerId)
-{
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
-
-	DWORD dwCGameProcIntroLogin = m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO")));
-	DWORD dwCUILoginIntro = m_Bot->Read4Byte(dwCGameProcIntroLogin + m_Bot->GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO")));
-
-	m_Bot->Write4Byte(dwCUILoginIntro + m_Bot->GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO_SERVER_INDEX")), byServerId);
-
-	BYTE byCode[] =
-	{
-		0x60,
-		0x8B, 0x0D, 0x0, 0x0, 0x0, 0x0,
-		0xBF, 0x0, 0x0, 0x0, 0x0,
-		0xFF, 0xD7,
-		0x61,
-		0xC3,
-	};
-
-	DWORD dwPtrIntro = m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO"));
-	CopyBytes(byCode + 3, dwPtrIntro);
-
-	DWORD dwPtrServerSelect = m_Bot->GetAddress(skCryptDec("KO_PTR_SERVER_SELECT"));
-	CopyBytes(byCode + 8, dwPtrServerSelect);
-
-	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
 
 void Client::SelectCharacterSkip()
@@ -2314,90 +1982,6 @@ void Client::SendCaptcha(std::string szCode)
 	SendPacket(pkt);
 }
 
-int32_t Client::GetPartyMemberCount()
-{
-	return m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_PARTY_BASE")) + m_Bot->GetAddress("KO_OFF_PARTY_LIST_COUNT"));
-}
-
-bool Client::GetPartyList(std::vector<Party>& vecParty)
-{
-	return false;
-
-	int32_t iBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_PARTY_BASE")) + m_Bot->GetAddress("KO_OFF_PARTY_LIST")));
-	int32_t iPartyMemberCount = GetPartyMemberCount();
-
-	if (iPartyMemberCount == 0)
-		return false;
-
-	for (int i = 0; i <= iPartyMemberCount - 1; i++)
-	{
-		Party pParty;
-		memset(&pParty, 0, sizeof(pParty));
-
-		pParty.iID = m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_ID"));
-
-		pParty.iHP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_HP"));
-		pParty.iMaxHP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_MAXHP"));
-		pParty.iMP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_MP"));
-		pParty.iMaxMP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_MAXMP"));
-		pParty.iCure = m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_CURE"));
-
-		int MemberNameLen = m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_NAME_LENGTH"));
-
-		if (MemberNameLen > 15)
-			pParty.szName = m_Bot->ReadString(m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_NAME")), MemberNameLen);
-		else
-			pParty.szName = m_Bot->ReadString(iBase + m_Bot->GetAddress("KO_OFF_PARTY_NAME"), MemberNameLen);
-
-		vecParty.push_back(pParty);
-
-		iBase = m_Bot->Read4Byte(iBase);
-	}
-
-	return vecParty.size() > 0;
-}
-
-bool Client::GetPartyMember(int32_t iID, Party& pPartyMember)
-{
-	int32_t iBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_PARTY_BASE")) + m_Bot->GetAddress("KO_OFF_PARTY_LIST")));
-	int32_t iPartyMemberCount = GetPartyMemberCount();
-
-	if (iPartyMemberCount == 0)
-		return false;
-
-	for (int i = 0; i <= iPartyMemberCount - 1; i++)
-	{
-		Party pParty;
-		memset(&pParty, 0, sizeof(pParty));
-
-		pParty.iID = m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_ID"));
-
-		if (pParty.iID != iID)
-		{
-			iBase = m_Bot->Read4Byte(iBase);
-			continue;
-		}
-
-		pParty.iHP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_HP"));
-		pParty.iMaxHP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_MAXHP"));
-		pParty.iMP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_MP"));
-		pParty.iMaxMP = (int16_t)m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_MAXMP"));
-		pParty.iCure = m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_CURE"));
-
-		int MemberNameLen = m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_NAME_LENGTH"));
-
-		if (MemberNameLen > 15)
-			pParty.szName = m_Bot->ReadString(m_Bot->Read4Byte(iBase + m_Bot->GetAddress("KO_OFF_PARTY_NAME")), MemberNameLen);
-		else
-			pParty.szName = m_Bot->ReadString(iBase + m_Bot->GetAddress("KO_OFF_PARTY_NAME"), MemberNameLen);
-
-		pPartyMember = pParty;
-		return true;
-	}
-
-	return false;
-}
-
 void Client::UpdateSkillSuccessRate(bool bDisableCasting)
 {
 	for (auto& e : m_vecAvailableSkill)
@@ -3118,4 +2702,44 @@ bool Client::IsWarehouseOpen()
 	DWORD iTransactionDlgBase = m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + 0x1F8;
 	DWORD iiTransactionDlgOpenAddress = m_Bot->Read4Byte(iTransactionDlgBase) + 0xE4;
 	return m_Bot->Read2Byte(iiTransactionDlgOpenAddress) != 0;
+}
+
+void Client::RemoveItem(int32_t iItemSlot)
+{
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * (iItemSlot + 14))));
+
+	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE1"), 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE1") + 0x4, iItemSlot);
+	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE1") + 0x8, iItemBase);
+
+	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE2"), 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x4, iItemBase);
+	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x0C, 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x10, iItemSlot);
+	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x14, 1);
+
+	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+
+	BYTE byPatch[] =
+	{
+		0x60,
+		0xB9, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	memcpy(byPatch + 2, &iInventoryBase, sizeof(iInventoryBase));
+
+	DWORD iCallAddress = m_Bot->GetAddress("KO_REMOVE_CALL");
+	memcpy(byPatch + 7, &iCallAddress, sizeof(iCallAddress));
+
+	m_Bot->ExecuteRemoteCode(hProcess, byPatch, sizeof(byPatch));
+}
+
+void Client::HidePlayer(bool bHide)
+{
+	m_Bot->WriteByte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_HIDE")), bHide ? 0 : 1);
 }

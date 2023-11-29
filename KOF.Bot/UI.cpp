@@ -22,7 +22,7 @@ DWORD UI::dTargetPID = 0;
 HMODULE UI::hCurrentModule = nullptr;
 
 DWORD g_iLastFrameTime = 0;
-DWORD g_iFPSLimit = 30;
+DWORD g_iFPSLimit = 15;
 
 /**
     @brief : Function that create a D3D9 device.
@@ -138,7 +138,7 @@ void UI::Render(Bot* pBot)
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    io.Framerate = 30;
+    io.Framerate = 15;
     
     //ImGui::StyleColorsDark();
     StyleColorsHazar();
@@ -160,7 +160,7 @@ void UI::Render(Bot* pBot)
 
     while (!bDone)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         if (hTargetWindow != nullptr && GetAsyncKeyState(VK_INSERT) & 1)
             Drawing::bDraw = !Drawing::bDraw;

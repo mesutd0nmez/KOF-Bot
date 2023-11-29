@@ -50,8 +50,6 @@ void ClientHandler::Clear()
 	m_msLastSupplyTime = std::chrono::milliseconds(0);
 	m_msLastSelectedTargetTime = std::chrono::milliseconds(0);
 
-	m_iRouteStep = RouteStepType::STEP_NONE;
-
 	m_iOTPRetryCount = 0;
 
 	m_fLastSearchTargetTime = 0.0f;
@@ -65,10 +63,28 @@ void ClientHandler::Clear()
 	m_fLastRegionProcessTime = 0.0f;
 	m_fLastLootRequestTime = 0.0f;
 	m_fLastPotionProcessTime = 0.0f;
+	m_fLastStatisticsProcessTime = 0.0f;
+	m_fLastRemoveItemProcessTime = 0.0f;
+	m_fLastLevelDownerProcessTime = 0.0f;
+	m_fLastSupplyProcessTime = 0.0f;
+	m_fLastRouteProcessTime = 0.0f;
 
 	m_bIsRoutePlanning = false;
 
 	m_bRouteWarpListLoaded = false;
+
+	m_pCurrentRunningRoute = nullptr;
+
+	m_iStartCoin = 0;
+	m_iCoinCounter = 0;
+	m_iExpCounter = 0;
+
+	m_iEveryMinuteCoinPrevCounter = 0;
+	m_iEveryMinuteCoinCounter = 0;
+	m_iEveryMinuteExpPrevCounter = 0;
+	m_iEveryMinuteExpCounter = 0;
+
+
 
 	ClearUserConfiguration();
 }
@@ -175,10 +191,6 @@ void ClientHandler::ClearUserConfiguration()
 
 	m_bAutoRepair = false;
 
-	m_bAutoSellSlotRange = false;
-	m_iAutoSellSlotRangeStart = 1;
-	m_iAutoSellSlotRangeEnd = 14;
-
 	m_vecSupplyList.clear();
 
 	m_bAutoSupply = false;
@@ -187,6 +199,23 @@ void ClientHandler::ClearUserConfiguration()
 	m_bSlotExpLimitEnable = false;
 
 	m_bPartyLeaderSelect = false;
+
+	m_vecLootItemList.clear();
+	m_vecSellItemList.clear();
+	m_vecInnItemList.clear();
+	m_vecDeleteItemList.clear();
+
+	m_iLootType = 0;
+
+	m_bMinPriceLootEnable = false;
+
+	m_bHidePlayer = false;
+
+	m_bLevelDownerEnable = false;
+	m_iLevelDownerNpcId = -1;
+	m_bLevelDownerLevelLimitEnable = true;
+	m_iLevelDownerLevelLimit = 35;
+	m_bLevelDownerStopNearbyPlayer = true;
 }
 
 void ClientHandler::Initialize()
@@ -299,10 +328,6 @@ void ClientHandler::InitializeUserConfiguration()
 
 	m_bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), m_bAutoRepair);
 
-	m_bAutoSellSlotRange = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSellSlotRange"), m_bAutoSellSlotRange);
-	m_iAutoSellSlotRangeStart = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeStart"), m_iAutoSellSlotRangeStart);
-	m_iAutoSellSlotRangeEnd = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoSellSlotRangeEnd"), m_iAutoSellSlotRangeEnd);
-
 	m_vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), m_vecSupplyList);
 
 	m_bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), m_bAutoSupply);
@@ -311,8 +336,24 @@ void ClientHandler::InitializeUserConfiguration()
 
 	m_bSlotExpLimitEnable = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("SlotExpLimitEnable"), m_bSlotExpLimitEnable);
 
-
 	m_bPartyLeaderSelect = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("PartyLeaderSelect"), m_bPartyLeaderSelect);
+
+	m_vecLootItemList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("LootItemList"), m_vecLootItemList);
+	m_vecSellItemList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("SellItemList"), m_vecSellItemList);
+	m_vecInnItemList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("InnItemList"), m_vecInnItemList);
+	m_vecDeleteItemList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("DeleteItemList"), m_vecDeleteItemList);
+
+	m_iLootType = GetUserConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("LootType"), m_iLootType);
+
+	m_bMinPriceLootEnable = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("MinPriceLootEnable"), m_bMinPriceLootEnable);
+
+	m_bHidePlayer = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("HidePlayer"), m_bHidePlayer);
+
+	m_bLevelDownerEnable = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("Enable"), m_bLevelDownerEnable);
+	m_iLevelDownerNpcId = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), m_iLevelDownerNpcId);
+	m_bLevelDownerLevelLimitEnable = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimitEnable"), m_bLevelDownerLevelLimitEnable);
+	m_iLevelDownerLevelLimit = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimit"), m_iLevelDownerLevelLimit);
+	m_bLevelDownerStopNearbyPlayer = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("StopIfNearbyPlayer"), m_bLevelDownerStopNearbyPlayer);
 }
 
 void ClientHandler::StartHandler()
@@ -366,6 +407,7 @@ void ClientHandler::Process()
 			CharacterProcess();
 
 			SearchTargetProcess();
+
 			MoveToTargetProcess();
 			BasicAttackProcess();
 			AttackProcess();
@@ -380,14 +422,9 @@ void ClientHandler::Process()
 			RouteRecorderProcess();
 			SupplyProcess();
 
-			if (m_bCharacterSizeEnable)
-			{
-				if (GetScaleZ() != (float)m_iCharacterSize)
-				{
-					DWORD iMyBase = m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_CHR")));
-					SetScale(iMyBase, (float)m_iCharacterSize, (float)m_iCharacterSize, (float)m_iCharacterSize);
-				}
-			}
+			StatisticsProcess();
+			RemoveItemProcess();
+			LevelDownerProcess();
 		}
 	}
 }
@@ -398,9 +435,9 @@ void ClientHandler::OnReady()
 	printf("Client handler ready\n");
 #endif
 
-	new std::thread([&]()
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	//new std::thread([&]()
+	//{
+		//std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 		PushPhase(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO")));
 
@@ -419,13 +456,13 @@ void ClientHandler::OnReady()
 					m_Bot->m_jSelectedAccount[szAccountIdAttribute.c_str()].get<std::string>(),
 					m_Bot->m_jSelectedAccount[szPasswordAttribute.c_str()].get<std::string>());
 
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				//std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 				WriteLoginInformation(m_szAccountId, m_szPassword);
 				ConnectLoginServer();
 			}
 		}
-	});
+	//});
 }
 
 void ClientHandler::PatchSocket()
@@ -499,87 +536,119 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 
 	m_Bot->WriteBytes((DWORD)pMailSlotNameAddress, vecMailSlotName);
 
-	m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, 2000, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-
 	if (m_RecvHookAddress == 0)
 	{
-		return;
+		BYTE byHookPatch[] =
+		{
+			0x55,
+			0x8B, 0xEC,
+			0x83, 0xC4, 0xF4,
+			0x33, 0xC0,
+			0x89, 0x45, 0xFC,
+			0x33, 0xD2,
+			0x89, 0x55, 0xF8,
+			0x6A, 0x00,
+			0x68, 0x80, 0x00, 0x00, 0x00,
+			0x6A, 0x03,
+			0x6A, 0x00,
+			0x6A, 0x01,
+			0x68, 0x00, 0x00, 0x00, 0x40,
+			0x68, 0x00, 0x00, 0x00, 0x00,
+			0xE8, 0x00, 0x00, 0x00, 0x00,
+			0x89, 0x45, 0xF8,
+			0x6A, 0x00,
+			0x8D, 0x4D, 0xFC,
+			0x51,
+			0xFF, 0x75, 0x0C,
+			0xFF, 0x75, 0x08,
+			0xFF, 0x75, 0xF8,
+			0xE8, 0x00, 0x00, 0x00, 0x00,
+			0x89, 0x45, 0xF4,
+			0xFF, 0x75, 0xF8,
+			0xE8, 0x00, 0x00, 0x00, 0x00,
+			0x8B, 0xE5,
+			0x5D,
+			0xC3
+		};
+
+		m_RecvHookAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byHookPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+		if (m_RecvHookAddress == 0)
+		{
+			return;
+		}
+
+		CopyBytes(byHookPatch + 35, pMailSlotNameAddress);
+
+		DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 39, (DWORD)pCreateFilePtr);
+		CopyBytes(byHookPatch + 40, iCreateFileDifference);
+
+		DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 62, (DWORD)pWriteFilePtr);
+		CopyBytes(byHookPatch + 63, iWriteFileDifference);
+
+		DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 73, (DWORD)pCloseHandlePtr);
+		CopyBytes(byHookPatch + 74, iCloseHandlePtrDifference);
+
+		std::vector<BYTE> vecHookPatch(byHookPatch, byHookPatch + sizeof(byHookPatch));
+		m_Bot->WriteBytes((DWORD)m_RecvHookAddress, vecHookPatch);
 	}
 
 	DWORD iRecvAddress = m_Bot->Read4Byte(m_Bot->Read4Byte(iAddress)) + 0x8;
 
 	BYTE byPatch[] =
 	{
-		0x60,										//pushad 
-		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
-		0x8B, 0x40, 0x08,							//mov eax,[eax+08]
-		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
-		0x8B, 0x44, 0x24, 0x24,						//mov eax,[esp+24]
-		0x8B, 0x40, 0x04,							//mov eax,[eax+04]
-		0x89, 0x05, 0x00, 0x00, 0x00, 0x00,			//mov [iRecvProcessLength],eax
-		0x3D, 0x00, 0x40, 0x00, 0x00,				//cmp eax,00004000
-		0x7D, 0x3D,									//jnl 2624005F
-
-		0x6A, 0x00,									//push 00
-		0x68, 0x80, 0x00, 0x00, 0x00,				//push 00000080
-		0x6A, 0x03,									//push 03
-		0x6A, 0x00,									//push 00
-		0x6A, 0x01,									//push 01
-		0x68, 0x00, 0x00, 0x00, 0x40,				//push 40000000
-		0x68, 0x00, 0x00, 0x00, 0x00,				//push pMailSlotNameAddress	
-			
-		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CreateFileW
-		0x83, 0xF8, 0xFF,							//cmp eax,-01
-			
-		0x74, 0x1C,									//je 2624005F
-		0x6A, 0x00,									//push 00
-		0x54,										//push esp
-		0x90,										//nop
-			
-		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessLength]
-		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,			//push [iRecvProcessPacket]
-
-		0x50,										//push eax
-		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.WriteFile
-		0x50,										//push eax
-		0xE8, 0x00, 0x00, 0x00, 0x00,				//call KERNEL32.CloseHandle
-		0x61,										//popad 
-
-		0xE9, 0x00, 0x00, 0x00, 0x00,				//jmp KnightOnLine.exe+3009F0
+		0x55,									//push ebp
+		0x8B, 0xEC,								//mov ebp,esp
+		0x83, 0xC4, 0xF8,						//add esp,-08
+		0x53,									//push ebx
+		0x8B, 0x45, 0x08,						//mov eax,[ebp+08]
+		0x83, 0xC0, 0x04,						//add eax,04
+		0x8B, 0x10,								//mov edx,[eax]
+		0x89, 0x55, 0xFC,						//mov [ebp-04],edx
+		0x8B, 0x4D, 0x08,						//mov ecx,[ebp+08]
+		0x83, 0xC1, 0x08,						//add ecx,08
+		0x8B, 0x01,								//mov eax,[ecx]
+		0x89, 0x45, 0xF8,						//mov [ebp-08],eax
+		0xFF, 0x75, 0xFC,						//push [ebp-04]
+		0xFF, 0x75, 0xF8,						//push [ebp-08]
+		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- ClientHook::RecvProcess()
+		0xFF, 0xD0,								//call eax
+		0x83, 0xC4, 0x08,						//add esp,08
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,		//mov ecx,[00000000] <-- KO_PTR_DLG
+		0xFF, 0x75, 0x0C,						//push [ebp+0C]
+		0xFF, 0x75, 0x08,						//push [ebp+08]
+		0xB8, 0x00, 0x00, 0x00, 0x00,			//mov eax,00000000 <-- GetRecvCallAddress()
+		0xFF, 0xD0,								//call eax
+		0x5B,									//pop ebx
+		0x59,									//pop ecx
+		0x59,									//pop ecx
+		0x5D,									//pop ebp
+		0xC2, 0x08, 0x00						//ret 0008
 	};
 
-	DWORD iRecvProcessPacket = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x104);
-	CopyBytes(byPatch + 10, iRecvProcessPacket);
+	DWORD iRecvProcessFunction = (DWORD)(LPVOID*)m_RecvHookAddress;
+	CopyBytes(byPatch + 36, iRecvProcessFunction);
 
-	DWORD iRecvProcessLength = (DWORD)(LPVOID*)((DWORD)m_RecvHookAddress+0x100);
-	CopyBytes(byPatch + 23, iRecvProcessLength);
+	DWORD iDlgAddress = iAddress;
+	CopyBytes(byPatch + 47, iDlgAddress);
 
-	CopyBytes(byPatch + 53, pMailSlotNameAddress);
-
-	DWORD iCreateFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 57, (DWORD)pCreateFilePtr);
-	CopyBytes(byPatch + 58, iCreateFileDifference);
-
-	CopyBytes(byPatch + 73, iRecvProcessLength);
-	CopyBytes(byPatch + 79, iRecvProcessPacket);
-
-	DWORD iWriteFileDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 84, (DWORD)pWriteFilePtr);
-	CopyBytes(byPatch + 85, iWriteFileDifference);
-
-	DWORD iCloseHandlePtrDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 90, (DWORD)pCloseHandlePtr);
-	CopyBytes(byPatch + 91, iCloseHandlePtrDifference);
-	
 	DWORD iRecvCallAddress = m_Bot->Read4Byte(iRecvAddress);
-	DWORD iCallDifference = Memory::GetDifference((DWORD)m_RecvHookAddress + 96, (DWORD)iRecvCallAddress);
-
-	CopyBytes(byPatch + 97, iCallDifference);
+	CopyBytes(byPatch + 58, iRecvCallAddress);
 
 	std::vector<BYTE> vecPatch(byPatch, byPatch + sizeof(byPatch));
 
-	m_Bot->WriteBytes((DWORD)m_RecvHookAddress, vecPatch);
+	LPVOID pPatchAddress = VirtualAllocEx(hProcess, nullptr, sizeof(byPatch), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (pPatchAddress == nullptr)
+	{
+		return;
+	}
+
+	m_Bot->WriteBytes((DWORD)pPatchAddress, vecPatch);
 
 	DWORD dwOldProtection;
 	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, PAGE_EXECUTE_READWRITE, &dwOldProtection);
-	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(iAddress)) + 0x8, (DWORD)m_RecvHookAddress);
+	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(iAddress)) + 0x8, (DWORD)pPatchAddress);
 	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
 
 #ifdef DEBUG
@@ -1109,25 +1178,19 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					new std::thread([this]()
 					{
-#ifdef DEBUG
-						printf("RecvProcess::LS_SERVERLIST: Connecting to server\n");
-#endif
 						std::string szServerIndexAttribute = skCryptDec("serverIndex");
 						std::string szChannelIndexAttribute = skCryptDec("channelIndex");
 
 						if (m_Bot->GetPlatformType() != PlatformType::CNKO)
 						{
 							LoadServerList();
-							std::this_thread::sleep_for(std::chrono::milliseconds(100));
 						}
 
 						SelectServer(m_Bot->m_jSelectedAccount[szServerIndexAttribute.c_str()].get<int32_t>() - 1);
 
 						if (m_Bot->GetPlatformType() != PlatformType::CNKO)
 						{
-							std::this_thread::sleep_for(std::chrono::milliseconds(100));
 							ShowChannel();
-							std::this_thread::sleep_for(std::chrono::milliseconds(100));
 							SelectChannel(m_Bot->m_jSelectedAccount[szChannelIndexAttribute.c_str()].get<int32_t>() - 1);
 						}
 
@@ -1326,8 +1389,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				m_PlayerMySelf.tInventory[i].iExpirationTime = pkt.read<uint32_t>();
 			}
 
-			LoadSkillData();
-
 			m_Bot->SendLoadUserConfiguration(GetServerId(), m_PlayerMySelf.szName);
 
 #ifdef DEBUG
@@ -1464,8 +1525,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						case 0x01:
 						{
-							m_vecAttackSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-							m_vecCharacterSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+							m_vecAttackSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::unordered_set<int>());
+							m_vecCharacterSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::unordered_set<int>());
 							LoadSkillData();
 						}
 						break;
@@ -1492,8 +1553,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						case 0x01:
 						{
-							m_vecAttackSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-							m_vecCharacterSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+							m_vecAttackSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::unordered_set<int>());
+							m_vecCharacterSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::unordered_set<int>());
 							LoadSkillData();
 						}
 						break;
@@ -1524,8 +1585,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 						m_PlayerMySelf.eClass = (Class)iClass;
 
-						m_vecAttackSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::vector<int>());
-						m_vecCharacterSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::vector<int>());
+						m_vecAttackSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::unordered_set<int>());
+						m_vecCharacterSkillList = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::unordered_set<int>());
 
 						LoadSkillData();
 					}					
@@ -1544,14 +1605,22 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				WaitCondition(GetUserConfiguration() == nullptr)
 				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
-				WaitCondition(m_Bot->IsTableLoaded() == false);
 
 				LoadSkillData();
+
+				m_iStartCoin = m_PlayerMySelf.iGold;
 
 				SetAuthority(m_bWallHack ? 0 : 1);
 				PatchObjectCollision(m_bLegalWallHack);
 				PatchDeathEffect(m_bDeathEffect);
 				UpdateSkillSuccessRate(m_bDisableCasting);
+				HidePlayer(m_bHidePlayer);
+
+				if (m_bCharacterSizeEnable)
+				{
+					DWORD iMyBase = Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_CHR")));
+					SetScale(iMyBase, (float)m_iCharacterSize, (float)m_iCharacterSize, (float)m_iCharacterSize);
+				}
 
 				m_bAttackStatus = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
 				m_bCharacterStatus = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
@@ -1820,7 +1889,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						if (iUserID == m_PlayerMySelf.iID)
 							continue;
 
-						m_vecRegionUserList.push_back(iUserID);
+						m_vecRegionUserList.insert(iUserID);
 					}
 
 #ifdef DEBUG
@@ -1908,6 +1977,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					if (it != m_vecNpc.end())
 					{
 						it->eState = PSA_DEATH;
+
+						m_vecNpc.erase(
+							std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
+								[&](const TNpc& a) { return a.iID == it->iID; }),
+							m_vecNpc.end());
 
 #ifdef DEBUG
 						printf("RecvProcess::WIZ_DEAD: %d Npc Dead\n", iID);
@@ -2217,45 +2291,41 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 							if (pPartyMember != m_vecPartyMembers.end())
 							{
-								std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-								if (GetAvailableSkill(&vecAvailableSkills))
+								auto it = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
+									[&](const TABLE_UPC_SKILL& a) { return a.iID == iSkillID; });
+
+								if (it != m_vecAvailableSkill.end())
 								{
-									auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-										[&](const TABLE_UPC_SKILL& a) { return a.iID == iSkillID; });
-
-									if (it != vecAvailableSkills->end())
+									switch (it->iBaseId)
 									{
-										switch (it->iBaseId)
-										{
-											case 111654: case 112675: case 112670: case 111657:
-											case 111655: case 111642: case 111633: case 111624:
-											case 111615: case 111606:
-											{
-												pPartyMember->fHpBuffTime = Bot::TimeGet();
-												pPartyMember->iHpBuffAttemptCount = 0;
-											}
-											break;
+									case 111654: case 112675: case 112670: case 111657:
+									case 111655: case 111642: case 111633: case 111624:
+									case 111615: case 111606:
+									{
+										pPartyMember->fHpBuffTime = Bot::TimeGet();
+										pPartyMember->iHpBuffAttemptCount = 0;
+									}
+									break;
 
-											case 112674: case 111660: case 111651: case 111639:
-											case 111630: case 111621: case 111612: case 111603:
-											{
-												pPartyMember->fACBuffTime = Bot::TimeGet();
-												pPartyMember->iACBuffAttemptCount = 0;
-											}
-											break;
+									case 112674: case 111660: case 111651: case 111639:
+									case 111630: case 111621: case 111612: case 111603:
+									{
+										pPartyMember->fACBuffTime = Bot::TimeGet();
+										pPartyMember->iACBuffAttemptCount = 0;
+									}
+									break;
 
-											case 111645: case 111636: case 111627: case 111609:
-											{
-												pPartyMember->fMindBuffTime = Bot::TimeGet();
-												pPartyMember->iMindBuffAttemptCount = 0;
-											}
-											break;
+									case 111645: case 111636: case 111627: case 111609:
+									{
+										pPartyMember->fMindBuffTime = Bot::TimeGet();
+										pPartyMember->iMindBuffAttemptCount = 0;
+									}
+									break;
 
-											case 107010:
-											{
-											}
-											break;
-										}
+									case 107010:
+									{
+									}
+									break;
 									}
 								}
 							}
@@ -2319,87 +2389,83 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 								if (pPartyMember != m_vecPartyMembers.end())
 								{
-									std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-									if (GetAvailableSkill(&vecAvailableSkills))
-									{
-										auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-											[&](const TABLE_UPC_SKILL& a) { return a.iID == iSkillID; });
+									auto it = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
+										[&](const TABLE_UPC_SKILL& a) { return a.iID == iSkillID; });
 
-										if (it != vecAvailableSkills->end())
+									if (it != m_vecAvailableSkill.end())
+									{
+										switch (it->iBaseId)
 										{
-											switch (it->iBaseId)
+										case 111654: case 112675: case 112670: case 111657:
+										case 111655: case 111642: case 111633: case 111624:
+										case 111615: case 111606:
+										{
+											if (iData[3] == SKILLMAGIC_FAIL_CASTING)
 											{
-												case 111654: case 112675: case 112670: case 111657:
-												case 111655: case 111642: case 111633: case 111624:
-												case 111615: case 111606: 
-												{
-													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
-													{
-														pPartyMember->fHpBuffTime = 0.0f;
-														pPartyMember->iHpBuffAttemptCount = 0;
-													}
-													else
-													{
-														if (pPartyMember->iHpBuffAttemptCount < 2)
-														{
-															pPartyMember->iHpBuffAttemptCount++;
-														}
-														else
-														{
-															pPartyMember->fHpBuffTime = Bot::TimeGet();
-														}
-													}
-												}
-												break;
-												
-												case 112674: case 111660: case 111651: case 111639: 
-												case 111630: case 111621: case 111612: case 111603: 
-												{
-													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
-													{
-														pPartyMember->fACBuffTime = 0;
-														pPartyMember->iACBuffAttemptCount = 0;
-													}
-													else
-													{
-														if (pPartyMember->iACBuffAttemptCount < 2)
-														{
-															pPartyMember->iACBuffAttemptCount++;
-														}
-														else
-														{
-															pPartyMember->fACBuffTime = Bot::TimeGet();
-														}
-													}
-												}
-												break;
-												
-												case 111645: case 111636: case 111627: case 111609: 
-												{
-													if (iData[3] == SKILLMAGIC_FAIL_CASTING)
-													{
-														pPartyMember->fMindBuffTime = 0;
-														pPartyMember->iMindBuffAttemptCount = 0;
-													}
-													else
-													{
-														if (pPartyMember->iMindBuffAttemptCount < 2)
-														{
-															pPartyMember->iMindBuffAttemptCount++;
-														}
-														else 
-														{
-															pPartyMember->fMindBuffTime = Bot::TimeGet();
-														}
-													}
-												}
-												break;
-												
-												case 107010:
-												{
-												}
-												break;
+												pPartyMember->fHpBuffTime = 0.0f;
+												pPartyMember->iHpBuffAttemptCount = 0;
 											}
+											else
+											{
+												if (pPartyMember->iHpBuffAttemptCount < 2)
+												{
+													pPartyMember->iHpBuffAttemptCount++;
+												}
+												else
+												{
+													pPartyMember->fHpBuffTime = Bot::TimeGet();
+												}
+											}
+										}
+										break;
+
+										case 112674: case 111660: case 111651: case 111639:
+										case 111630: case 111621: case 111612: case 111603:
+										{
+											if (iData[3] == SKILLMAGIC_FAIL_CASTING)
+											{
+												pPartyMember->fACBuffTime = 0;
+												pPartyMember->iACBuffAttemptCount = 0;
+											}
+											else
+											{
+												if (pPartyMember->iACBuffAttemptCount < 2)
+												{
+													pPartyMember->iACBuffAttemptCount++;
+												}
+												else
+												{
+													pPartyMember->fACBuffTime = Bot::TimeGet();
+												}
+											}
+										}
+										break;
+
+										case 111645: case 111636: case 111627: case 111609:
+										{
+											if (iData[3] == SKILLMAGIC_FAIL_CASTING)
+											{
+												pPartyMember->fMindBuffTime = 0;
+												pPartyMember->iMindBuffAttemptCount = 0;
+											}
+											else
+											{
+												if (pPartyMember->iMindBuffAttemptCount < 2)
+												{
+													pPartyMember->iMindBuffAttemptCount++;
+												}
+												else
+												{
+													pPartyMember->fMindBuffTime = Bot::TimeGet();
+												}
+											}
+										}
+										break;
+
+										case 107010:
+										{
+										}
+										break;
 										}
 									}
 								}
@@ -2675,91 +2741,149 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			uint32_t iBundleID = pkt.read<uint32_t>();
 			uint8_t iResult = pkt.read<uint8_t>();
 
-			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
-				[&](const TLoot a) { return a.iBundleID == iBundleID; });
-
-			if (pLoot != m_vecLootList.end())
+			switch (iResult)
 			{
-				switch (iResult)
+				case 0:
 				{
-					case 0:
-					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Bundle open req failed\n");
-#endif
-					}
-					break;
+	#ifdef DEBUG
+					printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Bundle open req failed\n");
+	#endif
+				}
+				break;
 
-					case 1:
+				case 1:
+				{
+					if (m_bAutoLoot)
 					{
-						for (size_t i = 0; i < pLoot->iItemCount; i++)
+						auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
+							[&](const TLoot a) { return a.iBundleID == iBundleID; });
+
+						if (pLoot != m_vecLootList.end())
 						{
-							uint32_t iItemID = pkt.read<uint32_t>();
-							uint32_t iItemCount = pkt.read<int16_t>();
+							for (size_t i = 0; i < pLoot->iItemCount; i++)
+							{
+								uint32_t iItemID = pkt.read<uint32_t>();
+								uint32_t iItemCount = pkt.read<int16_t>();
 
-							if (iItemID == 900000000)
-							{
-								SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
-#ifdef DEBUG
-								printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
-#endif
-							}
-							else
-							{
-								__TABLE_ITEM* pItemData;
-								__TABLE_ITEM_EXTENSION* pItemExtensionData;
-								if (m_Bot->GetItemData(iItemID, pItemData) 
-									&& m_Bot->GetItemExtensionData(iItemID, pItemData->byExtIndex, pItemExtensionData))
+								switch (m_iLootType)
 								{
-									if (m_iLootMinPrice == 0
-										|| (m_iLootMinPrice > 0 && pItemData->iPriceRepair >= m_iLootMinPrice)
-										|| (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
-											|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA))
+									// Loot All
+									case 0:
 									{
-										
-										SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
-#ifdef DEBUG
-										printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d,%d,%d\n", 
-											iBundleID, iItemID, iItemCount, (int16_t)i, pItemData->iPriceRepair, pItemExtensionData->iItemType);
-#endif
+										if (iItemID == 900000000)
+										{
+											SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+										}
+										else
+										{
+											__TABLE_ITEM* pItemData;
+											__TABLE_ITEM_EXTENSION* pItemExtensionData;
+											if (m_Bot->GetItemData(iItemID, pItemData)
+												&& m_Bot->GetItemExtensionData(iItemID, pItemData->byExtIndex, pItemExtensionData))
+											{
+												if (!m_bMinPriceLootEnable
+													|| (m_bMinPriceLootEnable && pItemData->iPriceRepair >= m_iLootMinPrice)
+													|| (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+														|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA))
+												{
+
+													SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+												}
+											}
+											else
+											{
+												SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+											}
+										}
 									}
+									break;
+
+									// Loot Only Coin
+									case 1:
+									{
+										if (iItemID == 900000000)
+										{
+											SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+										}
+									}
+									break;
+
+									// Loot Only Item List
+									case 2:
+									{
+										if (iItemID == 900000000)
+										{
+											SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+										}
+										else
+										{
+											uint32_t iItemBaseID = iItemID / 1000 * 1000;
+											bool bLootSelected = m_vecLootItemList.count(iItemBaseID) > 0;
+
+											__TABLE_ITEM* pItemData;
+											__TABLE_ITEM_EXTENSION* pItemExtensionData;
+											if (m_Bot->GetItemData(iItemID, pItemData)
+												&& m_Bot->GetItemExtensionData(iItemID, pItemData->byExtIndex, pItemExtensionData))
+											{
+												if (bLootSelected)
+												{
+													if (!m_bMinPriceLootEnable
+														|| (m_bMinPriceLootEnable && pItemData->iPriceRepair >= m_iLootMinPrice)
+														|| (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+															|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA))
+													{
+
+														SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+													}
+												}
+											}
+											else
+											{
+												SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
+											}
+										}
+									}
+									break;
 								}
-								else
-								{
-									SendBundleItemGet(iBundleID, iItemID, (int16_t)i);
-#ifdef DEBUG
-									printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: pItemData == nullptr || pItemExtensionData == nullptr\n");
-									printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: %d,%d,%d,%d\n", iBundleID, iItemID, iItemCount, (int16_t)i);
-#endif
-								}
-							}						
+							}
+
+							m_vecLootList.erase(
+								std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+									[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
+								m_vecLootList.end());
 						}
 					}
-					break;
-
-					case 2:
-					{
-						m_vecLootList.erase(
-							std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-								[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
-							m_vecLootList.end());
-					}
-					break;
-
-					default:
-					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Result %d not implemented\n", iResult);
-#endif
-					}
-					break;
 				}
+				break;
+
+				case 2:
+				{
+					m_vecLootList.erase(
+						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+							[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
+						m_vecLootList.end());
+				}
+				break;
+
+				default:
+				{
+	#ifdef DEBUG
+					printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Result %d not implemented\n", iResult);
+	#endif
+				}
+				break;
 			}
 		}
 		break;
@@ -2772,20 +2896,20 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				case 0x00:
 				{
-					uint32_t iBundleID = pkt.read<uint32_t>();
+					//uint32_t iBundleID = pkt.read<uint32_t>();
 
-					// Unknown1: -15, -7 = No space in the inventory for this item
-					int16_t Unknown1 = pkt.read<int16_t>();
-					int16_t Unknown2 = pkt.read<int16_t>();		
+					//// Unknown1: -15, -7 = No space in the inventory for this item
+					//int16_t Unknown1 = pkt.read<int16_t>();
+					//int16_t Unknown2 = pkt.read<int16_t>();		
 
-					m_vecLootList.erase(
-						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-							[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
-						m_vecLootList.end());
+					//m_vecLootList.erase(
+					//	std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
+					//		[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
+					//	m_vecLootList.end());
 
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_GET: Failed - %d,%d,%d,%d\n", iType, iBundleID, Unknown1, Unknown2);
-#endif
+//#ifdef DEBUG
+//					printf("RecvProcess::WIZ_ITEM_GET: Failed - %d,%d,%d,%d\n", iType, iBundleID, Unknown1, Unknown2);
+//#endif
 				}
 				break;
 
@@ -2803,6 +2927,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						iItemCount = pkt.read<uint16_t>();
 
 					uint32_t iGold = pkt.read<uint32_t>();
+
+					if (iItemID == 900000000)
+					{
+						m_iCoinCounter += iItemCount;
+					}
 
 #ifdef DEBUG
 					printf("RecvProcess::WIZ_ITEM_GET: Success - %d,%d,%d,%d,%d,%d\n", iType, iBundleID, iPos, iItemID, iItemCount, iGold);
@@ -3120,7 +3249,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		case WIZ_WARP:
 		{
 #ifdef DEBUG
-			printf("SendProcess::WIZ_WARP\n");
+			printf("RecvProcess::WIZ_WARP\n");
 #endif
 
 			if (m_bTownOrTeleportStopBot)
@@ -3276,24 +3405,20 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							&& m_bTeleportRequest
 							&& szMessage.rfind(m_szTeleportRequestMessage.c_str(), 0) == 0)
 						{
-							std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-							if (GetAvailableSkill(&vecAvailableSkills))
-							{
-								auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
-									[&](const PartyMember& a)
-									{
-										return a.iMemberID == iSenderID;
-									});
-
-								if (pMember != m_vecPartyMembers.end())
+							auto pMember = std::find_if(m_vecPartyMembers.begin(), m_vecPartyMembers.end(),
+								[&](const PartyMember& a)
 								{
-									auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-										[](const TABLE_UPC_SKILL& a) { return a.iBaseId == 109004; });
+									return a.iMemberID == iSenderID;
+								});
 
-									if (it != vecAvailableSkills->end())
-									{
-										new std::thread([=]() { UseSkillWithPacket(*it, iSenderID); });
-									}
+							if (pMember != m_vecPartyMembers.end())
+							{
+								auto it = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
+									[](const TABLE_UPC_SKILL& a) { return a.iBaseId == 109004; });
+
+								if (it != m_vecAvailableSkill.end())
+								{
+									new std::thread([=]() { UseSkillWithPacket(*it, iSenderID); });
 								}
 							}
 						}
@@ -3374,8 +3499,55 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						TItemData* pItem = &m_PlayerMySelf.tWarehouse[i];
 
 						pItem->iPos = i;
-
 						pkt >> pItem->iItemID >> pItem->iDurability >> pItem->iCount >> pItem->iFlag >> pItem->iSerial >> pItem->iExpirationTime;
+					}
+
+					if (m_pCurrentRunningRoute != nullptr 
+						&& m_pCurrentRunningRoute->eStepType == STEP_INN
+						&& m_pCurrentRunningRoute->bSubProcessRequested)
+					{
+						if (m_vecInnItemList.size() > 0)
+						{
+							for (const TItemData& pItem : m_pCurrentRunningRoute->vecInventoryItemList)
+							{
+								if (pItem.iItemID == 0)
+									continue;
+
+								uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+								bool bInnSelected = m_vecInnItemList.count(iItemBaseID) > 0;
+
+								if (!bInnSelected)
+									continue;
+
+								uint8_t iContable = 0;
+
+								__TABLE_ITEM* pItemData;
+
+								if (m_Bot->GetItemData(pItem.iItemID, pItemData))
+								{
+									iContable = pItemData->byContable;
+								}
+
+								int iRealSlot = GetWarehouseAvailableSlot(pItem.iItemID, iContable);
+								int iPage = iRealSlot / 24;
+								int iSlot = iRealSlot % 24;
+
+								SendWarehouseGetIn(m_pCurrentRunningRoute->pNpcID, pItem.iItemID, (uint8_t)iPage, pItem.iPos - 14, (uint8_t)iSlot, pItem.iCount);
+
+								m_PlayerMySelf.tWarehouse[iRealSlot] = pItem;
+								m_PlayerMySelf.tWarehouse[iRealSlot].iPos = iRealSlot;
+
+								if (iContable)
+								{
+									m_PlayerMySelf.tWarehouse[iRealSlot].iCount += pItem.iCount;
+								}
+							}
+
+							SendNpcEvent(m_pCurrentRunningRoute->pNpcID);
+							SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+						}
+
+						m_pCurrentRunningRoute->bSubProcessFinished = true;
 					}
 				}
 				break;
@@ -3559,7 +3731,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		}
 		break;
 
-		case WIZ_COMPRESS_PACKET:
+		/*case WIZ_COMPRESS_PACKET:
 		{
 			uint32_t compressedLength = pkt.read<uint32_t>();
 			uint32_t originalLength = pkt.read<uint32_t>();
@@ -3572,7 +3744,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				RecvProcess(decompressedBuffer, originalLength);
 			}
 		}
-		break;
+		break;*/
 
 		case WIZ_REGENE:
 		{
@@ -3855,6 +4027,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			uint64_t iGainedExp = iExp - m_PlayerMySelf.iExp;
 
+			m_iExpCounter += iGainedExp;
+
 			if (m_bSlotExpLimitEnable)
 			{
 				if (m_iSlotExpLimit > iGainedExp)
@@ -3886,6 +4060,369 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			m_PlayerMySelf.iGold = iChangeAmount;
 		}
 		break;
+
+		case WIZ_TRADE_NPC:
+		{
+			int32_t iNpcSellingGroup = pkt.read<int32_t>();
+
+			if (m_pCurrentRunningRoute != nullptr
+				&& m_pCurrentRunningRoute->eStepType == STEP_POTION
+				&& m_pCurrentRunningRoute->bSubProcessRequested)
+			{
+				/**
+				 * Selling Operations
+				 */
+
+				if (m_vecSellItemList.size() > 0)
+				{
+					std::vector<TItemData> vecInventoryItemList;
+					GetInventoryItemList(vecInventoryItemList);
+
+					uint8_t iSellPageCount = 0;
+					std::vector<SSItemSell> vecInventoryItemSell[2];
+
+					for (const TItemData& pItem : vecInventoryItemList)
+					{
+						if (pItem.iItemID == 0)
+							continue;
+
+						//Promise Of Training
+						if (pItem.iItemID == 989511000)
+							continue;
+
+						__TABLE_ITEM* pItemData;
+						if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+							continue;
+
+						__TABLE_ITEM_EXTENSION* pItemExtensionData;
+						if (!m_Bot->GetItemExtensionData(pItem.iItemID, pItemData->byExtIndex, pItemExtensionData))
+							continue;
+
+						if (pItemData->byNeedRace == RACE_TRADEABLE_IN_72HR
+							|| pItemData->byNeedRace == RACE_NO_TRADE
+							|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD
+							|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD2
+							|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+							continue;
+
+						if (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA)
+							continue;
+
+						uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+						bool bSellSelected = m_vecSellItemList.count(iItemBaseID) > 0;
+
+						if (bSellSelected)
+						{
+							if (vecInventoryItemSell[iSellPageCount].size() == 14)
+								iSellPageCount++;
+
+							vecInventoryItemSell[iSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(pItem.iPos - 14), pItem.iCount));
+						}
+					}
+
+					if (vecInventoryItemSell[0].size() > 0)
+					{
+						for (size_t i = 0; i <= iSellPageCount; i++)
+						{
+							SendItemTradeSell(iNpcSellingGroup, m_pCurrentRunningRoute->pNpcID, vecInventoryItemSell[i]);
+						}
+
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+					}
+				}
+
+				/**
+				 * Buying Operations
+				 */
+
+				if (m_bAutoSupply)
+				{
+					auto jSupplyList = m_Bot->GetSupplyList();
+
+					uint8_t iBuyPageCount = 0;
+					std::vector<SSItemBuy> vecInventoryItemBuy[2];
+					std::vector<int32_t> vecExceptedBuyPos;
+
+					for (size_t i = 0; i < jSupplyList.size(); i++)
+					{
+						std::string szItemIdAttribute = skCryptDec("itemid");
+						std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+						std::string szCountAttribute = skCryptDec("count");
+
+						int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
+						int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
+
+						bool bSelected = std::find(m_vecSupplyList.begin(), m_vecSupplyList.end(), iItemId) != m_vecSupplyList.end();
+
+						if (!bSelected)
+							continue;
+
+						if (iSellingGroup != iNpcSellingGroup)
+							continue;
+
+						std::vector<SShopItem> vecShopItemTable;
+						if (!m_Bot->GetShopItemTable(iNpcSellingGroup, vecShopItemTable))
+							continue;
+
+						uint8_t iPos = -1;
+						int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
+							skCryptDec("Supply"),
+							std::to_string(iItemId).c_str(),
+							jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
+
+						TItemData pInventoryItem = GetInventoryItem(iItemId);
+
+						if (pInventoryItem.iItemID != 0)
+						{
+							if (pInventoryItem.iCount >= iItemCount)
+								continue;
+
+							iPos = (uint8_t)pInventoryItem.iPos;
+							iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
+						}
+						else
+						{
+							iPos = (uint8_t)GetInventoryEmptySlot(vecExceptedBuyPos);
+						}
+
+						if (iPos == -1 || iItemCount == 0)
+							continue;
+
+						auto pShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
+							[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
+
+						if (pShopItem == vecShopItemTable.end())
+							continue;
+
+						if (vecInventoryItemBuy[iBuyPageCount].size() == 14)
+							iBuyPageCount++;
+
+						vecInventoryItemBuy[iBuyPageCount].push_back(
+							SSItemBuy(pShopItem->m_iItemId, (iPos - 14), iItemCount, pShopItem->m_iPage, pShopItem->m_iPos));
+
+						vecExceptedBuyPos.push_back(iPos);
+					}
+
+					if (vecInventoryItemBuy[0].size() > 0)
+					{
+						for (size_t i = 0; i <= iBuyPageCount; i++)
+						{
+							SendItemTradeBuy(iNpcSellingGroup, m_pCurrentRunningRoute->pNpcID, vecInventoryItemBuy[i]);
+						}
+
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+					}
+				}
+
+				m_pCurrentRunningRoute->bSubProcessFinished = true;
+			}
+		}
+		break;
+
+		case WIZ_REPAIR_NPC:
+		{
+			int32_t iNpcSellingGroup = pkt.read<int32_t>();
+
+			if (m_pCurrentRunningRoute != nullptr
+				&& m_pCurrentRunningRoute->eStepType == STEP_SUNDRIES
+				&& m_pCurrentRunningRoute->bSubProcessRequested)
+			{
+				/**
+				 * Selling Operations
+				 */
+
+				if (m_vecSellItemList.size() > 0)
+				{
+					std::vector<TItemData> vecInventoryItemList;
+					GetInventoryItemList(vecInventoryItemList);
+
+					uint8_t iSellPageCount = 0;
+					std::vector<SSItemSell> vecInventoryItemSell[2];
+
+					for (const TItemData& pItem : vecInventoryItemList)
+					{
+						if (pItem.iItemID == 0)
+							continue;
+
+						//Promise Of Training
+						if (pItem.iItemID == 989511000)
+							continue;
+
+						__TABLE_ITEM* pItemData;
+						if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+							continue;
+
+						__TABLE_ITEM_EXTENSION* pItemExtensionData;
+						if (!m_Bot->GetItemExtensionData(pItem.iItemID, pItemData->byExtIndex, pItemExtensionData))
+							continue;
+
+						if (pItemData->byNeedRace == RACE_TRADEABLE_IN_72HR
+							|| pItemData->byNeedRace == RACE_NO_TRADE
+							|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD
+							|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD2
+							|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+							continue;
+
+						if (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+							|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA)
+							continue;
+
+						uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+						bool bSellSelected = m_vecSellItemList.count(iItemBaseID) > 0;
+
+						if (bSellSelected)
+						{
+							if (vecInventoryItemSell[iSellPageCount].size() == 14)
+								iSellPageCount++;
+
+							vecInventoryItemSell[iSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(pItem.iPos - 14), pItem.iCount));
+						}
+					}
+
+					if (vecInventoryItemSell[0].size() > 0)
+					{
+						for (size_t i = 0; i <= iSellPageCount; i++)
+						{
+							SendItemTradeSell(iNpcSellingGroup, m_pCurrentRunningRoute->pNpcID, vecInventoryItemSell[i]);
+						}
+
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+					}
+					
+				}
+
+				/**
+				 * Buying Operations
+				 */
+
+				if (m_bAutoSupply)
+				{
+					auto jSupplyList = m_Bot->GetSupplyList();
+
+					uint8_t iBuyPageCount = 0;
+					std::vector<SSItemBuy> vecInventoryItemBuy[2];
+					std::vector<int32_t> vecExceptedBuyPos;
+
+					for (size_t i = 0; i < jSupplyList.size(); i++)
+					{
+						std::string szItemIdAttribute = skCryptDec("itemid");
+						std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
+						std::string szCountAttribute = skCryptDec("count");
+
+						int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
+						int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
+
+						bool bSelected = std::find(m_vecSupplyList.begin(), m_vecSupplyList.end(), iItemId) != m_vecSupplyList.end();
+
+						if (!bSelected)
+							continue;
+
+						if (iSellingGroup != iNpcSellingGroup)
+							continue;
+
+						std::vector<SShopItem> vecShopItemTable;
+						if (!m_Bot->GetShopItemTable(iNpcSellingGroup, vecShopItemTable))
+							continue;
+
+						uint8_t iPos = -1;
+						int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
+							skCryptDec("Supply"),
+							std::to_string(iItemId).c_str(),
+							jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
+
+						TItemData pInventoryItem = GetInventoryItem(iItemId);
+
+						if (pInventoryItem.iItemID != 0)
+						{
+							if (pInventoryItem.iCount >= iItemCount)
+								continue;
+
+							iPos = (uint8_t)pInventoryItem.iPos;
+							iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
+						}
+						else
+						{
+							iPos = (uint8_t)GetInventoryEmptySlot(vecExceptedBuyPos);
+						}
+
+						if (iPos == -1 || iItemCount == 0)
+							continue;
+
+						auto pShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
+							[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
+
+						if (pShopItem == vecShopItemTable.end())
+							continue;
+
+						if (vecInventoryItemBuy[iBuyPageCount].size() == 14)
+							iBuyPageCount++;
+
+						vecInventoryItemBuy[iBuyPageCount].push_back(
+							SSItemBuy(pShopItem->m_iItemId, (iPos - 14), iItemCount, pShopItem->m_iPage, pShopItem->m_iPos));
+
+						vecExceptedBuyPos.push_back(iPos);
+					}
+
+					if (vecInventoryItemBuy[0].size() > 0)
+					{
+						for (size_t i = 0; i <= iBuyPageCount; i++)
+						{
+							SendItemTradeBuy(iNpcSellingGroup, m_pCurrentRunningRoute->pNpcID, vecInventoryItemBuy[i]);
+						}
+
+						SendShoppingMall(ShoppingMallType::STORE_CLOSE);
+					}
+					
+				}
+
+				/**
+				 * Repair Operations
+				 */
+
+				if (m_bAutoRepair
+					&& m_pCurrentRunningRoute->eStepType == RouteStepType::STEP_SUNDRIES)
+				{
+					for (uint8_t i = 0; i < SLOT_MAX + HAVE_MAX; i++)
+					{
+						switch (i)
+						{
+							case 1:
+							case 4:
+							case 6:
+							case 8:
+							case 10:
+							case 12:
+							case 13:
+							{
+								TItemData pInventory = GetInventoryItemSlot(i);
+
+								if (pInventory.iItemID == 0)
+									continue;
+
+								SendItemRepair(1, (uint8_t)pInventory.iPos, m_pCurrentRunningRoute->pNpcID, pInventory.iItemID);
+							}
+							break;
+						}
+					}
+				}
+				
+				m_pCurrentRunningRoute->bSubProcessFinished = true;
+			}
+		}
+		break;	
 	}
 }
 
@@ -4194,6 +4731,11 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 
 				m_vecRoutePlan.push_back(pAutoRoute);
 			}
+		}
+		break;
+
+		case WIZ_MOVE:
+		{
 		}
 		break;
 	}
@@ -5128,8 +5670,6 @@ void ClientHandler::SearchTargetProcess()
 		{
 			if (m_vecSelectedNpcIDList.size() > 0)
 			{
-				std::unordered_set<int> setSelectedNpcIDList(m_vecSelectedNpcIDList.begin(), m_vecSelectedNpcIDList.end());
-
 				std::copy_if(m_vecNpc.begin(), m_vecNpc.end(),
 					std::back_inserter(vecFilteredTarget),
 					[&](const TNpc& c)
@@ -5141,13 +5681,11 @@ void ClientHandler::SearchTargetProcess()
 								&& c.eState != PSA_DYING
 								&& c.eState != PSA_DEATH
 								&& ((c.iHPMax == 0) || (c.iHPMax != 0 && c.iHP > 0))
-								&& setSelectedNpcIDList.find(c.iID) != setSelectedNpcIDList.end());
+								&& m_vecSelectedNpcIDList.count(c.iID) > 0);
 					});
 			}
 			else
 			{
-				std::unordered_set<int> setSelectedNpcList(m_vecSelectedNpcList.begin(), m_vecSelectedNpcList.end());
-
 				std::copy_if(m_vecNpc.begin(), m_vecNpc.end(),
 					std::back_inserter(vecFilteredTarget),
 					[&](const TNpc& c)
@@ -5160,36 +5698,50 @@ void ClientHandler::SearchTargetProcess()
 								&& c.eState != PSA_DEATH
 								&& ((c.iHPMax == 0) || (c.iHPMax != 0 && c.iHP > 0))
 								&& ((m_bRangeLimit && GetDistance(Vector3(c.fX, c.fZ, c.fY)) <= (float)m_iRangeLimitValue) || !m_bRangeLimit)
-								&& setSelectedNpcList.find(c.iProtoID) != setSelectedNpcList.end());
+								&& m_vecSelectedNpcList.count(c.iProtoID) > 0);
 					});
-			}
-			
+			}	
 		}
 
 		if (vecFilteredTarget.size() > 0)
 		{
 			Vector3 v3CurrentPosition = GetPosition();
 
-			auto pSort = [&](TNpc const& a, TNpc const& b)
+			struct DistanceList 
+			{
+				float fDistance;
+				TNpc pNpc;
+			};
+
+			auto pSort = [&](const DistanceList& a, const DistanceList& b)
 				{
-					auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
-					auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
-
-					if (fADistance != fBDistance)
-					{
-						return fADistance < fBDistance;
-					}
-
-					return false;
+					return a.fDistance < b.fDistance;
 				};
 
-			std::sort(vecFilteredTarget.begin(), vecFilteredTarget.end(), pSort);
+			std::vector<DistanceList> vecDistanceList;
+			vecDistanceList.reserve(vecFilteredTarget.size());
 
-			auto& pSelectedTarget = vecFilteredTarget.front();
-
-			if (pSelectedTarget.iID != GetTarget())
+			for (const auto& pNpc : vecFilteredTarget)
 			{
-				SetTarget(pSelectedTarget.iID);
+				float fDistance = GetDistance(v3CurrentPosition, Vector3(pNpc.fX, pNpc.fZ, pNpc.fY));
+				vecDistanceList.push_back({ fDistance, pNpc });
+			}
+
+			std::sort(vecDistanceList.begin(), vecDistanceList.end(), pSort);
+
+			if (vecDistanceList[0].pNpc.iID != GetTarget())
+			{
+				SetTarget(vecDistanceList[0].pNpc.iID);
+
+				if (m_bTargetSizeEnable)
+				{
+					DWORD iTargetBase = GetEntityBase(vecDistanceList[0].pNpc.iID);
+
+					if (GetScaleZ(iTargetBase) != (float)m_iTargetSize)
+					{
+						SetScale(iTargetBase, (float)m_iTargetSize, (float)m_iTargetSize, (float)m_iTargetSize);
+					}
+				}
 			}
 		}
 
@@ -5323,17 +5875,12 @@ void ClientHandler::MinorProcess()
 		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
-		std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-		if (!GetAvailableSkill(&vecAvailableSkills))
-			return;
-
-
 		if (m_PlayerMySelf.iHP > 0 && (int32_t)std::ceil((m_PlayerMySelf.iHP * 100) / m_PlayerMySelf.iHPMax) < m_iHpProtectionValue)
 		{
-			auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+			auto it = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
 				[](const TABLE_UPC_SKILL& a) { return a.iBaseId == 107705; });
 
-			if (it == vecAvailableSkills->end())
+			if (it == m_vecAvailableSkill.end())
 				return;
 
 			if (m_PlayerMySelf.iMSP < it->iExhaustMSP)
@@ -5383,7 +5930,7 @@ void ClientHandler::PotionProcess()
 
 		if (m_bHpProtectionEnable)
 		{
-			int16_t iHp = m_PlayerMySelf.iHP; int16_t iMaxHp = m_PlayerMySelf.iHPMax;
+			int32_t iHp = m_PlayerMySelf.iHP; int32_t iMaxHp = m_PlayerMySelf.iHPMax;
 
 			if (iHp > 0 && iMaxHp > 0)
 			{
@@ -5400,7 +5947,7 @@ void ClientHandler::PotionProcess()
 
 		if (m_bMpProtectionEnable)
 		{
-			int16_t iMp = m_PlayerMySelf.iMSP; int16_t iMaxMp = m_PlayerMySelf.iMSPMax;
+			int32_t iMp = m_PlayerMySelf.iMSP; int32_t iMaxMp = m_PlayerMySelf.iMSPMax;
 
 			if (iMp > 0 && iMaxMp > 0)
 			{
@@ -5825,7 +6372,7 @@ void ClientHandler::CharacterProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastCharacterProcessTime + (500.0f / 1000.0f)))
+		if (Bot::TimeGet() < (m_fLastCharacterProcessTime + (300.0f / 1000.0f)))
 			return;
 
 		if (!m_bCharacterStatus)
@@ -5838,10 +6385,6 @@ void ClientHandler::CharacterProcess()
 			return;
 
 		if (m_PlayerMySelf.eState == PSA_DEATH)
-			return;
-
-		std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-		if (!GetAvailableSkill(&vecAvailableSkills))
 			return;
 
 		std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
@@ -5863,10 +6406,10 @@ void ClientHandler::CharacterProcess()
 		if (GetActionState() == PSA_SPELLMAGIC)
 			return;
 
-		if (IsRouting()
-			&& (GetRouteStep() == RouteStepType::STEP_SUNDRIES
-				|| GetRouteStep() == RouteStepType::STEP_POTION
-				|| GetRouteStep() == RouteStepType::STEP_INN))
+		if (m_pCurrentRunningRoute != nullptr
+			&& (m_pCurrentRunningRoute->eStepType == RouteStepType::STEP_SUNDRIES
+				|| m_pCurrentRunningRoute->eStepType == RouteStepType::STEP_POTION
+				|| m_pCurrentRunningRoute->eStepType == RouteStepType::STEP_INN))
 			return;
 
 		if (m_vecCharacterSkillList.size() == 0)
@@ -6166,42 +6709,6 @@ void ClientHandler::CharacterProcess()
 	}
 }
 
-void ClientHandler::PartySwiftProcess()
-{
-	if (!m_bPartySwift)
-		return;
-
-	if (!m_bCharacterStatus)
-		return;
-
-	if (IsZoneChanging())
-		return;
-
-	if (IsBlinking())
-		return;
-
-	if (m_PlayerMySelf.eState == PSA_DEATH)
-		return;
-
-	if (GetActionState() == PSA_SPELLMAGIC)
-		return;
-
-	if (m_vecPartyMembers.size() == 0)
-		return;
-
-	std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-	if (!GetAvailableSkill(&vecAvailableSkills))
-		return;
-
-	auto it = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
-		[&](const TABLE_UPC_SKILL& a) { return a.iBaseId == 107010; });
-
-	if (it != vecAvailableSkills->end())
-	{
-		
-	}
-}
-
 bool ClientHandler::HealthPotionProcess()
 {
 	std::vector<uint32_t> vecPotions =
@@ -6217,7 +6724,8 @@ bool ClientHandler::HealthPotionProcess()
 		389012000, 389011000, 389010000, 389070000,
 		389071000, 800124000, 800126000, 810189000,
 		810247000, 811006000, 811008000, 814679000,
-		900486000
+		900486000, 399284000, 389210000, 810947000,
+		810117000
 	};
 
 	auto pSort = [](uint32_t const& a, uint32_t const& b)
@@ -6255,6 +6763,8 @@ bool ClientHandler::ManaPotionProcess()
 		389079000, 910008000, 900810000, 389080000,
 		910009000, 900820000, 389081000, 910010000,
 		899997000, 399020000, 389082000, 931787000,
+		399285000, 810118000, 389130000, 389220000,
+		910116000, 900141000, 814680000
 	};
 
 	auto pSort = [](uint32_t const& a, uint32_t const& b)
@@ -6283,6 +6793,9 @@ void ClientHandler::RouteProcess()
 {
 	try
 	{
+		if (Bot::TimeGet() < (m_fLastRouteProcessTime + (100.0f / 1000.0f)))
+			return;
+
 		if (m_vecRouteActive.size() == 0)
 			return;
 
@@ -6292,25 +6805,25 @@ void ClientHandler::RouteProcess()
 		if (IsBlinking())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (GetActionState() == PSA_SPELLMAGIC)
 			return;
 
-		Route* pRoute = &m_vecRouteActive.front();
+		m_pCurrentRunningRoute = &m_vecRouteActive.front();
 
-		m_iRouteStep = pRoute->eStepType;
+		m_fLastRouteProcessTime = Bot::TimeGet();
 
-		switch (pRoute->eStepType)
+		switch (m_pCurrentRunningRoute->eStepType)
 		{
 			case RouteStepType::STEP_MOVE:
 			{
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute->fX, 0.0f, pRoute->fY));
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 
 				if (fDistance > 3.0f)
 				{
-					SetMovePosition(Vector3(pRoute->fX, 0.0f, pRoute->fY));
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 					return;
 				}
 			}
@@ -6318,11 +6831,11 @@ void ClientHandler::RouteProcess()
 
 			case RouteStepType::STEP_TOWN:
 			{
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute->fX, 0.0f, pRoute->fY));
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 
 				if (fDistance > 50.0f)
 				{
-					SetMovePosition(Vector3(pRoute->fX, 0.0f, pRoute->fY));
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 					return;
 				}
 
@@ -6332,12 +6845,28 @@ void ClientHandler::RouteProcess()
 
 			case RouteStepType::STEP_GENIE:
 			{
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+
+				if (fDistance > 3.0f)
+				{
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+					return;
+				}
+
 				SendStartGenie();
 			}
 			break;
 
 			case RouteStepType::STEP_BOT_START:
 			{
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+
+				if (fDistance > 3.0f)
+				{
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+					return;
+				}
+
 				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 1);
 				GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 1);
 			}
@@ -6345,18 +6874,18 @@ void ClientHandler::RouteProcess()
 
 			case RouteStepType::STEP_OBJECT_EVENT:
 			{
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute->fX, 0.0f, pRoute->fY));
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 
 				if (fDistance > 3.0f)
 				{
-					SetMovePosition(Vector3(pRoute->fX, 0.0f, pRoute->fY));
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 					return;
 				}
 
 				if (GetMoveState() != PSM_STOP)
 					return;
 
-				SendPacket(pRoute->szPacket);
+				SendPacket(m_pCurrentRunningRoute->szPacket);
 			}
 			break;
 
@@ -6365,43 +6894,165 @@ void ClientHandler::RouteProcess()
 				if (!m_bRouteWarpListLoaded)
 					return;
 
-				SendPacket(pRoute->szPacket);
+				SendPacket(m_pCurrentRunningRoute->szPacket);
 
 				m_bRouteWarpListLoaded = false;
 			}
 			break;
 
 			case RouteStepType::STEP_SUNDRIES:
-			case RouteStepType::STEP_POTION:
 			{
-				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(pRoute->fX, 0.0f, pRoute->fY));
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 
 				if (fDistance > 3.0f)
 				{
-					SetMovePosition(Vector3(pRoute->fX, 0.0f, pRoute->fY));
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+					return;
+				}
+
+				int iNpcSellingGroup = 255000;
+
+				if (!m_pCurrentRunningRoute->bReRouted)
+				{
+					std::vector<TNpc> tmpVecNpc = m_vecNpc;
+
+					Vector3 v3CurrentPosition = GetPosition();
+
+					auto pSort = [&](TNpc const& a, TNpc const& b)
+						{
+							auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+							auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+
+							if (fADistance != fBDistance)
+							{
+								return fADistance < fBDistance;
+							}
+
+							return false;
+						};
+
+					m_pCurrentRunningRoute->pNpcID = -1;
+
+					for (auto& e : tmpVecNpc)
+					{
+						if (e.iSellingGroup == iNpcSellingGroup)
+						{
+							m_pCurrentRunningRoute->pNpcID = e.iID;
+							m_pCurrentRunningRoute->fX = e.fX;
+							m_pCurrentRunningRoute->fY = e.fY;
+							break;
+						}
+					}
+
+					if (m_pCurrentRunningRoute->pNpcID != -1)
+					{
+						m_pCurrentRunningRoute->bReRouted = true;
+
+						return;
+					}
+				}
+				else
+				{
+					if (m_pCurrentRunningRoute->bSubProcessRequested == false)
+					{
+						if (GetMoveState() != PSM_STOP)
+							return;
+
+						SendNpcEvent(m_pCurrentRunningRoute->pNpcID);
+						m_pCurrentRunningRoute->bSubProcessRequested = true;
+						return;
+					}
+					else
+					{
+						if (m_pCurrentRunningRoute->bSubProcessFinished == false)
+							return;
+					}
+				}
+			}
+			break;
+
+			case RouteStepType::STEP_POTION:
+			{
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+
+				if (fDistance > 3.0f)
+				{
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
 					return;
 				}
 
 				int iNpcSellingGroup = 253000;
 
-				if (pRoute->eStepType == RouteStepType::STEP_SUNDRIES)
+				if (!m_pCurrentRunningRoute->bReRouted)
 				{
-					iNpcSellingGroup = 255000;
+					std::vector<TNpc> tmpVecNpc = m_vecNpc;
+
+					Vector3 v3CurrentPosition = GetPosition();
+
+					auto pSort = [&](TNpc const& a, TNpc const& b)
+						{
+							auto fADistance = GetDistance(v3CurrentPosition, Vector3(a.fX, a.fZ, a.fY));
+							auto fBDistance = GetDistance(v3CurrentPosition, Vector3(b.fX, b.fZ, b.fY));
+
+							if (fADistance != fBDistance)
+							{
+								return fADistance < fBDistance;
+							}
+
+							return false;
+						};
+
+					m_pCurrentRunningRoute->pNpcID = -1;
+
+					for (auto& e : tmpVecNpc)
+					{
+						if (e.iSellingGroup == iNpcSellingGroup)
+						{
+							m_pCurrentRunningRoute->pNpcID = e.iID;
+							m_pCurrentRunningRoute->fX = e.fX;
+							m_pCurrentRunningRoute->fY = e.fY;
+							break;
+						}
+					}
+
+					if (m_pCurrentRunningRoute->pNpcID != -1)
+					{
+						m_pCurrentRunningRoute->bReRouted = true;
+						return;
+					}
+				}
+				else
+				{
+					if (m_pCurrentRunningRoute->bSubProcessRequested == false)
+					{
+						if (GetMoveState() != PSM_STOP)
+							return;
+
+						SendNpcEvent(m_pCurrentRunningRoute->pNpcID);
+						m_pCurrentRunningRoute->bSubProcessRequested = true;
+						return;
+					}
+					else
+					{
+						if (m_pCurrentRunningRoute->bSubProcessFinished == false)
+							return;
+					}
+				}
+			}
+			break;
+
+			case RouteStepType::STEP_INN:
+			{
+				float fDistance = GetDistance(Vector3(GetX(), 0.0f, GetY()), Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+
+				if (fDistance > 3.0f)
+				{
+					SetMovePosition(Vector3(m_pCurrentRunningRoute->fX, 0.0f, m_pCurrentRunningRoute->fY));
+					return;
 				}
 
-				if (!pRoute->bReRouted)
+				if (!m_pCurrentRunningRoute->bReRouted)
 				{
-					struct SNpcInformation
-					{
-						SNpcInformation(int32_t iNpcID, int32_t iSellingGroup, Vector3 v3NpcPosition) :
-							m_iNpcID(iNpcID), m_iSellingGroup(iSellingGroup), m_v3NpcPosition(v3NpcPosition) {};
-
-						int32_t m_iNpcID;
-						int32_t m_iSellingGroup;
-						Vector3 m_v3NpcPosition;
-					};
-
-					std::vector<SNpcInformation> vecNpcInformation;
 					std::vector<TNpc> tmpVecNpc = m_vecNpc;
 
 					Vector3 v3CurrentPosition = GetPosition();
@@ -6419,212 +7070,39 @@ void ClientHandler::RouteProcess()
 						return false;
 					};
 
-					pRoute->pNpcID = -1;
+					m_pCurrentRunningRoute->pNpcID = -1;
 
 					for (auto& e : tmpVecNpc)
 					{
-						if (e.iSellingGroup == iNpcSellingGroup)
+						if (e.iFamilyType == 31)
 						{
-							pRoute->pNpcID = e.iID;
-							pRoute->fX = e.fX;
-							pRoute->fY = e.fY;
+							m_pCurrentRunningRoute->pNpcID = e.iID;
+							m_pCurrentRunningRoute->fX = e.fX;
+							m_pCurrentRunningRoute->fY = e.fY;
 							break;
 						}
 					}
 
-					if (pRoute->pNpcID != -1)
+					if (m_pCurrentRunningRoute->pNpcID != -1)
 					{
-						pRoute->bReRouted = true;
-
+						m_pCurrentRunningRoute->bReRouted = true;
 						return;
 					}
 				}
 				else
 				{
-					SendNpcEvent(pRoute->pNpcID);
-
-					/**
-					 * Selling Operations
-					 */
-
-					if (m_bAutoSellSlotRange)
+					if (m_pCurrentRunningRoute->bSubProcessRequested == false)
 					{
-						std::vector<TItemData> vecInventoryItemList;
-						GetInventoryItemList(vecInventoryItemList);
-
-						uint8_t iSellPageCount = 0;
-						std::vector<SSItemSell> vecInventoryItemSell[2];
-
-						for (const TItemData& pItem : vecInventoryItemList)
-						{
-							if (pItem.iItemID == 0)
-								continue;
-
-							//Promise Of Training
-							if (pItem.iItemID == 989511000)
-								continue;
-
-							__TABLE_ITEM* pItemData;
-							if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
-								continue;
-
-							__TABLE_ITEM_EXTENSION* pItemExtensionData;
-							if (!m_Bot->GetItemExtensionData(pItem.iItemID, pItemData->byExtIndex, pItemExtensionData))
-								continue;
-
-							if (pItemData->byNeedRace == RACE_TRADEABLE_IN_72HR
-								|| pItemData->byNeedRace == RACE_NO_TRADE
-								|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD
-								|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD2
-								|| pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
-								continue;
-
-							if (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
-								|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA)
-								continue;
-
-							int iRangeStart = (14 + m_iAutoSellSlotRangeStart) - 1;
-							int iRangeEnd = (14 + m_iAutoSellSlotRangeEnd) - 1;
-
-							if ((m_bAutoSellSlotRange
-									&& pItem.iPos >= iRangeStart
-									&& pItem.iPos <= iRangeEnd))
-							{
-								if (vecInventoryItemSell[iSellPageCount].size() == 14)
-									iSellPageCount++;
-
-								vecInventoryItemSell[iSellPageCount].push_back(SSItemSell(pItem.iItemID, (uint8_t)(pItem.iPos - 14), pItem.iCount));
-							}
-						}
-
-						if (vecInventoryItemSell[0].size() > 0)
-						{
-							for (size_t i = 0; i <= iSellPageCount; i++)
-							{
-								SendItemTradeSell(iNpcSellingGroup, pRoute->pNpcID, vecInventoryItemSell[i]);
-							}
-						}
+						GetInventoryItemList(m_pCurrentRunningRoute->vecInventoryItemList);
+						SendWarehouseOpen(m_pCurrentRunningRoute->pNpcID);
+						m_pCurrentRunningRoute->bSubProcessRequested = true;
+						return;
 					}
-
-					/**
-					 * Buying Operations
-					 */
-
-					if (m_bAutoSupply)
+					else
 					{
-						auto jSupplyList = m_Bot->GetSupplyList();
-
-						uint8_t iBuyPageCount = 0;
-						std::vector<SSItemBuy> vecInventoryItemBuy[2];
-						std::vector<int32_t> vecExceptedBuyPos;
-
-						for (size_t i = 0; i < jSupplyList.size(); i++)
-						{
-							std::string szItemIdAttribute = skCryptDec("itemid");
-							std::string szSellingGroupAttribute = skCryptDec("sellinggroup");
-							std::string szCountAttribute = skCryptDec("count");
-
-							int32_t iItemId = jSupplyList[i][szItemIdAttribute.c_str()].get<int32_t>();
-							int32_t iSellingGroup = jSupplyList[i][szSellingGroupAttribute.c_str()].get<int32_t>();
-
-							bool bSelected = std::find(m_vecSupplyList.begin(), m_vecSupplyList.end(), iItemId) != m_vecSupplyList.end();
-
-							if (!bSelected)
-								continue;
-
-							if (iSellingGroup != iNpcSellingGroup)
-								continue;
-
-							std::vector<SShopItem> vecShopItemTable;
-							if (!m_Bot->GetShopItemTable(iNpcSellingGroup, vecShopItemTable))
-								continue;
-
-							uint8_t iPos = -1;
-							int16_t iItemCount = (int16_t)GetUserConfiguration()->GetInt(
-								skCryptDec("Supply"),
-								std::to_string(iItemId).c_str(),
-								jSupplyList[i][szCountAttribute.c_str()].get<int16_t>());
-
-							TItemData pInventoryItem = GetInventoryItem(iItemId);
-
-							if (pInventoryItem.iItemID != 0)
-							{
-								if (pInventoryItem.iCount >= iItemCount)
-									continue;
-
-								iPos = (uint8_t)pInventoryItem.iPos;
-								iItemCount = (int16_t)std::abs(pInventoryItem.iCount - iItemCount);
-							}
-							else
-							{
-								iPos = (uint8_t)GetInventoryEmptySlot(vecExceptedBuyPos);
-							}
-
-							if (iPos == -1 || iItemCount == 0)
-								continue;
-
-							auto pShopItem = std::find_if(vecShopItemTable.begin(), vecShopItemTable.end(),
-								[iItemId](const SShopItem& a) { return a.m_iItemId == iItemId; });
-
-							if (pShopItem == vecShopItemTable.end())
-								continue;
-
-							if (vecInventoryItemBuy[iBuyPageCount].size() == 14)
-								iBuyPageCount++;
-
-							vecInventoryItemBuy[iBuyPageCount].push_back(
-								SSItemBuy(pShopItem->m_iItemId, (iPos - 14), iItemCount, pShopItem->m_iPage, pShopItem->m_iPos));
-
-							vecExceptedBuyPos.push_back(iPos);
-						}
-
-						if (vecInventoryItemBuy[0].size() > 0)
-						{
-							for (size_t i = 0; i <= iBuyPageCount; i++)
-							{
-								SendItemTradeBuy(iNpcSellingGroup, pRoute->pNpcID, vecInventoryItemBuy[i]);
-							}
-						}
+						if (m_pCurrentRunningRoute->bSubProcessFinished == false)
+							return;
 					}
-
-					/**
-					 * Repair Operations
-					 */
-
-					if (m_bAutoRepair
-						&& pRoute->eStepType == RouteStepType::STEP_SUNDRIES)
-					{
-						for (uint8_t i = 0; i < SLOT_MAX + HAVE_MAX; i++)
-						{
-							switch (i)
-							{
-								case 1:
-								case 4:
-								case 6:
-								case 8:
-								case 10:
-								case 12:
-								case 13:
-								{
-									TItemData pInventory = GetInventoryItemSlot(i);
-
-									if (pInventory.iItemID == 0)
-										continue;
-
-									SendItemRepair(1, (uint8_t)pInventory.iPos, pRoute->pNpcID, pInventory.iItemID);
-								}
-								break;
-							}
-						}
-					}
-
-					SendShoppingMall(ShoppingMallType::STORE_CLOSE);
 				}
 			}
 			break;
@@ -6633,8 +7111,10 @@ void ClientHandler::RouteProcess()
 		if (m_vecRouteActive.size() > 0)
 			m_vecRouteActive.erase(m_vecRouteActive.begin());
 
-		if(m_vecRouteActive.size() == 0)
-			m_iRouteStep = RouteStepType::STEP_NONE;
+		if (m_vecRouteActive.size() == 0)
+		{
+			m_pCurrentRunningRoute = nullptr;
+		}
 	}
 	catch (const std::exception& e)
 	{
@@ -6650,6 +7130,9 @@ void ClientHandler::SupplyProcess()
 {
 	try
 	{
+		if (Bot::TimeGet() < (m_fLastSupplyProcessTime + (1000.0f / 1000.0f)))
+			return;
+
 		if (IsZoneChanging())
 			return;
 
@@ -6659,7 +7142,7 @@ void ClientHandler::SupplyProcess()
 		if (IsRouting())
 			return;
 
-		if (IsDeath())
+		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
 		if (IsMovingToLoot())
@@ -6674,10 +7157,7 @@ void ClientHandler::SupplyProcess()
 		//if (IsWarehouseOpen())
 		//	continue;
 
-		int16_t iHp = GetHp();
-		int16_t iMaxHp = GetMaxHp();
-
-		int32_t iHpPercent = (int32_t)std::ceil((iHp * 100) / iMaxHp);
+		int32_t iHpPercent = (int32_t)std::ceil((m_PlayerMySelf.iHP * 100) / m_PlayerMySelf.iHPMax);
 		int32_t iHpNeededValue = 60;
 
 		if (iHpPercent <= iHpNeededValue)
@@ -6692,7 +7172,7 @@ void ClientHandler::SupplyProcess()
 
 			bool bNeedSupply = m_bAutoSupply && IsNeedSupply();
 			bool bNeedRepair = !m_bAutoRepairMagicHammer && m_bAutoRepair && IsNeedRepair();
-			bool bNeedSell = (m_bAutoSellSlotRange) && IsNeedSell();
+			bool bNeedSell = IsNeedSell();
 
 			if (bNeedSupply || bNeedRepair || bNeedSell)
 			{
@@ -6713,17 +7193,172 @@ void ClientHandler::SupplyProcess()
 				}
 			}
 		}
+
+		m_fLastSupplyProcessTime = Bot::TimeGet();
 	}
 	catch (const std::exception& e)
 	{
 #ifdef DEBUG
-		printf("RouteProcess:Exception: %s\n", e.what());
+		printf("SupplyProcess:Exception: %s\n", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
 	}
 }
 
+void ClientHandler::StatisticsProcess()
+{
+	try
+	{
+		if (Bot::TimeGet() < (m_fLastStatisticsProcessTime + (60000.0f / 1000.0f)))
+			return;
+
+		m_iEveryMinuteCoinPrevCounter = m_iEveryMinuteCoinCounter;
+		m_iEveryMinuteCoinCounter = m_iCoinCounter;
+
+		m_iEveryMinuteExpPrevCounter = m_iEveryMinuteExpCounter;
+		m_iEveryMinuteExpCounter = m_iExpCounter;
+
+		m_fLastStatisticsProcessTime = Bot::TimeGet();
+		
+	}
+	catch (const std::exception& e)
+	{
+#ifdef DEBUG
+		printf("StatisticsProcess:Exception: %s\n", e.what());
+#else
+		UNREFERENCED_PARAMETER(e);
+#endif
+	}
+}
+
+void ClientHandler::RemoveItemProcess()
+{
+	try
+	{
+		if (Bot::TimeGet() < (m_fLastRemoveItemProcessTime + (60000.0f / 1000.0f)))
+			return;
+
+		if (IsZoneChanging())
+			return;
+
+		if (IsBlinking())
+			return;
+
+		if (IsRouting())
+			return;
+
+		if (m_PlayerMySelf.eState == PSA_DEATH)
+			return;
+
+		if (m_vecDeleteItemList.size() > 0)
+		{
+			std::vector<TItemData> vecInventoryItemList;
+			GetInventoryItemList(vecInventoryItemList);
+
+			for (const TItemData& pItem : vecInventoryItemList)
+			{
+				if (pItem.iItemID == 0)
+					continue;
+
+				__TABLE_ITEM* pItemData;
+				if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+					continue;
+
+				__TABLE_ITEM_EXTENSION* pItemExtensionData;
+				if (!m_Bot->GetItemExtensionData(pItem.iItemID, pItemData->byExtIndex, pItemExtensionData))
+					continue;
+
+				if (pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_RED
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UPGRADE_REVERSE
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_UNIQUE_REVERSE
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_PET
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_EVENT
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_COSPRE
+					|| pItemExtensionData->iItemType == ITEM_ATTRIBUTE_MINERVA)
+					continue;
+
+				uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+				bool bDeleteSelected = m_vecDeleteItemList.count(iItemBaseID) > 0;
+
+				if (bDeleteSelected)
+				{
+					RemoveItem(pItem.iPos - 14);
+				}
+			}
+		}
+
+		m_fLastRemoveItemProcessTime = Bot::TimeGet();
+
+	}
+	catch (const std::exception& e)
+	{
+#ifdef DEBUG
+		printf("RemoveItemProcess:Exception: %s\n", e.what());
+#else
+		UNREFERENCED_PARAMETER(e);
+#endif
+	}
+}
+
+void ClientHandler::LevelDownerProcess()
+{
+	try
+	{
+		if (Bot::TimeGet() < (m_fLastLevelDownerProcessTime + (500.0f / 1000.0f)))
+			return;
+
+		if (IsZoneChanging())
+			return;
+
+		if (IsBlinking())
+			return;
+
+		if (IsRouting())
+			return;
+
+		if (!m_bLevelDownerEnable)
+			return;
+
+		if (m_iLevelDownerNpcId == -1)
+			return;
+
+		if (m_bLevelDownerStopNearbyPlayer
+			&& GetRegionUserCount(true) > 0)
+			return;
+
+		if (m_bLevelDownerLevelLimitEnable
+			&& GetLevel() < m_iLevelDownerLevelLimit)
+			return;
+
+		if (m_PlayerMySelf.eState == PSA_DEATH)
+			SendRegenePacket();
+		else
+		{
+			Packet pkt = Packet(WIZ_MAGIC_PROCESS);
+
+			pkt
+				<< uint8_t(SkillMagicType::SKILL_MAGIC_TYPE_EFFECTING)
+				<< uint32_t(300215)
+				<< m_iLevelDownerNpcId
+				<< m_PlayerMySelf.iID;
+
+			SendPacket(pkt);
+		}
+
+		m_fLastLevelDownerProcessTime = Bot::TimeGet();
+
+	}
+	catch (const std::exception& e)
+	{
+#ifdef DEBUG
+		printf("StatisticsProcess:Exception: %s\n", e.what());
+#else
+		UNREFERENCED_PARAMETER(e);
+#endif
+	}
+}
 
 void ClientHandler::SetRoute(std::vector<Route> vecRoute)
 {
@@ -6732,7 +7367,7 @@ void ClientHandler::SetRoute(std::vector<Route> vecRoute)
 
 void ClientHandler::ClearRoute()
 {
-	m_iRouteStep = RouteStepType::STEP_NONE;
+	m_pCurrentRunningRoute = nullptr;
 	m_vecRouteActive.clear();
 }
 
@@ -6768,18 +7403,14 @@ int ClientHandler::GetRegionUserCount(bool bExceptPartyMember)
 
 int32_t ClientHandler::PartyMemberNeedSwift()
 {
-	std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-	if (!GetAvailableSkill(&vecAvailableSkills))
-		return -1;
-
 	std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>* pSkillExtension4;
 	if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
 		return -1;
 
-	auto pSkillData = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+	auto pSkillData = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
 		[&](const TABLE_UPC_SKILL& a) { return a.iBaseId == 107010; });
 
-	if (pSkillData == vecAvailableSkills->end())
+	if (pSkillData == m_vecAvailableSkill.end())
 		return -1;
 
 	std::vector<PartyMember> tmpVecPartyMembers;
@@ -6825,14 +7456,8 @@ int32_t ClientHandler::PartyMemberNeedSwift()
 		if (IsBlinking() || IsBlinking(pMember.iMemberID))
 			continue;
 
-		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
-
-		if (pFindedPlayer == m_vecPlayer.end())
-			continue;
-
 		if (m_PlayerMySelf.iID == pMember.iMemberID
-			|| (pFindedPlayer->iMoveSpeed < 45 || pFindedPlayer->iMoveSpeed > 45))
+			|| (pTargetPlayer->iMoveSpeed < 45 || pTargetPlayer->iMoveSpeed > 45))
 			continue;
 
 		if (m_bSkillCasting == true || GetActionState() == PSA_SPELLMAGIC)
@@ -6846,18 +7471,14 @@ int32_t ClientHandler::PartyMemberNeedSwift()
 
 int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 {
-	std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-	if (!GetAvailableSkill(&vecAvailableSkills))
-		return -1;
-
 	std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION3>* pSkillExtension3;
 	if (!m_Bot->GetSkillExtension3Table(&pSkillExtension3))
 		return -1;
 
-	auto pSkillData = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+	auto pSkillData = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
 		[=](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSkillBaseID; });
 
-	if (pSkillData == vecAvailableSkills->end())
+	if (pSkillData == m_vecAvailableSkill.end())
 		return -1;
 
 	std::vector<PartyMember> tmpVecPartyMembers;
@@ -6896,28 +7517,29 @@ int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 			}
 		}
 
-		auto pTargetPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
+		if (m_PlayerMySelf.iID != pMember.iMemberID)
+		{
+			auto pTargetPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+				[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
 
-		if (pTargetPlayer == m_vecPlayer.end())
-			continue;
+			if (pTargetPlayer == m_vecPlayer.end())
+				continue;
 
-		auto iPlayerPosition = Vector3(pTargetPlayer->fX, pTargetPlayer->fZ, pTargetPlayer->fY);
+			auto iPlayerPosition = Vector3(pTargetPlayer->fX, pTargetPlayer->fZ, pTargetPlayer->fY);
 
-		if (GetDistance(iPlayerPosition) > 25.0f)
-			continue;
+			if (GetDistance(iPlayerPosition) > 25.0f)
+				continue;
 
-		if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || pTargetPlayer->eState == PSA_DEATH)
-			continue;
+			if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || pTargetPlayer->eState == PSA_DEATH)
+				continue;
+		}
+		else
+		{
+			if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH)
+				continue;
+		}
 
 		if (IsBlinking() || IsBlinking(pMember.iMemberID))
-			continue;
-
-		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
-
-		if (m_PlayerMySelf.iID != pMember.iMemberID
-			&& pFindedPlayer == m_vecPlayer.end())
 			continue;
 
 		if (m_bSkillCasting == true || GetActionState() == PSA_SPELLMAGIC)
@@ -6931,18 +7553,14 @@ int32_t ClientHandler::PartyMemberNeedHeal(uint32_t iSkillBaseID)
 
 int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 {
-	std::vector<__TABLE_UPC_SKILL>* vecAvailableSkills;
-	if (!GetAvailableSkill(&vecAvailableSkills))
-		return -1;
-
 	std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION4>* pSkillExtension4;
 	if (!m_Bot->GetSkillExtension4Table(&pSkillExtension4))
 		return -1;
 
-	auto pSkillData = std::find_if(vecAvailableSkills->begin(), vecAvailableSkills->end(),
+	auto pSkillData = std::find_if(m_vecAvailableSkill.begin(), m_vecAvailableSkill.end(),
 		[=](const TABLE_UPC_SKILL& a) { return a.iBaseId == iSkillBaseID; });
 
-	if (pSkillData == vecAvailableSkills->end())
+	if (pSkillData == m_vecAvailableSkill.end())
 		return -1;
 
 	std::vector<PartyMember> tmpVecPartyMembers;
@@ -7005,27 +7623,29 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 			}
 		}
 
-		auto pTargetPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
+		if (m_PlayerMySelf.iID != pMember.iMemberID)
+		{
+			auto pTargetPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+				[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
 
-		if (pTargetPlayer == m_vecPlayer.end())
-			continue;
+			if (pTargetPlayer == m_vecPlayer.end())
+				continue;
 
-		auto iPlayerPosition = Vector3(pTargetPlayer->fX, pTargetPlayer->fZ, pTargetPlayer->fY);
+			auto iPlayerPosition = Vector3(pTargetPlayer->fX, pTargetPlayer->fZ, pTargetPlayer->fY);
 
-		if (GetDistance(iPlayerPosition) > 25.0f)
-			continue;
+			if (GetDistance(iPlayerPosition) > 25.0f)
+				continue;
 
-		if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || pTargetPlayer->eState == PSA_DEATH)
-			continue;
+			if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH || pTargetPlayer->eState == PSA_DEATH)
+				continue;
+		}
+		else
+		{
+			if (IsStunned() || m_PlayerMySelf.eState == PSA_DEATH)
+				continue;
+		}
 
 		if (IsBlinking() || IsBlinking(pMember.iMemberID))
-			continue;
-
-		auto pFindedPlayer = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-			[&](const TPlayer& a) { return a.iID == pMember.iMemberID; });
-
-		if (m_PlayerMySelf.iID != pMember.iMemberID && pFindedPlayer == m_vecPlayer.end())
 			continue;
 
 		if (m_bSkillCasting == true || GetActionState() == PSA_SPELLMAGIC)
@@ -7153,39 +7773,25 @@ bool ClientHandler::IsNeedSupply()
 
 bool ClientHandler::IsNeedSell()
 {
-	if (m_bAutoSellSlotRange)
+	if (m_vecSellItemList.size() == 0)
+		return false;
+
+	bool bNeedSell = false;
+
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		for (int i = m_iAutoSellSlotRangeStart; i <= m_iAutoSellSlotRangeEnd; i++)
-		{
-			int iPosition = 14 + (i - 1);
+		TItemData pInventory = GetInventoryItemSlot((uint8_t)i);
 
-			TItemData pInventory = GetInventoryItemSlot((uint8_t)iPosition);
-
-			if (pInventory.iItemID == 0)
-				return false;
-		}
-	}
-
-	/*if (m_bAutoSellVipSlotRange)
-	{
-		if (!m_bVipWarehouseInitialized)
+		if (pInventory.iItemID == 0)
 			return false;
 
-		if (m_bVipWarehouseEnabled)
-		{
-			for (int i = m_iAutoSellVipSlotRangeStart; i <= m_iAutoSellVipSlotRangeEnd; i++)
-			{
-				int iPosition = (i - 1);
+		uint32_t iItemBaseID = pInventory.iItemID / 1000 * 1000;
 
-				TItemData* pItem = &m_PlayerMySelf.tVipWarehouse[iPosition];
+		if (m_vecSellItemList.count(pInventory.iItemID) > 0)
+			bNeedSell = true;
+	}
 
-				if (pItem->iItemID == 0)
-					return false;
-			}
-		}
-	}*/
-
-	return true;
+	return bNeedSell;
 }
 
 bool ClientHandler::IsNeedRepair()

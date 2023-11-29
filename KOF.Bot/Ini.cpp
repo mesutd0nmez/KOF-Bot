@@ -287,6 +287,51 @@ std::vector<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const
     return nDefault;
 }
 
+std::unordered_set<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault)
+{
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+
+    if (sectionItr != m_configMap.end())
+    {
+        ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
+
+        if (keyItr != sectionItr->second.end())
+        {
+            std::unordered_set<int> v;
+            std::stringstream ss(keyItr->second.c_str());
+
+            for (int i; ss >> i;)
+            {
+                v.insert(i);
+
+                if (ss.peek() == ',')
+                    ss.ignore();
+            }
+
+            return v;
+        }
+    }
+    else
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
+
+        std::string ret;
+
+        for (const int& s : nDefault)
+        {
+            if (!ret.empty())
+                ret += ",";
+
+            ret += std::to_string(s);
+        }
+
+        sectionItr->second[lpKeyName] = ret.c_str();
+    }
+
+    return nDefault;
+}
+
 int Ini::SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault)
 {
     char tmpDefault[INI_BUFFER];
@@ -296,6 +341,27 @@ int Ini::SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault
 }
 
 std::vector<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
+{
+    std::string ret;
+
+    for (const int& s : nDefault)
+    {
+        if (!ret.empty())
+            ret += ",";
+
+        ret += std::to_string(s);
+    }
+
+    m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+    sectionItr->second[lpKeyName] = ret.c_str();
+
+    Save();
+
+    return nDefault;
+}
+
+std::unordered_set<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault)
 {
     std::string ret;
 
