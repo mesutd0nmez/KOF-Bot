@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "Ini.h"
 #include "Trim.h"
+#include <unordered_set>
+#include <unordered_map>
+#include <sstream>
 
 #define INI_BUFFER 512
 
@@ -242,51 +245,6 @@ int Ini::GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault
     return nDefault;
 }
 
-std::vector<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
-{
-    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
-
-    if (sectionItr != m_configMap.end())
-    {
-        ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
-
-        if (keyItr != sectionItr->second.end())
-        {
-            std::vector<int> v;
-            std::stringstream ss(keyItr->second.c_str());
-
-            for (int i; ss >> i;)
-            {
-                v.push_back(i);
-
-                if (ss.peek() == ',')
-                    ss.ignore();
-            }
-
-            return v;
-        }
-    }
-    else
-    {
-        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
-        sectionItr = m_configMap.find(lpAppName);
-
-        std::string ret;
-
-        for (const int& s : nDefault)
-        {
-            if (!ret.empty())
-                ret += ",";
-
-            ret += std::to_string(s);
-        }
-
-        sectionItr->second[lpKeyName] = ret.c_str();
-    }
-
-    return nDefault;
-}
-
 std::unordered_set<int> Ini::GetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault)
 {
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
@@ -340,27 +298,6 @@ int Ini::SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault
     return nDefault;
 }
 
-std::vector<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault)
-{
-    std::string ret;
-
-    for (const int& s : nDefault)
-    {
-        if (!ret.empty())
-            ret += ",";
-
-        ret += std::to_string(s);
-    }
-
-    m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
-    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
-    sectionItr->second[lpKeyName] = ret.c_str();
-
-    Save();
-
-    return nDefault;
-}
-
 std::unordered_set<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault)
 {
     std::string ret;
@@ -373,9 +310,25 @@ std::unordered_set<int> Ini::SetInt(const char* lpAppName, const char* lpKeyName
         ret += std::to_string(s);
     }
 
-    m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
     ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
-    sectionItr->second[lpKeyName] = ret.c_str();
+
+    if (sectionItr == m_configMap.end()) 
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
+    }
+
+    ConfigEntryMap& entryMap = sectionItr->second;
+    auto keyItr = entryMap.find(lpKeyName);
+
+    std::string strDefault = ret.c_str();
+    if (keyItr != entryMap.end() 
+        && keyItr->second == strDefault) 
+    {
+        return nDefault;
+    }
+
+    entryMap[lpKeyName] = strDefault;
 
     Save();
 
@@ -418,15 +371,107 @@ std::string Ini::GetString(const char* lpAppName, const char* lpKeyName, const c
     return lpOutString;
 }
 
+std::unordered_set<std::string> Ini::GetString(const char* lpAppName, const char* lpKeyName, const std::unordered_set<std::string> nDefault)
+{
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+
+    if (sectionItr != m_configMap.end())
+    {
+        ConfigEntryMap::iterator keyItr = sectionItr->second.find(lpKeyName);
+
+        if (keyItr != sectionItr->second.end())
+        {
+            std::unordered_set<std::string> v;
+            std::stringstream ss(keyItr->second);
+
+            for (std::string s; std::getline(ss, s, ',');)
+            {
+                v.insert(s.c_str());
+            }
+
+            return v;
+        }
+    }
+    else
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
+
+        std::string ret;
+
+        for (const std::string& s : nDefault)
+        {
+            if (!ret.empty())
+                ret += ",";
+
+            ret += s;
+        }
+
+        sectionItr->second[lpKeyName] = ret.c_str();
+    }
+
+    return nDefault;
+}
+
+
 const char* Ini::SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault)
 {
     ConfigMap::iterator itr = m_configMap.find(lpAppName);
 
-    m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
-    itr = m_configMap.find(lpAppName);
-    itr->second[lpKeyName] = lpDefault;
+    if (itr == m_configMap.end()) 
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        itr = m_configMap.find(lpAppName);
+    }
 
+    ConfigEntryMap& entryMap = itr->second;
+    auto keyItr = entryMap.find(lpKeyName);
+
+    if (keyItr != entryMap.end() 
+        && keyItr->second == lpDefault) 
+    {
+        return lpDefault;
+    }
+
+    entryMap[lpKeyName] = lpDefault;
     Save();
 
     return lpDefault;
+}
+
+std::unordered_set<std::string> Ini::SetString(const char* lpAppName, const char* lpKeyName, const std::unordered_set<std::string> nDefault)
+{
+    std::string ret;
+
+    for (const std::string& s : nDefault)
+    {
+        if (!ret.empty())
+            ret += ",";
+
+        ret += s;
+    }
+
+    ConfigMap::iterator sectionItr = m_configMap.find(lpAppName);
+
+    if (sectionItr == m_configMap.end())
+    {
+        m_configMap.insert(std::make_pair(lpAppName, ConfigEntryMap()));
+        sectionItr = m_configMap.find(lpAppName);
+    }
+
+    ConfigEntryMap& entryMap = sectionItr->second;
+    auto keyItr = entryMap.find(lpKeyName);
+
+    std::string strDefault = ret.c_str();
+    if (keyItr != entryMap.end()
+        && keyItr->second == strDefault)
+    {
+        return nDefault;
+    }
+
+    entryMap[lpKeyName] = strDefault;
+
+    Save();
+
+    return nDefault;
 }

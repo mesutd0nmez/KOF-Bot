@@ -2,7 +2,6 @@
 
 #include "Client.h"
 #include "Packet.h"
-#include "RouteManager.h"
 #include "Struct.h"
 
 class Bot;
@@ -103,16 +102,13 @@ private:
 	std::string m_szPassword;
 
 private:
-	std::chrono::milliseconds m_msLastSupplyTime;
+	float m_fLastSupplyTime;
 
 private:
 	bool SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
 
-protected:
-	std::chrono::milliseconds m_msLastSelectedTargetTime;
-
 public:
-	int GetRegionUserCount(bool bExceptPartyMember = false);
+	int GetRegionUserCount(bool bExceptPartyMember = false, float fRangeLimit = 0.0f);
 
 protected:
 	uint8_t m_iOTPRetryCount;
@@ -163,6 +159,7 @@ public:
 	bool m_bMoveToTarget;
 	bool m_bDisableStun;
 	bool m_bStartGenieIfUserInRegion;
+	int m_iStartGenieIfUserInRegionMeter;
 
 	std::unordered_set<int> m_vecCharacterSkillList;
 	bool m_bPartySwift;
@@ -232,12 +229,9 @@ public:
 
 	bool m_bArcherCombo;
 
-	bool m_bSupplyRouteStatus;
-	std::string m_szSelectedSupplyRoute;
-	bool m_bDeathRouteStatus;
-	std::string m_szSelectedDeathRoute;
-	bool m_bLoginRouteStatus;
-	std::string m_szSelectedLoginRoute;
+	std::unordered_set<std::string> m_setSelectedSupplyRouteList;
+	std::unordered_set<std::string> m_setSelectedDeathRouteList;
+	std::unordered_set<std::string> m_setSelectedLoginRouteList;
 
 	bool m_bAutoRepair;
 

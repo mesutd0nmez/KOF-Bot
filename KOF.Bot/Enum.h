@@ -1,16 +1,5 @@
 #pragma once
 
-enum AccountTypeFlag
-{
-	ACCOUNT_TYPE_FLAG_FREE = (1 << 0),
-	ACCOUNT_TYPE_FLAG_BOT = (1 << 1),
-	ACCOUNT_TYPE_FLAG_CLIENTLESS = (1 << 2),
-	ACCOUNT_TYPE_FLAG_QUEST = (1 << 3),
-	ACCOUNT_TYPE_FLAG_DRAKI = (1 << 4),
-	ACCOUNT_TYPE_FLAG_UPGRADE = (1 << 5),
-	ACCOUNT_TYPE_FLAG_PACKET_LOGGER = (1 << 6),
-};
-
 enum PacketHeader
 {
 	READY,
@@ -19,7 +8,9 @@ enum PacketHeader
 	POINTER,
 	INJECTION,
 	PING,
-	CAPTCHA
+	CAPTCHA,
+	UPDATE,
+	ROUTE
 };
 
 enum LoginType
@@ -41,13 +32,6 @@ enum ConfigurationRequestType
 {
 	LOAD,
 	SAVE,
-};
-
-enum AppType
-{
-	LOADER,
-	BOT,
-	CLIENTLESS,
 };
 
 enum InjectionRequestType
@@ -574,4 +558,19 @@ enum ItemPosition
 	ITEM_POS_GOLD = 16, 
 	ITEM_POS_SONGPYUN = 17,
 	ITEM_POS_UNKNOWN = 0xffffffff
+};
+
+enum RouteStepType
+{
+	STEP_NONE,
+	STEP_MOVE,
+	STEP_TOWN,
+	STEP_SUNDRIES,
+	STEP_INN,
+	STEP_GENIE,
+	STEP_POTION,
+	STEP_BOT_START,
+	STEP_OBJECT_EVENT,
+	STEP_WARP,
+	STEP_DC_SUNDRIES,
 };

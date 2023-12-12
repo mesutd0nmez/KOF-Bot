@@ -27,64 +27,20 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 #endif
 
-    std::string szClientPath = DEVELOPMENT_PATH;
-    std::string szClientExe = DEVELOPMENT_EXE;
-    PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
-    int iAccountIndex = DEVELOPMENT_ACCOUNT_INDEX;
+    std::ifstream updater2File("Updater2.exe");
 
-    int argc;
-
-    LPWSTR* szArglist = CommandLineToArgvW(GetCommandLineW(), &argc);
-
-    char** argv = new char* [argc];
-
-    for (int i = 0; i < argc; i++)
+    if (updater2File)
     {
-        int lgth = wcslen(szArglist[i]);
+        updater2File.close();
 
-        argv[i] = new char[lgth + 1];
-
-        for (int j = 0; j <= lgth; j++)
-            argv[i][j] = char(szArglist[i][j]);
+        Sleep(1000);
+        DeleteFileA(skCryptDec("Updater.exe"));
+        Sleep(1000);
+        MoveFileA(skCryptDec("Updater2.exe"), skCryptDec("Updater.exe"));
+        Sleep(1000);
     }
-
-    if (argc == 5)
-    {
-        szClientPath = to_string(szArglist[1]);
-        szClientExe = to_string(szArglist[2]);
-        iPlatformType = (PlatformType)std::stoi(szArglist[3]);
-        iAccountIndex = std::stoi(szArglist[4]);
-    }
-
-#ifdef DEBUG
-        printf("Bot: All client process forcing close\n");
-#endif
-
-        KillProcessesByFileName(skCryptDec("KnightOnLine.exe"));
-
-        if (iPlatformType == PlatformType::USKO) 
-        {
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_NA.exe"));
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"));
-        }
-        
-        if (iPlatformType == PlatformType::STKO)
-        {
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_GB.exe"));
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"));
-        }
-
-        if (iPlatformType == PlatformType::USKO
-            || iPlatformType == PlatformType::STKO
-            || iPlatformType == PlatformType::KOKO)
-        {
-            KillProcessesByFileName(skCryptDec("xxd-0.xem"));
-        }
 
     m_Bot = new Bot();
-    m_Bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
-
-    UI::Render(m_Bot);
 
     TerminateMyProcess(m_Bot->GetInjectedProcessId(), -1);
 
@@ -92,8 +48,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     fclose(stdout);
     FreeConsole();
 #endif
-
-    LocalFree(szArglist);
 
     return 0;
 }

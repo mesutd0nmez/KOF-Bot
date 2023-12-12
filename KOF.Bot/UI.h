@@ -31,11 +31,10 @@ private:
 	static void GetProcessName(LPSTR lpProcessName, DWORD dPID);
 	static BOOL IsWindowValid(HWND hCurrentWindow);
 	static BOOL IsWindowCloaked(HWND hCurrentWindow);
-	static BOOL IsWindowAlive();
 
-	static void StyleColorsHazar();
 public:
 	static HMODULE hCurrentModule;
+	static BOOL IsWindowAlive();
 
 	struct WindowItem
 	{
@@ -51,6 +50,8 @@ public:
 	static void GetAllWindow(std::vector<WindowItem>* vWindowList);
 	static void SetTargetWindow(HWND hWindow);
 	static HWND GetProcessWindowHandle(DWORD targetProcessId);
+
+	static DWORD g_iFPSLimit;
 };
 
 #endif

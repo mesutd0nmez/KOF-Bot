@@ -88,26 +88,6 @@ BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szComm
 	return TRUE;
 }
 
-std::string to_string(wchar_t const* wcstr)
-{
-	auto s = std::mbstate_t();
-	auto const target_char_count = std::wcsrtombs(nullptr, &wcstr, 0, &s);
-	if (target_char_count == static_cast<std::size_t>(-1))
-	{
-		throw std::logic_error(skCryptDec("Illegal byte sequence"));
-	}
-
-	// +1 because std::string adds a null terminator which isn't part of size
-	auto str = std::string(target_char_count, '\0');
-	std::wcsrtombs(const_cast<char*>(str.data()), &wcstr, str.size() + 1, &s);
-	return str;
-}
-
-std::string to_string(std::wstring const& wstr)
-{
-	return to_string(wstr.c_str());
-}
-
 BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
 {
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
@@ -120,57 +100,6 @@ BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
 	CloseHandle(hProcess);
 
 	return bStatus;
-}
-
-size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp)
-{
-	((std::string*)userp)->append((char*)contents, size * nmemb);
-	return size * nmemb;
-}
-
-std::string CurlPost(std::string szUrl, JSON jData)
-{
-	CURL* curl;
-	CURLcode res;
-	std::string szReadBuffer;
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-
-	curl = curl_easy_init();
-
-	if (curl)
-	{
-		std::string szJson = jData.dump();
-
-		curl_easy_setopt(curl, CURLOPT_URL, szUrl.c_str());
-		curl_easy_setopt(curl, CURLOPT_POST, 1L);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, szJson.c_str());
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &szReadBuffer);
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, FALSE);
-
-		struct curl_slist* headers = NULL;
-		headers = curl_slist_append(headers, skCryptDec("Content-Type: application/json"));
-		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-		res = curl_easy_perform(curl);
-
-		if (res != CURLE_OK)
-		{
-#ifdef DEBUG
-			printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-#endif
-		}
-
-		curl_easy_cleanup(curl);
-		curl_slist_free_all(headers);
-	}
-
-	curl_global_cleanup();
-
-	return szReadBuffer;
 }
 
 bool Injection(DWORD iTargetProcess, std::string szPath)
@@ -191,14 +120,14 @@ bool Injection(DWORD iTargetProcess, std::string szPath)
 		iTargetProcess,
 		INJECTION_MODE::IM_ManualMap,
 		LAUNCH_METHOD::LM_HijackThread,
-		INJ_ERASE_HEADER,
+		INJ_ERASE_HEADER | INJ_UNLINK_FROM_PEB | INJ_CLEAN_DATA_DIR | INJ_SHIFT_MODULE | INJ_THREAD_CREATE_CLOAKED,
 		0,
 		NULL
 	};
 
 	strcpy(data.szDllPath, szPath.c_str());
 
-	InjectA(&data);
+	(f_InjectA)InjectA(&data);
 
 	return true;
 }
@@ -288,30 +217,69 @@ bool KillProcessesByFileName(const char* fileName)
 	return true;
 }
 
-std::string GenerateUniqueString(size_t iLength) 
+bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
 {
-	const std::string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	DWORD currentProcessId = GetCurrentProcessId();
 
-	auto now = std::chrono::system_clock::now();
-	auto time = std::chrono::system_clock::to_time_t(now);
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
-	std::stringstream ss;
-	ss << std::put_time(std::localtime(&time), "%Y%m%d%H%M%S");
-
-	std::random_device rd;
-	std::mt19937 generator(rd());
-	std::uniform_int_distribution<int> distribution(0, alphabet.length() - 1);
-
-	std::string uniqueString = ss.str();
-
-	while (uniqueString.length() < iLength)
+	if (hSnapshot == INVALID_HANDLE_VALUE)
 	{
-		uniqueString += alphabet[distribution(generator)];
+#ifdef DEBUG
+		std::cerr << "KillProcessesByFileNames: Error creating process snapshot" << std::endl;
+#endif
+		return false;
 	}
 
-	uniqueString = uniqueString.substr(0, iLength);
+	PROCESSENTRY32 pe;
+	pe.dwSize = sizeof(PROCESSENTRY32);
 
-	return uniqueString;
+	if (Process32First(hSnapshot, &pe))
+	{
+		do
+		{
+			if (pe.th32ProcessID == currentProcessId)
+			{
+				continue;
+			}
+
+			for (const char* fileName : fileNames)
+			{
+				if (_stricmp(pe.szExeFile, fileName) == 0)
+				{
+					HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+
+					if (hProcess)
+					{
+						if (TerminateProcess(hProcess, 0))
+						{
+#ifdef DEBUG
+							printf("KillProcessesByFileNames: Terminated process ID: %d\n", pe.th32ProcessID);
+#endif
+						}
+						else
+						{
+#ifdef DEBUG
+							printf("KillProcessesByFileNames: Failed to terminate process ID: %d\n", pe.th32ProcessID);
+#endif
+						}
+
+						CloseHandle(hProcess);
+					}
+					else
+					{
+#ifdef DEBUG
+						printf("KillProcessesByFileNames: Failed to open process for termination\n\n");
+#endif
+					}
+				}
+			}
+		} while (Process32Next(hSnapshot, &pe));
+	}
+
+	CloseHandle(hSnapshot);
+
+	return true;
 }
 
 uint8_t hexCharToUint8(char c) 
@@ -319,7 +287,7 @@ uint8_t hexCharToUint8(char c)
 	if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
 	if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
 	if (c >= 'a' && c <= 'f') return static_cast<uint8_t>(c - 'a' + 10);
-	throw std::invalid_argument("Invalid hex character");
+	throw std::invalid_argument(skCryptDec("Invalid hex character"));
 }
 
 std::vector<uint8_t> fromHexString(const std::string& hexString) 
@@ -328,7 +296,7 @@ std::vector<uint8_t> fromHexString(const std::string& hexString)
 		return {};
 
 	if (hexString.size() % 2 != 0)
-		throw std::invalid_argument("Bad hex length");
+		throw std::invalid_argument(skCryptDec("Bad hex length"));
 
 	std::vector<uint8_t> result(hexString.size() / 2);
 
@@ -383,21 +351,179 @@ std::string calculateElapsedTime(const std::chrono::time_point<std::chrono::syst
 
 	if (hours > 0) 
 	{
-		result_stream << hours << " saat ";
+		result_stream << hours << skCryptDec(" saat ");
 	}
 
 	if (minutes > 0) 
 	{
-		result_stream << minutes << " dakika";
+		result_stream << minutes << skCryptDec(" dakika");
 	}
 
 	return result_stream.str();
 }
 
-std::string formatNumber(uint64_t number) 
+DWORD CalculateCRC32(const std::string& filePath)
 {
-	std::ostringstream formatted_number_stream;
-	formatted_number_stream << std::fixed << std::setprecision(2) << number;
-	std::string formatted_number = formatted_number_stream.str();
-	return formatted_number;
+	std::ifstream fileStream(filePath, std::ios::binary);
+
+	if (!fileStream.is_open())
+	{
+#ifdef DEBUG
+		printf("File not opened: %s", filePath.c_str());
+#endif
+		return 0xFFFFFFFF;
+	}
+
+	fileStream.seekg(0, std::ios::end);
+	uint32_t iFileSize = (uint32_t)fileStream.tellg();
+	fileStream.seekg(0, std::ios::beg);
+
+	std::vector<char> buffer(iFileSize);
+
+	fileStream.read(buffer.data(), iFileSize);
+	fileStream.close();
+
+	return crc32((uint8_t*)buffer.data(), iFileSize);
+}
+
+bool IsProcessRunning(const char* fileName)
+{
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	PROCESSENTRY32 pe32;
+	pe32.dwSize = sizeof(PROCESSENTRY32);
+
+	if (Process32First(hSnap, &pe32))
+	{
+		do
+		{
+			if (_stricmp(pe32.szExeFile, fileName) == 0)
+			{
+				CloseHandle(hSnap);
+				return true;
+			}
+		} while (Process32Next(hSnap, &pe32));
+	}
+
+	CloseHandle(hSnap);
+	return false;
+}
+
+std::string GenerateAlphanumericString(int length) 
+{
+	const std::string characters = skCryptDec("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+
+	std::string alphanumericString = "";
+	int charactersLength = characters.length();
+
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+	for (int i = 0; i < length; ++i) 
+	{
+		int randomIndex = std::rand() % charactersLength;
+		alphanumericString += characters[randomIndex];
+	}
+
+	return alphanumericString;
+}
+
+std::string to_string(wchar_t const* wcstr)
+{
+	auto s = std::mbstate_t();
+	auto const target_char_count = std::wcsrtombs(nullptr, &wcstr, 0, &s);
+	if (target_char_count == static_cast<std::size_t>(-1))
+	{
+		throw std::logic_error(skCryptDec("Illegal byte sequence"));
+	}
+
+	// +1 because std::string adds a null terminator which isn't part of size
+	auto str = std::string(target_char_count, '\0');
+	std::wcsrtombs(const_cast<char*>(str.data()), &wcstr, str.size() + 1, &s);
+	return str;
+}
+
+bool IsFolderExists(const std::string& folderPath) 
+{
+	DWORD dwAttrib = GetFileAttributesA(folderPath.c_str());
+
+	return (dwAttrib != INVALID_FILE_ATTRIBUTES &&
+		(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
+}
+
+bool IsFolderExistsOrCreate(const std::string& folderPath)
+{
+	if (IsFolderExists(folderPath))
+		return true;
+
+	return CreateFolder(folderPath);
+}
+
+bool CreateFolder(const std::string& folderPath) 
+{
+	if (CreateDirectoryA(folderPath.c_str(), NULL) ||
+		ERROR_ALREADY_EXISTS == GetLastError()) 
+	{
+		return true;
+	}
+	return false;
+}
+
+std::string RemainingTime(long long int seconds) 
+{
+	const int secondsPerMinute = 60;
+	const int minutesPerHour = 60;
+	const int hoursPerDay = 24;
+
+	long long int remainingDays = seconds / (secondsPerMinute * minutesPerHour * hoursPerDay);
+	seconds %= secondsPerMinute * minutesPerHour * hoursPerDay;
+
+	long long int remainingHours = seconds / (secondsPerMinute * minutesPerHour);
+	seconds %= secondsPerMinute * minutesPerHour;
+
+	long long int remainingMinutes = seconds / secondsPerMinute;
+	seconds %= secondsPerMinute;
+
+	std::string result;
+
+	if (remainingDays > 0) 
+	{
+		result += std::to_string(remainingDays) + skCryptDec(" gun ");
+	}
+
+	if (remainingHours > 0) 
+	{
+		result += std::to_string(remainingHours) + skCryptDec(" saat ");
+	}
+
+	if (remainingMinutes > 0) 
+	{
+		result += std::to_string(remainingMinutes) + skCryptDec(" dakika ");
+	}
+
+	if (seconds > 0 || result.empty()) 
+	{
+		result += std::to_string(seconds) + skCryptDec(" saniye ");
+	}
+
+	if (remainingDays == 0 && remainingHours == 0 && remainingMinutes == 0 && seconds == 0) {
+		result += skCryptDec("0 saniye ");
+	}
+
+	return result;
+}
+
+bool CheckFileExistence(const std::string& path, const std::vector<std::string>& fileArray) 
+{
+	std::filesystem::path folderPath(path);
+
+	for (const auto& fileName : fileArray) 
+	{
+		std::filesystem::path filePath = folderPath / fileName;
+
+		if (!std::filesystem::exists(filePath)) 
+		{
+			return false;
+		}
+	}
+
+	return true;
 }

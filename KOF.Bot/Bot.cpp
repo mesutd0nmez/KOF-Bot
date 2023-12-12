@@ -27,19 +27,14 @@ Bot::Bot()
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
-	m_szClientPath.clear();
-	m_szClientExe.clear();
+	m_szClientPath = skCryptDec(DEVELOPMENT_PATH);
+	m_szClientExe = skCryptDec(DEVELOPMENT_EXE);
 
 	m_bClosed = false;
 
 	m_msLastInitializeHandle = std::chrono::milliseconds(0);
 
 	m_bInternalMailslotWorking = false;
-
-	m_jAccountList.clear();
-	m_iSelectedAccount = -1;
-
-	m_jSelectedAccount.clear();
 
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
@@ -48,13 +43,20 @@ Bot::Bot()
 
 	m_bAuthenticated = false;
 
-	m_RouteManager = nullptr;
+	m_bUpdate = false;
+
+	m_bUserSaveRequested = false;
+
+	m_bOnReady = false;
+
+	m_bStarted = false;
+	m_bForceClosed = false;
+
+	Initialize();
 }
 
 Bot::~Bot()
 {
-	Close();
-
 	m_ClientHandler = nullptr;
 
 	m_bTableLoaded = false;
@@ -85,172 +87,139 @@ Bot::~Bot()
 	m_hInternalMailslot = nullptr;
 	m_bInternalMailslotWorking = false;
 
-	m_jAccountList.clear();
-	m_iSelectedAccount = -1;
-
-	m_jSelectedAccount.clear();
-
 	m_hModuleAnyOTP = nullptr;
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
 
 	m_bAuthenticated = false;
+	m_bUpdate = false;
 
-	m_RouteManager = nullptr;
+	m_bUserSaveRequested = false;
 
-	m_jSupplyList.clear();
+	m_bOnReady = false;
+
+	m_bStarted = false;
+	m_bForceClosed = false;
+
+	Close();
 }
 
-void Bot::Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount)
-{
-	m_szClientPath = szClientPath;
-	m_szClientExe = szClientExe;
-
-	Initialize(ePlatformType, iSelectedAccount);
-}
-
-void Bot::Initialize(PlatformType ePlatformType, int32_t iSelectedAccount)
+void Bot::Initialize()
 {
 #ifdef DEBUG
 	printf("Bot: Initialize\n");
 #endif
 
-#ifdef DEBUG
-	printf("Bot: AnyOTP Service Initialize\n");
-#endif
+	m_hardwareInfo.LoadHardwareInformation();
 
 	InitializeAnyOTPService();
 
-#ifdef DEBUG
-	printf("Bot: Loading Hardware Information\n");
-#endif
-
-	m_hardwareInfo.LoadHardwareInformation();
-
-#ifdef DEBUG
-	printf("Bot: Hardware Information Loaded\n");
-#endif
-
-	m_ePlatformType = ePlatformType;
-	m_iSelectedAccount = iSelectedAccount;
-
-	LoadAccountList();
+	m_ePlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
 
 	GetService()->Initialize();
 
-	InitializeRouteData();
-	InitializeSupplyData();
-
 	m_startTime = std::chrono::system_clock::now();
+
+	UI::Render(this);
 }
 
 void Bot::Process()
 {
-	if (IsServiceClosed())
+	if (m_bUserSaveRequested)
 	{
-		Close();
+		SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
+		m_bUserSaveRequested = false;
 	}
-	else
+
+	if (m_bInternalMailslotWorking == false)
 	{
-		if (m_bInternalMailslotWorking == false)
+		if (ConnectInternalMailslot())
 		{
-			if (ConnectInternalMailslot())
-			{
 #ifdef DEBUG
-				printf("Bot: Internal Connection Ready\n");
+			printf("Bot: Internal Connection Ready\n");
 #endif
-				Packet pkt = Packet(PIPE_LOAD_POINTER);
+			Packet pkt = Packet(PIPE_LOAD_POINTER);
 
-				pkt << int32_t(m_mapAddress.size());
+			pkt << int32_t(m_mapAddress.size());
 
-				for (auto& e : m_mapAddress)
-				{
-					pkt << e.first << e.second;
-				}
-
-				SendInternalMailslot(pkt);
-
-				m_bInternalMailslotWorking = true;
+			for (auto& e : m_mapAddress)
+			{
+				pkt << e.first << e.second;
 			}
+
+			SendInternalMailslot(pkt);
+
+			m_bInternalMailslotWorking = true;
 		}
+	}
 
-		if (m_ClientHandler)
+	if (m_bAutoLogin && !m_bForceClosed)
+	{
+		if (GetInjectedProcessId() != 0 && IsInjectedProcessLost())
 		{
-			m_ClientHandler->Process();
+#ifdef DEBUG
+			printf("Bot: Auto Login Process Started\n");
+#endif
 
-			if (m_iSelectedAccount != -1)
+			PROCESS_INFORMATION botProcessInfo;
+			StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), "", botProcessInfo);
+
+			Close();
+
+			exit(0);
+		}
+	}
+
+	if (m_ClientHandler)
+	{
+		m_ClientHandler->Process();
+
+		if (m_bAutoLogin)
+		{
+			if (m_ClientHandler->IsDisconnect())
 			{
-				if (m_ClientHandler->IsDisconnect())
+				if (m_ClientHandler->m_msLastDisconnectTime == std::chrono::milliseconds(0))
 				{
-					if (m_ClientHandler->m_msLastDisconnectTime == std::chrono::milliseconds(0))
-					{
 #ifdef DEBUG
-						printf("Bot: Disconnected, Auto Login Process Starting In 60 Seconds\n");
+					printf("Bot: Disconnected, Auto Login Process Starting In 60 Seconds\n");
 #endif
 
-						m_ClientHandler->m_msLastDisconnectTime = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
-					}
-					else
-					{
-						std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-							std::chrono::system_clock::now().time_since_epoch()
-						);
-
-						if ((m_ClientHandler->m_msLastDisconnectTime.count() + 60000) < msNow.count())
-						{
-#ifdef DEBUG
-							printf("Bot: Auto Login Process Started\n");
-#endif
-							std::ostringstream strBotCommandLine;
-							strBotCommandLine
-								<< m_szClientPath
-								<< " "
-								<< m_szClientExe
-								<< " "
-								<< std::to_string(m_ePlatformType)
-								<< " "
-								<< std::to_string(m_iSelectedAccount);
-
-							PROCESS_INFORMATION botProcessInfo;
-							StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), strBotCommandLine.str().c_str(), botProcessInfo);
-
-							Close();
-						}
-					}
+					m_ClientHandler->m_msLastDisconnectTime = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
 				}
 				else
 				{
-					if (m_ClientHandler->m_msLastDisconnectTime != std::chrono::milliseconds(0))
+					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
+						std::chrono::system_clock::now().time_since_epoch()
+					);
+
+					if ((m_ClientHandler->m_msLastDisconnectTime.count() + 60000) < msNow.count())
 					{
 #ifdef DEBUG
-						printf("Bot: Auto Login Process Stopped, Connection Return Back\n");
+						printf("Bot: Auto Login Process Started\n");
 #endif
-					}
 
-					m_ClientHandler->m_msLastDisconnectTime = std::chrono::milliseconds(0);
+						PROCESS_INFORMATION botProcessInfo;
+						StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), "", botProcessInfo);
+
+						Close();
+
+						exit(0);
+					}
 				}
 			}
-		}
-	}
-}
-
-void Bot::LoadAccountList()
-{
-	try
-	{
-		m_szAccountListFilePath = skCryptDec("data\\accounts.json");
-
-		std::ifstream i(m_szAccountListFilePath.c_str());
-		m_jAccountList = JSON::parse(i);
-	}
-	catch (const std::exception& e)
-	{
+			else
+			{
+				if (m_ClientHandler->m_msLastDisconnectTime != std::chrono::milliseconds(0))
+				{
 #ifdef DEBUG
-		printf("%s\n", e.what());
-#else
-		DBG_UNREFERENCED_PARAMETER(e);
+					printf("Bot: Auto Login Process Stopped, Connection Return Back\n");
 #endif
+				}
+
+				m_ClientHandler->m_msLastDisconnectTime = std::chrono::milliseconds(0);
+			}
+		}
 	}
 }
 
@@ -421,6 +390,8 @@ void Bot::OnReady()
 	{
 		SendLogin(m_szToken);
 	}
+
+	m_bOnReady = true;
 }
 
 void Bot::OnPong()
@@ -428,6 +399,39 @@ void Bot::OnPong()
 #ifdef DEBUG
 	printf("Bot: OnPong\n");
 #endif
+
+	if (m_ClientHandler 
+		&& m_ClientHandler->IsWorking())
+	{
+		SendPong(
+			m_ClientHandler->m_PlayerMySelf.szName, 
+			m_ClientHandler->m_PlayerMySelf.fX, 
+			m_ClientHandler->m_PlayerMySelf.fY, 
+			m_ClientHandler->m_PlayerMySelf.iCity);
+	}
+	else
+	{
+		SendPong("", 0.0f, 0.0f, 0);
+	}
+}
+
+void Bot::OnConnected()
+{
+#ifdef DEBUG
+	printf("Bot: OnConnected\n");
+#endif
+
+	uint32_t iCRC = CalculateCRC32(skCryptDec("Discord.exe"));
+
+	if (iCRC == 0xFFFFFFFF)
+	{
+#ifdef DEBUG
+		printf("Bot: CRC Calculate failed\n");
+		return;
+#endif
+	}
+
+	SendReady(iCRC);
 }
 
 void Bot::OnAuthenticated()
@@ -436,7 +440,44 @@ void Bot::OnAuthenticated()
 	printf("Bot: OnAuthenticated\n");
 #endif
 
+	SendRouteLoadRequest();
+
 	m_bAuthenticated = true;
+}
+
+void Bot::OnUpdate()
+{
+#ifdef DEBUG
+	printf("Bot: OnUpdate\n");
+#endif
+
+	SendUpdate();
+
+	m_bUpdate = true;
+}
+
+void Bot::OnUpdateDownloaded(bool bStatus)
+{
+#ifdef DEBUG
+	printf("Bot: OnUpdateDownloaded: %d\n", bStatus);
+#endif
+
+	if (bStatus)
+	{
+		std::filesystem::path currentPath = std::filesystem::current_path();
+
+		PROCESS_INFORMATION updateProcessInfo;
+		if (!StartProcess(currentPath.string(), skCryptDec("Updater.exe"), "", updateProcessInfo))
+		{
+#ifdef DEBUG
+			printf("OnUpdateDownloaded: Update process start failed\n");
+#endif
+		}
+	}
+	else
+	{
+
+	}
 }
 
 void Bot::OnLoaded()
@@ -451,151 +492,12 @@ void Bot::OnLoaded()
 	printf("Bot: Knight Online process starting\n");
 #endif
 
-#ifndef DISABLE_XIGNCODE
-	if (m_ePlatformType == PlatformType::USKO)
+	bool bAutoStart = GetAppConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Start"), false);
+
+	if (bAutoStart)
 	{
-		PROCESS_INFORMATION loaderProcessInfo;
-		std::ostringstream strLoaderCommandLine;
-		strLoaderCommandLine << m_szClientPath + "\\"  + m_szClientExe;
-
-		if (!StartProcess(
-			m_szClientPath + "\\XIGNCODE\\", "xldr_KnightOnline_NA_loader_win32.exe", strLoaderCommandLine.str(), loaderProcessInfo))
-		{
-#ifdef DEBUG
-			printf("Bot: Loader cannot started\n");
-#endif
-			Close();
-			return;
-		}
-
-		//WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
+		StartGame();
 	}
-	else if (m_ePlatformType == PlatformType::STKO)
-	{
-		PROCESS_INFORMATION loaderProcessInfo;
-		std::ostringstream strLoaderCommandLine;
-		strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
-
-		if (!StartProcess(
-			m_szClientPath + "\\XIGNCODE\\", "xldr_KnightOnline_GB_loader_win32.exe", strLoaderCommandLine.str(), loaderProcessInfo))
-		{
-#ifdef DEBUG
-			printf("Bot: Loader cannot started\n");
-#endif
-			Close();
-			return;
-		}
-
-		//WaitForSingleObject(loaderProcessInfo.hProcess, INFINITE);
-	}
-#endif
-
-	std::ostringstream strCommandLine;
-
-	if (m_ePlatformType == PlatformType::USKO 
-		|| m_ePlatformType == PlatformType::CNKO 
-		|| m_ePlatformType == PlatformType::STKO)
-	{
-		strCommandLine << GetCurrentProcessId();
-	}
-	else if (m_ePlatformType == PlatformType::KOKO)
-	{
-		strCommandLine << "ongate MVGHONG4 NDAYOK1EPZFQT1P6TIQA0YE7ZTD0IWN8LS1V10JLT1V185JX00OMLNQ0 2330316151 15100 0";
-	}
-
-	if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), m_InjectedProcessInfo))
-	{
-#ifdef DEBUG
-		printf("Bot: Process cannot started\n");
-#endif
-		Close();
-		return;
-	}
-
-#ifdef DEBUG
-	printf("Bot: Knight Online process started\n");
-#endif
-
-	if (m_ePlatformType == PlatformType::USKO 
-		|| m_ePlatformType == PlatformType::KOKO
-		|| m_ePlatformType == PlatformType::STKO)
-	{
-		DWORD dwXignCodeEntryPoint = 0;
-
-#ifdef DEBUG
-		printf("Bot: Waiting entry point\n");
-#endif
-
-		while (dwXignCodeEntryPoint == 0)
-			ReadProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
-
-#ifdef DEBUG
-		printf("Bot: Entry point ready, Knight Online process suspending\n");
-#endif
-
-		SuspendProcess(m_InjectedProcessInfo.hProcess);
-
-#ifdef DEBUG
-		printf("Bot: Knight Online process suspended, bypass started\n");
-#endif
-
-		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS1")) > 0)
-		{
-			Remap::PatchSection(
-				m_InjectedProcessInfo.hProcess,
-				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")), 
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")), PAGE_EXECUTE_READWRITE);
-		}
-
-		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
-		{
-			Remap::PatchSection(
-				m_InjectedProcessInfo.hProcess,
-				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")), PAGE_EXECUTE_READWRITE);
-		}
-		
-		if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
-		{
-			Remap::PatchSection(
-				m_InjectedProcessInfo.hProcess,
-				(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
-				GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
-		}
-
-#ifdef DEBUG
-		printf("Bot: Knight Online Patched\n");
-#endif
-
-#ifdef DISABLE_XIGNCODE
-		if (m_ePlatformType == PlatformType::USKO)
-		{
-			BYTE byPatch2[] = { 0xE9, 0xE5, 0x02, 0x00, 0x00, 0x90 };
-			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
-		}
-		else if (m_ePlatformType == PlatformType::KOKO)
-		{
-			BYTE byPatch2[] = { 0xE9, 0x50, 0x07, 0x00, 0x00, 0x90 };
-			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
-		}
-		else if (m_ePlatformType == PlatformType::STKO)
-		{
-			BYTE byPatch2[] = { 0xE9, 0x09, 0x03, 0x00, 0x00, 0x90 };
-			WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
-		}
-#endif
-
-#ifdef DEBUG
-		printf("Bot: Bypass finished, Knight Online process resuming\n");
-#endif
-	
-		ResumeProcess(m_InjectedProcessInfo.hProcess);
-	}
-
-	Patch(m_InjectedProcessInfo.hProcess);
-
-	m_ClientHandler = new ClientHandler(this);
-	m_ClientHandler->Initialize();
 }
 
 void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
@@ -617,9 +519,8 @@ void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
 void Bot::Patch(HANDLE hProcess)
 {
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	DWORD iPatchEntryPoint1 = 0;
-	while (iPatchEntryPoint1 == 0)
-		ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), &iPatchEntryPoint1, 4, 0);
+
+	WaitCondition(Read4Byte(GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1"))) == 0);
 
 	BYTE byPatch1[] = 
 	{ 
@@ -631,20 +532,6 @@ void Bot::Patch(HANDLE hProcess)
 	};
 
 	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//DWORD iPatchEntryPoint2 = 0;
-	//while (iPatchEntryPoint2 == 0)
-	//	ReadProcessMemory(hProcess, (LPVOID)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), &iPatchEntryPoint2, 4, 0);
-
-	//BYTE byPatch2[] =
-	//{ 
-	//	0xE9, 0xC5, 0x00, 0x00, 0x00,
-	//	0x90 
-	//};
-
-	//WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_LEGAL_ATTACK_FIX1")), byPatch2, sizeof(byPatch2), 0);
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
@@ -670,7 +557,7 @@ void Bot::OnConfigurationLoaded()
 
 	m_iniUserConfiguration->onSaveEvent = [=]()
 	{
-		SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
+		m_bUserSaveRequested = true;
 	};
 }
 
@@ -1115,7 +1002,16 @@ std::wstring Bot::GetAnyOTPHardwareID()
 
 void Bot::InitializeAnyOTPService()
 {
-	m_hModuleAnyOTP = LoadLibraryExW(skCryptDec(L"AnyOTPBiz.dll"), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+	std::string filePath;
+
+	if (std::filesystem::exists(skCryptDec("C:\\Program Files\\AnyOTPSetup\\AnyOTPBiz.dll"))) 
+	{
+		m_hModuleAnyOTP = LoadLibraryExW(skCryptDec(L"C:\\Program Files\\AnyOTPSetup\\AnyOTPBiz.dll"), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+	}
+	else if (std::filesystem::exists(skCryptDec("C:\\Program Files (x86)\\AnyOTPSetup\\AnyOTPBiz.dll")))
+	{
+		m_hModuleAnyOTP = LoadLibraryExW(skCryptDec(L"C:\\Program Files (x86)\\AnyOTPSetup\\AnyOTPBiz.dll"), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+	}
 
 	if (m_hModuleAnyOTP == NULL)
 	{
@@ -1128,6 +1024,8 @@ void Bot::InitializeAnyOTPService()
 #ifdef _DEBUG
 	printf("Bot: AnyOTP Library Loaded\n");
 #endif
+
+	m_szAnyOTPID = to_string(GetAnyOTPHardwareID().c_str());
 }
 
 std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareID)
@@ -1165,43 +1063,221 @@ std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareI
 	return szCode;
 }
 
-void Bot::InitializeRouteData()
+void Bot::StartGame()
 {
-#ifdef DEBUG
-	printf("InitializeRouteData: Started\n");
+#ifdef VMPROTECT
+	VMProtectBeginUltra("Bypass Function");
 #endif
 
-	m_RouteManager = new RouteManager();
-	m_RouteManager->Load();
+	m_bStarted = true;
+
+	new std::thread([&]()
+	{
+		std::vector<const char*> fileNames = {
+		#ifdef DEBUG
+			skCryptDec("KOF.exe"),
+		#endif
+			skCryptDec("Updater.exe"),
+			skCryptDec("Updater2.exe"),
+			skCryptDec("KnightOnLine.exe"),
+			skCryptDec("xldr_KnightOnline_NA.exe"),
+			skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"),
+			skCryptDec("xldr_KnightOnline_GB.exe"),
+			skCryptDec("xldr_KnightOnline_GB_loader_win32.exe") 
+		};
+
+		KillProcessesByFileNames(fileNames);
+
+		while (IsProcessRunning(skCryptDec("Updater.exe")))
+		{
+			Sleep(1000);
+			KillProcessesByFileName(skCryptDec("Updater.exe"));
+			Sleep(1000);
+		}
+
+#ifndef DISABLE_XIGNCODE
+		if (m_ePlatformType == PlatformType::USKO)
+		{
+			PROCESS_INFORMATION loaderProcessInfo;
+			std::ostringstream strLoaderCommandLine;
+			strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
+
+			if (!StartProcess(
+				m_szClientPath + skCryptDec("\\XIGNCODE\\"), skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"), strLoaderCommandLine.str(), loaderProcessInfo))
+			{
+#ifdef DEBUG
+				printf("Bot: Loader cannot started\n");
+#endif
+				Close();
+				exit(0);
+				return;
+			}
+		}
+		else if (m_ePlatformType == PlatformType::STKO)
+		{
+			PROCESS_INFORMATION loaderProcessInfo;
+			std::ostringstream strLoaderCommandLine;
+			strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
+
+			if (!StartProcess(
+				m_szClientPath + skCryptDec("\\XIGNCODE\\"), skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"), strLoaderCommandLine.str(), loaderProcessInfo))
+			{
+#ifdef DEBUG
+				printf("Bot: Loader cannot started\n");
+#endif
+				Close();
+				exit(0);
+				return;
+			}
+		}
+#endif
+
+		std::ostringstream strCommandLine;
+
+		if (m_ePlatformType == PlatformType::USKO
+			|| m_ePlatformType == PlatformType::CNKO
+			|| m_ePlatformType == PlatformType::STKO)
+		{
+			strCommandLine << GetCurrentProcessId();
+		}
+		else if (m_ePlatformType == PlatformType::KOKO)
+		{
+			strCommandLine << skCryptDec("ongate MVGHONG4 NDAYOK1EPZFQT1P6TIQA0YE7ZTD0IWN8LS1V10JLT1V185JX00OMLNQ0 2330316151 15100 0");
+		}
+
+		if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), m_InjectedProcessInfo))
+		{
+#ifdef DEBUG
+			printf("Bot: Process cannot started\n");
+#endif
+			Close();
+			exit(0);
+			return;
+		}
 
 #ifdef DEBUG
-	printf("InitializeRouteData: Finished\n");
+		printf("Bot: Knight Online process started\n");
+#endif
+
+		if (m_ePlatformType == PlatformType::USKO
+			|| m_ePlatformType == PlatformType::KOKO
+			|| m_ePlatformType == PlatformType::STKO)
+		{
+			DWORD dwXignCodeEntryPoint = 0;
+
+#ifdef DEBUG
+			printf("Bot: Waiting entry point\n");
+#endif
+
+			while (dwXignCodeEntryPoint == 0)
+				ReadProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
+
+#ifdef DEBUG
+			printf("Bot: Entry point ready, Knight Online process suspending\n");
+#endif
+
+			SuspendProcess(m_InjectedProcessInfo.hProcess);
+
+#ifdef DEBUG
+			printf("Bot: Knight Online process suspended, bypass started\n");
+#endif
+
+			if (GetAddress(skCryptDec("KO_PATCH_ADDRESS1")) > 0)
+			{
+				Remap::PatchSection(
+					m_InjectedProcessInfo.hProcess,
+					(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS1")),
+					GetAddress(skCryptDec("KO_PATCH_ADDRESS1_SIZE")), PAGE_EXECUTE_READWRITE);
+			}
+
+			if (GetAddress(skCryptDec("KO_PATCH_ADDRESS2")) > 0)
+			{
+				Remap::PatchSection(
+					m_InjectedProcessInfo.hProcess,
+					(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS2")),
+					GetAddress(skCryptDec("KO_PATCH_ADDRESS2_SIZE")), PAGE_EXECUTE_READWRITE);
+			}
+
+			if (GetAddress(skCryptDec("KO_PATCH_ADDRESS3")) > 0)
+			{
+				Remap::PatchSection(
+					m_InjectedProcessInfo.hProcess,
+					(LPVOID*)GetAddress(skCryptDec("KO_PATCH_ADDRESS3")),
+					GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
+			}
+
+#ifdef DEBUG
+			printf("Bot: Knight Online Patched\n");
+#endif
+
+#ifdef DISABLE_XIGNCODE
+			if (m_ePlatformType == PlatformType::USKO)
+			{
+				BYTE byPatch2[] = { 0xE9, 0x01, 0x03, 0x00, 0x00, 0x90 };
+				WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+			}
+			else if (m_ePlatformType == PlatformType::KOKO)
+			{
+				BYTE byPatch2[] = { 0xE9, 0x50, 0x07, 0x00, 0x00, 0x90 };
+				WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+			}
+			else if (m_ePlatformType == PlatformType::STKO)
+			{
+				BYTE byPatch2[] = { 0xE9, 0x09, 0x03, 0x00, 0x00, 0x90 };
+				WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
+			}
+#endif
+
+#ifdef DEBUG
+			printf("Bot: Bypass finished, Knight Online process resuming\n");
+#endif
+
+			ResumeProcess(m_InjectedProcessInfo.hProcess);
+		}
+
+		Patch(m_InjectedProcessInfo.hProcess);
+
+		m_ClientHandler = new ClientHandler(this);
+		m_ClientHandler->Initialize();
+
+		m_bForceClosed = false;
+	});
+
+#ifdef VMPROTECT
+	VMProtectEnd();
 #endif
 }
 
-void Bot::InitializeSupplyData()
+void Bot::StopStartGameProcess()
 {
-#ifdef DEBUG
-	printf("InitializeSupplyData: Started\n");
-#endif
+	if (!m_bStarted)
+		return;
 
-	try
+	m_bForceClosed = true;
+
+	std::vector<const char*> fileNames = 
 	{
-		std::ifstream ifSupply(
-			skCryptDec("data\\supply.json"));
+	#ifdef DEBUG
+		skCryptDec("KOF.exe"),
+	#endif
+		skCryptDec("Updater.exe"),
+		skCryptDec("Updater2.exe"),
+		skCryptDec("KnightOnLine.exe"),
+		skCryptDec("xldr_KnightOnline_NA.exe"),
+		skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"),
+		skCryptDec("xldr_KnightOnline_GB.exe"),
+		skCryptDec("xldr_KnightOnline_GB_loader_win32.exe")
+	};
 
-		m_jSupplyList = JSON::parse(ifSupply);
-	}
-	catch (const std::exception& e)
+	KillProcessesByFileNames(fileNames);
+
+	if (m_ClientHandler) 
 	{
-#ifdef DEBUG
-		printf("%s\n", e.what());
-#else
-		DBG_UNREFERENCED_PARAMETER(e);
-#endif
+		m_ClientHandler->Clear();
+
+		delete m_ClientHandler;
+		m_ClientHandler = nullptr;
 	}
 
-#ifdef DEBUG
-	printf("InitializeSupplyData: Finished\n");
-#endif
+	m_bStarted = false;
 }

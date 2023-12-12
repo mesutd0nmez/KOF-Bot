@@ -17,12 +17,19 @@ public:
 
 	void SetInitialVector(std::string szInitialVector)
 	{
+#ifdef VMPROTECT
+		VMProtectBeginUltra("SetInitialVector");
+#endif
 		std::string szTmpInitialVector(szInitialVector
 			+ skCryptDec(".")
-			+ skCryptDec("xRMnlYJ8Zyll4dpwYXBEtroo3kZ7AtCie64oaEsOcIvZjFtUQbWZTr3Xla9blbrk"));
+			+ skCryptDec("GyFbVKv89rHQtoe9iqfLFtJhkwfwA7jn9ZqvwC56bPTk47DBTLu3DutoXBCzTPe6"));
 		uint8_t byTmpInitialVector[CryptoPP::SHA256::DIGESTSIZE];
 		CryptoPP::SHA256().CalculateDigest(byTmpInitialVector, (uint8_t*)szTmpInitialVector.data(), szTmpInitialVector.size());
 		CryptoPP::Weak::MD5().CalculateDigest(m_initialVector, byTmpInitialVector, CryptoPP::SHA256::DIGESTSIZE);
+
+#ifdef VMPROTECT
+		VMProtectEnd();
+#endif
 	}
 
 	int Encryption(uint8_t* datain, size_t length, std::vector<uint8_t>& dataout)

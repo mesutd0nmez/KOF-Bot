@@ -16,6 +16,7 @@
 #include "Enum.h"
 #include "Struct.h"
 #include "Json.h"
+#include "crc32.h"
 using JSON = nlohmann::json;
 
 #include <imgui.h>
@@ -39,13 +40,13 @@ using JSON = nlohmann::json;
 #include <functional>
 #include <cerrno>
 
-#include <curl/curl.h>
-
 #include "imgui.h"
 #include "imgui_impl_dx9.h"
 #include "imgui_impl_win32.h"
 
-
+#ifdef VMPROTECT
+#include "VMProtectSDK.h"
+#endif
 
 #define WaitCondition(condition) \
 	while(condition) \
@@ -76,20 +77,14 @@ extern void ResumeProcess(DWORD dwProcessId);
 
 extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION& processInfo);
 
-extern std::string to_string(wchar_t const* wcstr);
-extern std::string to_string(std::wstring const& wstr);
-
 extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
-
-extern std::string CurlPost(std::string szUrl, JSON jData);
 
 extern bool Injection(DWORD iTargetProcess, std::string szPath);
 
 extern bool ConsoleCommand(const std::string & input, std::string & out);
 
 extern bool KillProcessesByFileName(const char* fileName);
-
-extern std::string GenerateUniqueString(size_t iLength);
+extern bool KillProcessesByFileNames(const std::vector<const char*>&fileNames);
 
 extern uint8_t hexCharToUint8(char c);
 extern std::vector<uint8_t> fromHexString(const std::string& hexString);
@@ -98,5 +93,18 @@ extern std::string toHexString(const std::vector<uint8_t>&bytes);
 extern const char* stristr(const char* haystack, const char* needle);
 
 extern std::string calculateElapsedTime(const std::chrono::time_point<std::chrono::system_clock>&start_time);
-extern std::string formatNumber(uint64_t number);
+extern DWORD CalculateCRC32(const std::string & filePath);
+
+extern bool IsProcessRunning(const char* fileName);
+
+extern std::string GenerateAlphanumericString(int length);
+
+extern std::string to_string(wchar_t const* wcstr);
+
+extern bool IsFolderExists(const std::string & folderPath);
+extern bool IsFolderExistsOrCreate(const std::string & folderPath);
+extern bool CreateFolder(const std::string & folderPath);
+
+extern std::string RemainingTime(long long int seconds);
+extern bool CheckFileExistence(const std::string & path, const std::vector<std::string>&fileArray);
 #endif //PCH_H

@@ -72,11 +72,13 @@ public:
 	ByteBuffer& operator<<(std::string& value) { *this << value.c_str(); return *this; }
 	ByteBuffer& operator<<(const char* str)
 	{
-		uint16_t len = (uint16_t)strlen(str);
+		size_t len = strlen(str);
+
 		if (m_doubleByte)
-			append((uint8_t*)&len, 2);
+			append((uint8_t*)&len, sizeof(uint16_t));
 		else
-			append((uint8_t*)&len, 1);
+			append((uint8_t*)&len, sizeof(uint8_t));
+
 		append((uint8_t*)str, len);
 		return *this;
 	}

@@ -49,7 +49,6 @@ public:
 	static void Draw();
 	static void DXDraw(LPDIRECT3DDEVICE9 pCurrentD3DDevice);
 	static void SetLegalModeSettings(bool bMode);
-	static void SetSpeedModeSettings(bool bMode);
 
 	static Bot* Bot;
 	static LPCSTR lpWindowName;

@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "Socket.h"
-#include "Compression.h"
 
 Socket::Socket()
 {
@@ -19,10 +18,6 @@ void Socket::Connect(std::string szIP, uint16_t iPort)
     m_tcpSocket.Connect(szIP, iPort, [&]
     {
         m_tcpSocket.isConnected = true;
-
-        m_Cryption->SetEncryptionKey(skCryptDec("auJouZxXdDolrmQNIaJ0zHY9wCOvbgSdE45ByrNkXBecZELoupFvhwINAVYJUnTq"));
-        GenerateSeed((1881 * 2023) / 2009 << 16);
-        m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
         OnConnect();
 
@@ -69,19 +64,19 @@ void Socket::Send(Packet& pkt, bool bCompress)
 
     Packet encryptionPkt = Packet();
 
-    if (bCompress
-        && pkt.size() > Compression::MinBytes)
+    if (bCompress 
+        && pkt.size() >= 512)
     {
-        encryptionPkt
-            << uint8_t(1) //compression enabled
-            << uint32_t(pkt.size()); //packet size
+        //encryptionPkt
+        //    << uint8_t(1) //compression enabled
+        //    << uint32_t(pkt.size()); //packet size
 
-        uint32_t crc = 0;
-        uint32_t outLength = 0;
+        //uint32_t crc = 0;
+        //uint32_t outLength = 0;
 
-        uint8_t* outBuffer = Compression::CompressWithCRC32(pkt.contents(), pkt.size(), &outLength, &crc);
+        //uint8_t* outBuffer = Compression::CompressWithCRC32(pkt.contents(), pkt.size(), &outLength, &crc);
 
-        encryptionPkt.append(outBuffer, outLength);
+        //encryptionPkt.append(outBuffer, outLength);
     }
     else
     {
@@ -112,14 +107,6 @@ void Socket::Send(Packet& pkt, bool bCompress)
 
 void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 {
-    if (iStreamLength < 10)
-    {
-#ifdef DEBUG
-        printf("Process packet failed, packet size need minimum 9\n");
-#endif
-        return;
-    }
-
     uint16_t iStreamHeader = *(uint16_t*)&iStream[0];
 
     if (iStreamHeader != 0xaa55)
@@ -159,21 +146,21 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 
     if (iFlag == 1)
     {
-        uint32_t iPacketCompressedLength = *(uint32_t*)&vecDecryptedPacket[5];
-        iPacket = Compression::DecompressWithCRC32(&vecDecryptedPacket[9], iPacketCompressedLength, iPacketLength, 0);
+        //uint32_t iPacketCompressedLength = *(uint32_t*)&vecDecryptedPacket[5];
+        //iPacket = Compression::DecompressWithCRC32(&vecDecryptedPacket[9], iPacketCompressedLength, iPacketLength, 0);
     }
     else
     {
         iPacket = new uint8_t[iPacketLength];
         iPacket = (uint8_t*)&vecDecryptedPacket[5];
+
+        Packet pkt = Packet(iPacket[0], iPacketLength);
+
+        if (iPacketLength > 1)
+        {
+            pkt.append(&iPacket[1], iPacketLength - 1);
+        }
+
+        HandlePacket(pkt);
     }
-
-    Packet pkt = Packet(iPacket[0], iPacketLength);
-
-    if (iPacketLength > 1)
-    {
-        pkt.append(&iPacket[1], iPacketLength - 1);
-    }
-
-    HandlePacket(pkt);
 }

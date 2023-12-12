@@ -582,10 +582,10 @@ void Client::SetAuthority(uint8_t iAuthority)
 
 bool Client::IsBuffActive(int32_t iBuffType)
 { 
-	int32_t iSkillBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_SKILL_BASE"));
+	int32_t iSkillBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_BASE")));
 
 	int32_t iSkillContainer1 = m_Bot->Read4Byte(iSkillBase + 0x4);
-	int32_t iSkillContainer1Slot = m_Bot->Read4Byte(iSkillContainer1 + m_Bot->GetAddress("KO_OFF_SKILL_SLOT"));
+	int32_t iSkillContainer1Slot = m_Bot->Read4Byte(iSkillContainer1 + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_SLOT")));
 
 	for (int32_t i = 0; i < 20; i++)
 	{
@@ -601,7 +601,7 @@ bool Client::IsBuffActive(int32_t iBuffType)
 	}
 
 	int32_t iSkillContainer2 = m_Bot->Read4Byte(iSkillBase + 0x8);
-	int32_t iSkillContainer2Slot = m_Bot->Read4Byte(iSkillContainer2 + m_Bot->GetAddress("KO_OFF_SKILL_SLOT"));
+	int32_t iSkillContainer2Slot = m_Bot->Read4Byte(iSkillContainer2 + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_SLOT")));
 
 	for (int32_t i = 0; i < 20; i++)
 	{
@@ -621,10 +621,10 @@ bool Client::IsBuffActive(int32_t iBuffType)
 
 bool Client::IsSkillActive(int32_t iSkillID)
 {
-	int32_t iSkillBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_SKILL_BASE"));
+	int32_t iSkillBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_BASE")));
 
 	int32_t iSkillContainer1 = m_Bot->Read4Byte(iSkillBase + 0x4);
-	int32_t iSkillContainer1Slot = m_Bot->Read4Byte(iSkillContainer1 + m_Bot->GetAddress("KO_OFF_SKILL_SLOT"));
+	int32_t iSkillContainer1Slot = m_Bot->Read4Byte(iSkillContainer1 + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_SLOT")));
 
 	for (int32_t i = 0; i < 20; i++)
 	{
@@ -640,7 +640,7 @@ bool Client::IsSkillActive(int32_t iSkillID)
 	}
 
 	int32_t iSkillContainer2 = m_Bot->Read4Byte(iSkillBase + 0x8);
-	int32_t iSkillContainer2Slot = m_Bot->Read4Byte(iSkillContainer2 + m_Bot->GetAddress("KO_OFF_SKILL_SLOT"));
+	int32_t iSkillContainer2Slot = m_Bot->Read4Byte(iSkillContainer2 + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_SLOT")));
 
 	for (int32_t i = 0; i < 20; i++)
 	{
@@ -703,18 +703,18 @@ float Client::GetDistance(float fX1, float fY1, float fX2, float fY2)
 
 uint8_t Client::GetSkillPoint(int32_t Slot)
 {
-	return m_Bot->ReadByte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_SKILL_POINT_BASE")) + m_Bot->GetAddress("KO_OFF_SKILL_POINT_START") + (Slot * 4));
+	return m_Bot->ReadByte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_POINT_BASE"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_SKILL_POINT_START")) + (Slot * 4));
 }
 
 int32_t Client::GetInventoryItemCount(uint32_t iItemID)
 {
 	int32_t iItemCount = 0;
 
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
 
 	for (size_t i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * i)));
 
 		if (m_Bot->GetPlatformType() == PlatformType::USKO 
 			|| m_Bot->GetPlatformType() == PlatformType::STKO)
@@ -737,11 +737,11 @@ TItemData Client::GetInventoryItem(uint32_t iItemID)
 	TItemData pInventory;
 	memset(&pInventory, 0, sizeof(pInventory));
 
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
 
 	for (size_t i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * i)));
 
 		if (m_Bot->GetPlatformType() == PlatformType::USKO 
 			|| m_Bot->GetPlatformType() == PlatformType::STKO)
@@ -775,11 +775,11 @@ TItemData Client::GetInventoryItem(uint32_t iItemID)
 
 int32_t Client::GetInventoryEmptySlot()
 {
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
 
 	for (size_t i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
-		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * i)));
 
 		if (m_Bot->GetPlatformType() == PlatformType::USKO 
 			|| m_Bot->GetPlatformType() == PlatformType::STKO)
@@ -803,7 +803,7 @@ int32_t Client::GetInventoryEmptySlot()
 
 int32_t Client::GetInventoryEmptySlot(std::vector<int32_t> vecExcept)
 {
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
 
 	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
@@ -811,7 +811,7 @@ int32_t Client::GetInventoryEmptySlot(std::vector<int32_t> vecExcept)
 			!= vecExcept.end())
 			continue;
 
-		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * i)));
 
 		if (m_Bot->GetPlatformType() == PlatformType::USKO 
 			|| m_Bot->GetPlatformType() == PlatformType::STKO)
@@ -834,8 +834,8 @@ TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 	TItemData pInventory;
 	memset(&pInventory, 0, sizeof(pInventory));
 
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
-	DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * iSlotPosition)));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
+	DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * iSlotPosition)));
 
 	if (m_Bot->GetPlatformType() == PlatformType::USKO 
 		|| m_Bot->GetPlatformType() == PlatformType::STKO)
@@ -872,7 +872,7 @@ TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 
 bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)
 {
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
 
 	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
 	{
@@ -881,7 +881,7 @@ bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)
 
 		pItem.iPos = i;
 
-		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * i)));
+		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * i)));
 
 		if (m_Bot->GetPlatformType() == PlatformType::USKO 
 			|| m_Bot->GetPlatformType() == PlatformType::STKO)
@@ -2267,7 +2267,7 @@ void Client::SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage
 
 bool Client::GetVipWarehouseItemList(std::vector<TItemData>& vecItemList)
 {
-	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP")));
+	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP")));
 
 	for (size_t i = 0; i < VIP_HAVE_MAX; i++)
 	{
@@ -2310,7 +2310,7 @@ bool Client::GetVipWarehouseItemList(std::vector<TItemData>& vecItemList)
 
 bool Client::GetVipWarehouseInventoryItemList(std::vector<TItemData>& vecItemList)
 {
-	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP")));
+	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP")));
 
 	for (size_t i = 0; i < HAVE_MAX; i++)
 	{
@@ -2443,7 +2443,7 @@ void Client::PatchObjectCollision(bool bEnable)
 			0x75
 		};
 
-		WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress("KO_OBJECT_COLLISION_CHECK"), byPatch, sizeof(byPatch), 0);
+		WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OBJECT_COLLISION_CHECK")), byPatch, sizeof(byPatch), 0);
 	}
 	else
 	{
@@ -2452,7 +2452,7 @@ void Client::PatchObjectCollision(bool bEnable)
 			0x74
 		};
 
-		WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress("KO_OBJECT_COLLISION_CHECK"), byPatch, sizeof(byPatch), 0);
+		WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OBJECT_COLLISION_CHECK")), byPatch, sizeof(byPatch), 0);
 	}
 }
 
@@ -2525,7 +2525,7 @@ void Client::SendVipWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPa
 
 bool Client::IsVipWarehouseFull()
 {
-	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP")));
+	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP")));
 
 	for (size_t i = 0; i < VIP_HAVE_MAX; i++)
 	{
@@ -2551,7 +2551,7 @@ void Client::OpenVipWarehouse()
 {
 	m_bVipWarehouseLoaded = false;
 
-	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP_OPEN")), 1);
+	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP_OPEN")), 1);
 
 	BYTE byCode[] =
 	{
@@ -2582,7 +2582,7 @@ void Client::CloseVipWarehouse()
 {
 	m_bVipWarehouseLoaded = false;
 
-	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP_OPEN")), 0);
+	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP_OPEN")), 0);
 
 	BYTE byCode[] =
 	{
@@ -2685,39 +2685,39 @@ void Client::PatchSpeedHack(bool bEnable)
 
 bool Client::IsVipWarehouseOpen()
 {
-	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP"));
+	DWORD iVipWarehouseBase = m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_VIP"));
 	DWORD iVipWarehouseOpenAddress = m_Bot->Read4Byte(iVipWarehouseBase) + 0xE4;
 	return m_Bot->Read2Byte(iVipWarehouseOpenAddress) != 0;
 }
 
 bool Client::IsTransactionDialogOpen()
 {
-	DWORD iTransactionDlgBase = m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress(skCryptDec("KO_OFF_TRANSACTION_DLG"));
+	DWORD iTransactionDlgBase = m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_TRANSACTION_DLG"));
 	DWORD iiTransactionDlgOpenAddress = m_Bot->Read4Byte(iTransactionDlgBase) + 0xE4;
 	return m_Bot->Read2Byte(iiTransactionDlgOpenAddress) != 0;
 }
 
 bool Client::IsWarehouseOpen()
 {
-	DWORD iTransactionDlgBase = m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + 0x1F8;
+	DWORD iTransactionDlgBase = m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + 0x1F8;
 	DWORD iiTransactionDlgOpenAddress = m_Bot->Read4Byte(iTransactionDlgBase) + 0xE4;
 	return m_Bot->Read2Byte(iiTransactionDlgOpenAddress) != 0;
 }
 
 void Client::RemoveItem(int32_t iItemSlot)
 {
-	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress("KO_PTR_DLG")) + m_Bot->GetAddress("KO_OFF_INVENTORY_BASE"));
-	DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress("KO_OFF_INVENTORY_START") + (4 * (iItemSlot + 14))));
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
+	DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * (iItemSlot + 14))));
 
-	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE1"), 1);
-	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE1") + 0x4, iItemSlot);
-	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE1") + 0x8, iItemBase);
+	m_Bot->WriteByte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE1")), 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE1")) + 0x4, iItemSlot);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE1")) + 0x8, iItemBase);
 
-	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE2"), 1);
-	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x4, iItemBase);
-	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x0C, 1);
-	m_Bot->Write4Byte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x10, iItemSlot);
-	m_Bot->WriteByte(m_Bot->GetAddress("KO_REMOVE_BASE2") + 0x14, 1);
+	m_Bot->WriteByte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")), 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")) + 0x4, iItemBase);
+	m_Bot->WriteByte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")) + 0x0C, 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")) + 0x10, iItemSlot);
+	m_Bot->WriteByte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")) + 0x14, 1);
 
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
 
@@ -2733,7 +2733,7 @@ void Client::RemoveItem(int32_t iItemSlot)
 
 	memcpy(byPatch + 2, &iInventoryBase, sizeof(iInventoryBase));
 
-	DWORD iCallAddress = m_Bot->GetAddress("KO_REMOVE_CALL");
+	DWORD iCallAddress = m_Bot->GetAddress(skCryptDec("KO_REMOVE_CALL"));
 	memcpy(byPatch + 7, &iCallAddress, sizeof(iCallAddress));
 
 	m_Bot->ExecuteRemoteCode(hProcess, byPatch, sizeof(byPatch));

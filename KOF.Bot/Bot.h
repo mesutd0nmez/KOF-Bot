@@ -2,8 +2,6 @@
 
 #include "Service.h"
 #include "Table.h"
-#include "RouteManager.h"
-#include "World.h"
 
 class ClientHandler;
 class Client;
@@ -17,12 +15,10 @@ public:
 	Service* GetService() { return static_cast<Service*>(this); }
 
 public:
-	void Initialize(std::string szClientPath, std::string szClientExe, PlatformType ePlatformType, int32_t iSelectedAccount);
-	void Initialize(PlatformType ePlatformType, int32_t iSelectedAccount);
+	void Initialize();
 	void InitializeStaticData();
 
 	void Process();
-	void LoadAccountList();
 
 	void Close();
 	void Release();
@@ -50,13 +46,13 @@ public:
 
 	bool GetDisguiseRingTable(std::map<uint32_t, __TABLE_DISGUISE_RING>** mapDataOut);
 
-	JSON m_jAccountList;
-	JSON m_jSelectedAccount;
-
 private:
+	void OnConnected();
 	void OnReady();
 	void OnPong();
 	void OnAuthenticated();
+	void OnUpdate();
+	void OnUpdateDownloaded(bool bStatus);
 	void OnLoaded();
 	void OnConfigurationLoaded();
 	void OnCaptchaResponse(bool bStatus, std::string szResult);
@@ -136,9 +132,11 @@ public:
 private:
 	PROCESS_INFORMATION m_InjectedProcessInfo;
 
-private:
+public:
 	HMODULE m_hModuleAnyOTP;
 	std::wstring GetAnyOTPHardwareID();
+private:
+
 	void InitializeAnyOTPService();
 	typedef int(__stdcall* GenerateOTP)(int, LPCWSTR, LPCWSTR, int*);
 
@@ -151,26 +149,27 @@ private:
 public:
 	bool IsAuthenticated() { return m_bAuthenticated; };
 
-protected:
-	void InitializeRouteData();
-	void InitializeSupplyData();
-
-public:
-	RouteManager* GetRouteManager() { return m_RouteManager; };
-
 private:
-	RouteManager* m_RouteManager;
+	bool m_bUpdate;
 
 public:
-	JSON GetSupplyList() { return m_jSupplyList; };
-
-protected:
-	JSON m_jSupplyList;
+	bool IsUpdating() { return m_bUpdate; };
 
 public:
 	std::chrono::time_point<std::chrono::system_clock> m_startTime;
 
 public:
 	std::map<uint32_t, __TABLE_ITEM>* m_mapItemTable;
+
+public:
+	void StartGame();
+	void StopStartGameProcess();
+
+public:
+	bool m_bStarted;
+	bool m_bForceClosed;
+public:
+	bool IsStarted() { return m_bStarted; };
+	bool IsForceClosed() { return m_bForceClosed; };
 };
 

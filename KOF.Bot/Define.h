@@ -21,12 +21,6 @@
 #define DEVELOPMENT_EXE "KnightOnLine.exe"
 #define DEVELOPMENT_PLATFORM 0
 
-#ifdef DEBUG
-#define DEVELOPMENT_ACCOUNT_INDEX 8
-#else
-#define DEVELOPMENT_ACCOUNT_INDEX -1
-#endif
-
 ///////////////// FEATURES /////////////////
 
 //#define FEATURE_LEVEL_DOWNER

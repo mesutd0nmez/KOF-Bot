@@ -816,12 +816,12 @@ private:
 public:
 	void LoadHardwareInformation()
 	{
-		QuerySMBIOS();
-		QueryProcessor();
+		//QuerySMBIOS();
+		//QueryProcessor();
 		QueryGPU();
 		QuerySystem();
-		QueryNetwork();
-		QueryPhysicalMemory();
+		//QueryNetwork();
+		//QueryPhysicalMemory();
 		QueryRegistry();
 		QueryDisk();
 	}
