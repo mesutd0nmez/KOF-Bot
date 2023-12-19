@@ -50,7 +50,7 @@ using JSON = nlohmann::json;
 
 #define WaitCondition(condition) \
 	while(condition) \
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 #define WaitConditionWithTimeout(condition, timeout_ms) \
 { \

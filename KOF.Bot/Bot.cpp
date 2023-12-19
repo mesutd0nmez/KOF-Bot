@@ -991,9 +991,10 @@ std::wstring Bot::GetAnyOTPHardwareID()
 		{
 			std::wstringstream sstream;
 			sstream << std::hex << Disk.Signature;
-			std::wstring hexStr = sstream.str();
+			sstream << std::hex << std::uppercase << Disk.Signature;
+			std::wstring szSignature = sstream.str();
 
-			szOTPHardwareID = hexStr.substr(0, 4) + szPNPDeviceID.substr(szPNPDeviceID.length() - 16);
+			szOTPHardwareID = szSignature.substr(0, 4) + szPNPDeviceID.substr(szPNPDeviceID.length() - 16);
 		}
 	}
 
@@ -1163,14 +1164,12 @@ void Bot::StartGame()
 			|| m_ePlatformType == PlatformType::KOKO
 			|| m_ePlatformType == PlatformType::STKO)
 		{
-			DWORD dwXignCodeEntryPoint = 0;
 
 #ifdef DEBUG
 			printf("Bot: Waiting entry point\n");
 #endif
 
-			while (dwXignCodeEntryPoint == 0)
-				ReadProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), &dwXignCodeEntryPoint, 4, 0);
+			WaitCondition(Read4Byte(GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT"))) == 0);
 
 #ifdef DEBUG
 			printf("Bot: Entry point ready, Knight Online process suspending\n");
@@ -1213,7 +1212,7 @@ void Bot::StartGame()
 #ifdef DISABLE_XIGNCODE
 			if (m_ePlatformType == PlatformType::USKO)
 			{
-				BYTE byPatch2[] = { 0xE9, 0x01, 0x03, 0x00, 0x00, 0x90 };
+				BYTE byPatch2[] = { 0xE9, 0x39, 0x03, 0x00, 0x00, 0x90 };
 				WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 			}
 			else if (m_ePlatformType == PlatformType::KOKO)
@@ -1234,6 +1233,8 @@ void Bot::StartGame()
 
 			ResumeProcess(m_InjectedProcessInfo.hProcess);
 		}
+
+		SendInjectionRequest(m_InjectedProcessInfo.dwProcessId);
 
 		Patch(m_InjectedProcessInfo.hProcess);
 

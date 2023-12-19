@@ -19,6 +19,7 @@ enum Pipe
 	PIPE_CONNECT_SERVER,
 	PIPE_SAVE_CPU,
 	PIPE_PROXY,
+	PIPE_VIP_GET_OUT,
 };
 
 enum StateAction

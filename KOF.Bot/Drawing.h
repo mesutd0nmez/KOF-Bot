@@ -20,6 +20,7 @@ private:
 	static void DrawMainController();
 	static void DrawProtectionController();
 	static void DrawAutoLootController();
+	static void DrawVIPStorageController();
 	static void DrawItemListController();
 	static void DrawTransformationController();
 	static void DrawSpeedController();

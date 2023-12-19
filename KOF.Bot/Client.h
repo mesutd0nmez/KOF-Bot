@@ -140,12 +140,13 @@ protected:
 	void SelectCharacter();
 
 	void SendPacket(Packet byBuffer);
-	void SendPacket(std::string szPacket);
+
 
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 public:
 	void SetSaveCPUSleepTime(int32_t iValue);
+	void SendPacket(std::string szPacket);
 
 protected:
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
@@ -179,8 +180,11 @@ protected:
 private:
 	std::vector<uint8_t> m_vecOrigDeathEffectFunction;
 
-protected:
+public:
 	void SendNpcEvent(int32_t iTargetID);
+
+protected:
+
 	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition);
 	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemBuy> vecItemList);
 	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount);
@@ -251,8 +255,8 @@ public:
 	bool GetVipWarehouseItemList(std::vector<TItemData>& vecItemList);
 	bool GetVipWarehouseInventoryItemList(std::vector<TItemData>& vecItemList);
 
-	void VipWarehouseGetIn(int32_t iTargetPosition);
-	void VipWarehouseGetOut(int32_t iTargetPosition);
+	void VipWarehouseGetIn(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
+	void VipWarehouseGetOut(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
 
 	void CountableDialogChangeCount(uint32_t iCount);
 	void AcceptCountableDialog();
@@ -287,9 +291,9 @@ protected:
 	bool m_bVipWarehouseInitialized;
 	bool m_bVipWarehouseEnabled;
 	bool m_bVipWarehouseLoaded;
+	bool m_bVipWarehouseFull;
 
 public:
-	bool IsInventoryFull();
 	bool IsVipWarehouseFull();
 
 public:
@@ -304,4 +308,14 @@ protected:
 public:
 	void RemoveItem(int32_t iItemSlot);
 	void HidePlayer(bool bHide);
+
+	void VipGetInTest();
+	void VipGetOutTest();
+	void Legalize(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
+
+	void EquipItem(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
+
+public:
+	bool IsInventoryFull() { return GetInventoryEmptySlotCount() == 0; };
+	int GetInventoryEmptySlotCount();
 };

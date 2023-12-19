@@ -432,7 +432,10 @@ void Drawing::Draw()
 		}
         else
         {
-            if (Drawing::Bot->GetUserConfiguration() != nullptr)
+            bool bTableLoaded = Drawing::Bot->IsTableLoaded();
+
+            if (Drawing::Bot->GetUserConfiguration() != nullptr 
+                && bTableLoaded)
             {
                 vWindowSize = { 800, 650 };
 
@@ -586,6 +589,9 @@ void Drawing::Draw()
                             if (ImGui::BeginTabItem(skCryptDec("Item")))
                             {
                                 DrawAutoLootController();
+                                ImGui::Separator();
+
+                                DrawVIPStorageController();
                                 ImGui::Separator();
 
                                 if (!bTableLoaded)
@@ -809,6 +815,55 @@ void Drawing::DrawMainController()
             TerminateMyProcess(Drawing::Bot->GetInjectedProcessId(), -1);
             Drawing::Bot->Close();
             exit(0);
+        }
+
+        if (ImGui::Button(skCryptDec("VIP AL"), ImVec2(132.0f, 0.0f)))
+        {
+            m_pClient->VipGetOutTest();
+        }
+
+        if (ImGui::Button(skCryptDec("VIP AT"), ImVec2(132.0f, 0.0f)))
+        {
+            m_pClient->VipGetInTest();
+        }
+
+        if (ImGui::Button(skCryptDec("legalize"), ImVec2(132.0f, 0.0f)))
+        {
+            DWORD iInventoryBase = Drawing::Bot->Read4Byte(Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + Drawing::Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
+            DWORD iItemBase = Drawing::Bot->Read4Byte(iInventoryBase + (Drawing::Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * (0 + 14))));
+
+            m_pClient->Legalize(iItemBase, 0, 8);
+        }
+
+        //Scroll: 1f01090054a8350000
+        //Scroll Alma: 1f010a0054a8350000
+
+        //ATMA: 1f0109b0b357300000
+        //ALMA: 1f010ab0b357300000
+
+        if (ImGui::Button(skCryptDec("REDIS AT"), ImVec2(132.0f, 0.0f)))
+        {
+            new std::thread([=]()
+                {
+                    while(true)
+                    {
+                        m_pClient->SendPacket("20010fc10000ffffffff");
+                        Sleep(100);
+                        m_pClient->SendPacket("1f01090054a8350000");
+                        Sleep(100);
+                        m_pClient->SendPacket("55001032393030325f4b313273756d2e6c7561");
+                        Sleep(100);
+                        m_pClient->SendPacket("1f010a0054a8350000");
+                    }
+                });
+
+            //1: 20010fc10000ffffffff
+            //1: 1f01090054a8350000000000000000000000
+
+
+            //m_pClient->SendNpcEvent(49423);
+
+            //m_pClient->SendPacket("1f01090054a8350000");
         }
     };
 }
@@ -1109,6 +1164,25 @@ void Drawing::DrawProtectionController()
     }
 }
 
+void Drawing::DrawVIPStorageController()
+{
+    ImGui::BulletText(skCryptDec("VIP Storage Ayarlari"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        if (ImGui::Checkbox(skCryptDec("##VIPStorageSellSupply"), &m_pClient->m_bVIPSellSupply))
+        {
+
+            m_pClient->m_bVIPSellSupply = m_pUserConfiguration->SetInt(skCryptDec("VIPStorage"), skCryptDec("SellSupply"), m_pClient->m_bVIPSellSupply ? 1 : 0);
+        }
+
+        ImGui::SameLine();
+
+        ImGui::Text(skCryptDec("Satilacaklari VIP Storage Depola"));
+    }
+}
+
 void Drawing::DrawAutoLootController()
 {
     ImGui::BulletText(skCryptDec("Oto Kutu Ayarlari"));
@@ -1255,11 +1329,11 @@ void Drawing::DrawItemListController()
         {
             if (ImGui::BeginTable(skCryptDec("ItemList.Table"), 5, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
             {
-                ImGui::TableSetupColumn(skCryptDec("Item"), ImGuiTableColumnFlags_WidthFixed, 270);
-                ImGui::TableSetupColumn(skCryptDec("Topla"), ImGuiTableColumnFlags_WidthFixed, 35);
-                ImGui::TableSetupColumn(skCryptDec("Sat"), ImGuiTableColumnFlags_WidthFixed, 35);
-                ImGui::TableSetupColumn(skCryptDec("Banka"), ImGuiTableColumnFlags_WidthFixed, 35);
-                ImGui::TableSetupColumn(skCryptDec("Sil"), ImGuiTableColumnFlags_WidthFixed, 35);
+                ImGui::TableSetupColumn(skCryptDec("Item"), ImGuiTableColumnFlags_WidthFixed, 200);
+                ImGui::TableSetupColumn(skCryptDec("Topla"), ImGuiTableColumnFlags_WidthFixed, 40);
+                ImGui::TableSetupColumn(skCryptDec("Sat"), ImGuiTableColumnFlags_WidthFixed, 40);
+                ImGui::TableSetupColumn(skCryptDec("Banka"), ImGuiTableColumnFlags_WidthFixed, 40);
+                ImGui::TableSetupColumn(skCryptDec("Sil"), ImGuiTableColumnFlags_WidthFixed, 40);
                 ImGui::TableHeadersRow();
 
                 std::map<uint32_t, __TABLE_ITEM>* pItemTable;
@@ -1431,12 +1505,8 @@ void Drawing::DrawItemListController()
 
                             ImGui::PopID();
                         }
-
-                    }
-                    
+                    }                  
                 }
-
-                
 
                 ImGui::EndTable();
             }
@@ -2205,15 +2275,6 @@ void Drawing::SetLegalModeSettings(bool bMode)
         m_pClient->m_bBasicAttackWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), 0);
         m_pClient->m_bUseSkillWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), 0);
         m_pClient->m_bClosestTarget = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), 0);
-
-        m_pClient->m_bAttackRangeLimit = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), 1);
-        m_pClient->m_iAttackRangeLimitValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), 6);
-
-        m_pClient->m_bRangeLimit = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimit"), 1);
-        m_pClient->m_iRangeLimitValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), 25);
-
-        m_pClient->m_bAttackSpeed = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeed"), 1);
-        m_pClient->m_iAttackSpeedValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 800);
     }
     else
     {
@@ -2221,15 +2282,6 @@ void Drawing::SetLegalModeSettings(bool bMode)
         m_pClient->m_bBasicAttackWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("BasicAttackWithPacket"), 1);
         m_pClient->m_bUseSkillWithPacket = m_pUserConfiguration->SetInt(skCryptDec("Skill"), skCryptDec("UseSkillWithPacket"), 1);
         m_pClient->m_bClosestTarget = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("ClosestTarget"), 1);
-
-        m_pClient->m_bAttackRangeLimit = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimit"), 1);
-        m_pClient->m_iAttackRangeLimitValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackRangeLimitValue"), 30);
-
-        m_pClient->m_bRangeLimit = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimit"), 1);
-        m_pClient->m_iRangeLimitValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("RangeLimitValue"), 30);
-
-        m_pClient->m_bAttackSpeed = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeed"), 1);
-        m_pClient->m_iAttackSpeedValue = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("AttackSpeedValue"), 800);
     }
 }
 

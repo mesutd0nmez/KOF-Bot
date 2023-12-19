@@ -2,6 +2,7 @@
 #include "Client.h"
 #include "Bot.h"
 #include "Memory.h"
+#include "pch.h"
 
 Client::Client()
 {
@@ -54,6 +55,8 @@ void Client::Clear()
 	m_msLastDisconnectTime = std::chrono::milliseconds(0);
 
 	m_bSkillCasting = false;
+
+	m_bVipWarehouseFull = false;
 }
 
 Ini* Client::GetUserConfiguration()
@@ -913,6 +916,36 @@ bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)
 	return true;
 }
 
+int Client::GetInventoryEmptySlotCount()
+{
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
+
+	int iEmptySlotCount = 0;
+
+	for (int i = SLOT_MAX; i < SLOT_MAX + HAVE_MAX; i++)
+	{
+		DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * i)));
+
+		if (m_Bot->GetPlatformType() == PlatformType::USKO
+			|| m_Bot->GetPlatformType() == PlatformType::STKO)
+		{
+			if (m_Bot->Read4Byte(m_Bot->Read4Byte(iItemBase + 0x60)) + m_Bot->Read4Byte(m_Bot->Read4Byte(iItemBase + 0x64)) == 0)
+			{
+				iEmptySlotCount++;
+			}
+		}
+		else if (m_Bot->GetPlatformType() == PlatformType::CNKO)
+		{
+			if (m_Bot->Read4Byte(m_Bot->Read4Byte(iItemBase + 0x68)) + m_Bot->Read4Byte(m_Bot->Read4Byte(iItemBase + 0x6C)) == 0)
+			{
+				iEmptySlotCount++;
+			}
+		}
+	}
+
+	return iEmptySlotCount;
+}
+
 void Client::StepCharacterForward(bool bStart)
 {
 	BYTE byCode[] =
@@ -1573,6 +1606,25 @@ void Client::SendTownPacket()
 	Packet pkt = Packet(WIZ_HOME);
 
 	SendPacket(pkt);
+
+	/*int iX, iY = 0;
+	GetChildAreaByiOrder(1, 6, iX, iY);
+
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
+	DWORD iItemBase = m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * 14)));
+
+	m_Bot->Write4Byte(0x010E5B9C, 0);
+	m_Bot->Write4Byte(0x010E5BA0, 1);
+	m_Bot->Write4Byte(0x010E5BA4, 0);
+	m_Bot->Write4Byte(0x010E5BA8, iItemBase);
+
+	ReceiveIconDrop(iItemBase, iX, iY);*/
+
+	//VipGetInTest();
+	//VipGetOutTest();
+
+	//GetChildAreaByiOrder(1, 6); //ITEM Sol
+	//GetChildAreaByiOrder(1, 8); //ITEM Sag
 }
 
 void Client::SetPosition(Vector3 v3Position)
@@ -2025,8 +2077,11 @@ void Client::SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage,
 	SendPacket(pkt);
 }
 
-void Client::VipWarehouseGetIn(int32_t iTargetPosition)
+void Client::VipWarehouseGetIn(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition)
 {
+	if (iItemBase == 0)
+		return;
+
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
 
 	BYTE byAreaPositionCode[] =
@@ -2065,16 +2120,14 @@ void Client::VipWarehouseGetIn(int32_t iTargetPosition)
 	memcpy(byAreaPositionCode + 31, &pCallReturnAddress, sizeof(pCallReturnAddress));
 
 	DWORD iAreaPositionBase = 0;
-	DWORD iAreaPositionX = 0;
-	DWORD iAreaPositionY = 0;
 	SIZE_T bytesRead = 0;
 
 	if (m_Bot->ExecuteRemoteCode(hProcess, byAreaPositionCode, sizeof(byAreaPositionCode)))
 	{
-		if (ReadProcessMemory(hProcess, pCallReturnAddress, &iAreaPositionBase, sizeof(iAreaPositionBase), &bytesRead) && bytesRead == sizeof(iAreaPositionBase))
+		if (!ReadProcessMemory(hProcess, pCallReturnAddress, &iAreaPositionBase, sizeof(iAreaPositionBase), &bytesRead) && bytesRead == sizeof(iAreaPositionBase))
 		{
-			iAreaPositionX = m_Bot->Read4Byte(iAreaPositionBase + 0xC8) + 1;
-			iAreaPositionY = m_Bot->Read4Byte(iAreaPositionBase + 0xC4) + 1;
+			VirtualFreeEx(hProcess, pCallReturnAddress, 0, MEM_RELEASE);
+			return;
 		}
 	}
 
@@ -2082,6 +2135,14 @@ void Client::VipWarehouseGetIn(int32_t iTargetPosition)
 
 	if (iAreaPositionBase == 0)
 		return;
+
+	DWORD iAreaPositionX = m_Bot->Read4Byte(iAreaPositionBase + 0xC8) + 1;
+	DWORD iAreaPositionY = m_Bot->Read4Byte(iAreaPositionBase + 0xC4) + 1;
+
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), iSourcePosition - 14);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 10);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), iItemBase);
 
 	BYTE byVipWarehouseGetInCode[] =
 	{
@@ -2103,16 +2164,24 @@ void Client::VipWarehouseGetIn(int32_t iTargetPosition)
 	memcpy(byVipWarehouseGetInCode + 19, &iAreaPositionY, sizeof(iAreaPositionY));
 
 	DWORD iItemBaseAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE"));
+
+	if (m_Bot->Read4Byte(iItemBaseAddress) == 0
+		|| m_Bot->Read4Byte(iItemBaseAddress) != m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE"))))
+		return;
+
 	memcpy(byVipWarehouseGetInCode + 25, &iItemBaseAddress, sizeof(iItemBaseAddress));
 
-	DWORD iVipWarehouseGetInCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_VIP_GET_IN"));
+	DWORD iVipWarehouseGetInCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_VIP_ITEM_MOVE"));
 	memcpy(byVipWarehouseGetInCode + 30, &iVipWarehouseGetInCallAddress, sizeof(iVipWarehouseGetInCallAddress));
 
 	m_Bot->ExecuteRemoteCode(hProcess, byVipWarehouseGetInCode, sizeof(byVipWarehouseGetInCode));
 }
 
-void Client::VipWarehouseGetOut(int32_t iTargetPosition)
+void Client::VipWarehouseGetOut(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition)
 {
+	if (iItemBase == 0)
+		return;
+
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
 
 	BYTE byAreaPositionCode[] =
@@ -2151,16 +2220,14 @@ void Client::VipWarehouseGetOut(int32_t iTargetPosition)
 	memcpy(byAreaPositionCode + 31, &pCallReturnAddress, sizeof(pCallReturnAddress));
 
 	DWORD iAreaPositionBase = 0;
-	DWORD iAreaPositionX = 0;
-	DWORD iAreaPositionY = 0;
 	SIZE_T bytesRead = 0;
 
 	if (m_Bot->ExecuteRemoteCode(hProcess, byAreaPositionCode, sizeof(byAreaPositionCode)))
 	{
-		if (ReadProcessMemory(hProcess, pCallReturnAddress, &iAreaPositionBase, sizeof(iAreaPositionBase), &bytesRead) && bytesRead == sizeof(iAreaPositionBase))
+		if (!ReadProcessMemory(hProcess, pCallReturnAddress, &iAreaPositionBase, sizeof(iAreaPositionBase), &bytesRead) && bytesRead == sizeof(iAreaPositionBase))
 		{
-			iAreaPositionX = m_Bot->Read4Byte(iAreaPositionBase + 0xC8) + 1;
-			iAreaPositionY = m_Bot->Read4Byte(iAreaPositionBase + 0xC4) + 1;
+			VirtualFreeEx(hProcess, pCallReturnAddress, 0, MEM_RELEASE);
+			return;
 		}
 	}
 
@@ -2168,6 +2235,14 @@ void Client::VipWarehouseGetOut(int32_t iTargetPosition)
 
 	if (iAreaPositionBase == 0)
 		return;
+
+	DWORD iAreaPositionX = m_Bot->Read4Byte(iAreaPositionBase + 0xC8) + 1;
+	DWORD iAreaPositionY = m_Bot->Read4Byte(iAreaPositionBase + 0xC4) + 1;
+
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_WND")), 14);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), iSourcePosition);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 2);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), iItemBase);
 
 	BYTE byVipWarehouseGetOutCode[] =
 	{
@@ -2189,9 +2264,14 @@ void Client::VipWarehouseGetOut(int32_t iTargetPosition)
 	memcpy(byVipWarehouseGetOutCode + 19, &iAreaPositionY, sizeof(iAreaPositionY));
 
 	DWORD iItemBaseAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE"));
+
+	if (m_Bot->Read4Byte(iItemBaseAddress) == 0
+		|| m_Bot->Read4Byte(iItemBaseAddress) != m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE"))))
+		return;
+
 	memcpy(byVipWarehouseGetOutCode + 25, &iItemBaseAddress, sizeof(iItemBaseAddress));
 
-	DWORD iVipWarehouseGetOutCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_VIP_GET_OUT"));
+	DWORD iVipWarehouseGetOutCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_VIP_ITEM_MOVE"));
 	memcpy(byVipWarehouseGetOutCode + 30, &iVipWarehouseGetOutCallAddress, sizeof(iVipWarehouseGetOutCallAddress));
 
 	m_Bot->ExecuteRemoteCode(hProcess, byVipWarehouseGetOutCode, sizeof(byVipWarehouseGetOutCode));
@@ -2742,4 +2822,374 @@ void Client::RemoveItem(int32_t iItemSlot)
 void Client::HidePlayer(bool bHide)
 {
 	m_Bot->WriteByte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_HIDE")), bHide ? 0 : 1);
+}
+
+void Client::VipGetInTest()
+{
+	new std::thread([=]()
+	{
+		if (m_bVipWarehouseInitialized
+			&& !m_bVipWarehouseEnabled)
+			return;
+
+		std::vector<TItemData> vecInventoryItemList;
+		std::vector<TItemData> vecFlaggedItemList;
+
+		GetInventoryItemList(vecInventoryItemList);
+
+		for (const TItemData& pItem : vecInventoryItemList)
+		{
+			if (pItem.iItemID == 0)
+				continue;
+
+			vecFlaggedItemList.push_back(pItem);
+		}
+
+		OpenVipWarehouse();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+		WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+
+		if (!m_bVipWarehouseLoaded)
+			return;
+
+		for (const TItemData& pItem : vecFlaggedItemList)
+		{
+			__TABLE_ITEM* pItemData;
+			if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+				continue;
+
+			if (pItemData->byNeedRace == RACE_NO_TRADE_SOLD_STORE)
+				continue;
+
+			WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+
+			std::vector<TItemData> vecVipWarehouseItemList;
+			GetVipWarehouseItemList(vecVipWarehouseItemList);
+
+			int iTargetPosition = -1;
+
+			if (pItemData->byContable)
+			{
+				auto pWarehouseItem = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
+					[&](const TItemData& a)
+					{
+						return a.iItemID == pItem.iItemID;
+					});
+
+				if (pWarehouseItem != vecVipWarehouseItemList.end())
+				{
+					if ((pItem.iCount + pWarehouseItem->iCount) > 9999)
+						continue;
+
+					iTargetPosition = pWarehouseItem->iPos;
+				}
+				else
+				{
+					auto pWarehouseEmptySlot = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
+						[&](const TItemData& a)
+						{
+							return a.iItemID == 0;
+						});
+
+					if (pWarehouseEmptySlot != vecVipWarehouseItemList.end())
+					{
+						iTargetPosition = pWarehouseEmptySlot->iPos;
+					}
+				}
+			}
+			else
+			{
+				auto pWarehouseEmptySlot = std::find_if(vecVipWarehouseItemList.begin(), vecVipWarehouseItemList.end(),
+					[&](const TItemData& a)
+					{
+						return a.iItemID == 0;
+					});
+
+				if (pWarehouseEmptySlot != vecVipWarehouseItemList.end())
+				{
+					iTargetPosition = pWarehouseEmptySlot->iPos;
+				}
+			}
+
+			if (iTargetPosition == -1)
+				break;
+
+			WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+
+			VipWarehouseGetIn(pItem.iBase, pItem.iPos, iTargetPosition);
+
+			if (pItemData->byContable)
+			{
+				CountableDialogChangeCount(1);
+				CountableDialogChangeCount(31);
+				AcceptCountableDialog();
+			}
+		}
+
+		WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+		CloseVipWarehouse();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+	});
+}
+
+void Client::VipGetOutTest()
+{
+	new std::thread([=]()
+	{ 
+		if (m_bVipWarehouseInitialized
+			&& !m_bVipWarehouseEnabled)
+			return;
+
+		OpenVipWarehouse();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+		WaitConditionWithTimeout(m_bVipWarehouseLoaded == false, 3000);
+
+		if (!m_bVipWarehouseLoaded)
+			return;
+
+		std::vector<TItemData> vecVipWarehouseItemList;
+		std::vector<TItemData> vecFlaggedItemList;
+
+		GetVipWarehouseItemList(vecVipWarehouseItemList);
+
+		for (const TItemData& pItem : vecVipWarehouseItemList)
+		{
+			if (pItem.iItemID == 0)
+				continue;
+
+			vecFlaggedItemList.push_back(pItem);
+		}
+
+		if (vecFlaggedItemList.size() == 0)
+			return;
+
+		for (const TItemData& pItem : vecFlaggedItemList)
+		{
+			__TABLE_ITEM* pItemData;
+			if (!m_Bot->GetItemData(pItem.iItemID, pItemData))
+				continue;
+
+			WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+
+			std::vector<TItemData> vecVipWarehouseInventoryItemList;
+			GetVipWarehouseInventoryItemList(vecVipWarehouseInventoryItemList);
+
+			int iTargetPosition = -1;
+
+			if (pItemData->byContable)
+			{
+				auto pInventoryItem = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+					[&](const TItemData& a)
+					{
+						return a.iItemID == pItem.iItemID;
+					});
+
+				if (pInventoryItem != vecVipWarehouseInventoryItemList.end())
+				{
+					if ((pItem.iCount + pInventoryItem->iCount) > 9999)
+						continue;
+
+					iTargetPosition = pInventoryItem->iPos;
+				}
+				else
+				{
+					auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+						[&](const TItemData& a)
+						{
+							return a.iItemID == 0;
+						});
+
+					if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
+					{
+						iTargetPosition = pInventoryEmptySlot->iPos;
+					}
+				}
+			}
+			else
+			{
+				auto pInventoryEmptySlot = std::find_if(vecVipWarehouseInventoryItemList.begin(), vecVipWarehouseInventoryItemList.end(),
+					[&](const TItemData& a)
+					{
+						return a.iItemID == 0;
+					});
+
+				if (pInventoryEmptySlot != vecVipWarehouseInventoryItemList.end())
+				{
+					iTargetPosition = pInventoryEmptySlot->iPos;
+				}
+			}
+
+			if (iTargetPosition == -1)
+			{
+				return;
+			}
+
+			WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+
+			VipWarehouseGetOut(pItem.iBase, pItem.iPos, iTargetPosition);
+
+			if (pItemData->byContable)
+			{
+				CountableDialogChangeCount(1);
+				CountableDialogChangeCount(31);
+				AcceptCountableDialog();
+			}
+		}
+
+		WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 3000);
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+		CloseVipWarehouse();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+	});
+}
+
+void Client::Legalize(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition)
+{
+	if (iItemBase == 0)
+		return;
+
+	EquipItem(iItemBase, iSourcePosition, iTargetPosition);
+}
+
+void Client::EquipItem(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition)
+{
+	if (iItemBase == 0)
+		return;
+
+	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+
+	BYTE byAreaPositionCode[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0x8B, 0x89, 0x00, 0x00, 0x00, 0x00,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0x68, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD7,
+		0xA3, 0x00, 0x00, 0x00, 0x00,
+		0x61,
+		0xC3,
+	};
+
+	DWORD iDlg = m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"));
+	memcpy(byAreaPositionCode + 3, &iDlg, sizeof(iDlg));
+
+	DWORD iInventoryBase = m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE"));
+	memcpy(byAreaPositionCode + 9, &iInventoryBase, sizeof(iInventoryBase));
+
+	memcpy(byAreaPositionCode + 14, &iTargetPosition, sizeof(iTargetPosition));
+
+	DWORD iAreaType = 0x00000001; //UI_AREA_TYPE_SLOT
+	memcpy(byAreaPositionCode + 19, &iAreaType, sizeof(iAreaType));
+
+	DWORD iAreaPositionCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_AREA_POSITION"));
+	memcpy(byAreaPositionCode + 24, &iAreaPositionCallAddress, sizeof(iAreaPositionCallAddress));
+
+	LPVOID pCallReturnAddress = VirtualAllocEx(hProcess, nullptr, sizeof(DWORD), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (!pCallReturnAddress)
+		return;
+
+	memcpy(byAreaPositionCode + 31, &pCallReturnAddress, sizeof(pCallReturnAddress));
+
+	DWORD iAreaPositionBase = 0;
+	SIZE_T bytesRead = 0;
+
+	if (m_Bot->ExecuteRemoteCode(hProcess, byAreaPositionCode, sizeof(byAreaPositionCode)))
+	{
+		if (!ReadProcessMemory(hProcess, pCallReturnAddress, &iAreaPositionBase, sizeof(iAreaPositionBase), &bytesRead) && bytesRead == sizeof(iAreaPositionBase))
+		{
+			VirtualFreeEx(hProcess, pCallReturnAddress, 0, MEM_RELEASE);
+			return;
+		}
+	}
+
+	if (iAreaPositionBase == 0)
+	{
+		VirtualFreeEx(hProcess, pCallReturnAddress, 0, MEM_RELEASE);
+		return;
+	}
+
+	LPVOID pMouseInputPatchAddress = VirtualAllocEx(hProcess, nullptr, sizeof(DWORD), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	if (!pMouseInputPatchAddress)
+		return;
+
+	BYTE byMouseInputPatch[] =
+	{
+		0xB8, 0x00, 0x00, 0x00, 0x00,
+		0x8B, 0x88, 0xC4, 0x00, 0x00, 0x00,
+		0x8B, 0x80, 0xC8, 0x00, 0x00, 0x00,
+		0xE9, 0x00, 0x00, 0x00, 0x00,
+	};
+
+	memcpy(byMouseInputPatch + 1, &iAreaPositionBase, sizeof(iAreaPositionBase));
+
+	DWORD iMouseInputHookAddress = Memory::GetDifference((DWORD)pMouseInputPatchAddress + 17, m_Bot->GetAddress(skCryptDec("KO_PTR_INVENTORY_MOUSE_HOOK")) + 11);
+	memcpy(byMouseInputPatch + 18, &iMouseInputHookAddress, sizeof(iMouseInputHookAddress));
+
+	WriteProcessMemory(hProcess, pMouseInputPatchAddress, &byMouseInputPatch[0], sizeof(byMouseInputPatch), 0);
+
+	BYTE byMouseInputHookPatch[] =
+	{
+		0xE9, 0x00, 0x00, 0x00, 0x00
+	};
+
+	DWORD iCallDifference = Memory::GetDifference(m_Bot->GetAddress(skCryptDec("KO_PTR_INVENTORY_MOUSE_HOOK")), (DWORD)pMouseInputPatchAddress);
+	memcpy(byMouseInputHookPatch + 1, &iCallDifference, sizeof(iCallDifference));
+
+	std::vector<uint8_t> vecBackupOriginalFunction;
+	vecBackupOriginalFunction = m_Bot->ReadBytes(m_Bot->GetAddress(skCryptDec("KO_PTR_INVENTORY_MOUSE_HOOK")), 5);
+
+	WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_PTR_INVENTORY_MOUSE_HOOK")), byMouseInputHookPatch, sizeof(byMouseInputHookPatch), 0);
+
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_WND")), 0);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_SLOT_ORDER")), iSourcePosition);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_WND_DISTRICT")), 1);
+	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE")), iItemBase);
+
+	BYTE byCallPatch[] =
+	{
+		0x60,
+		0x8B, 0x0D, 0x00, 0x00, 0x00, 0x00,
+		0x8B, 0x89, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0x35, 0x00, 0x00, 0x00, 0x00,
+		0xBF, 0x00, 0x00, 0x00, 0x00,
+		0xFF, 0xD7,
+		0x61,
+		0xC3,
+	};
+
+	memcpy(byCallPatch + 3, &iDlg, sizeof(iDlg));
+	memcpy(byCallPatch + 9, &iInventoryBase, sizeof(iInventoryBase));
+
+	DWORD iItemBaseAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE"));
+
+	if (m_Bot->Read4Byte(iItemBaseAddress) == 0
+		|| m_Bot->Read4Byte(iItemBaseAddress) != m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_SELECTED_ITEM_BASE"))))
+		return;
+
+	memcpy(byCallPatch + 15, &iItemBaseAddress, sizeof(iItemBaseAddress));
+
+	DWORD iCallAddress = m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_ITEM_MOVE"));
+	memcpy(byCallPatch + 20, &iCallAddress, sizeof(iCallAddress));
+
+	m_Bot->ExecuteRemoteCode(hProcess, byCallPatch, sizeof(byCallPatch));
+
+	WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_PTR_INVENTORY_MOUSE_HOOK")), &vecBackupOriginalFunction[0], vecBackupOriginalFunction.size(), 0);
+
+	VirtualFreeEx(hProcess, pMouseInputPatchAddress, 0, MEM_RELEASE);
+	VirtualFreeEx(hProcess, pCallReturnAddress, 0, MEM_RELEASE);
 }

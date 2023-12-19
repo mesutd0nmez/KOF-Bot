@@ -81,6 +81,8 @@ private:
 	void StatisticsProcess();
 	void RemoveItemProcess();
 
+	void VIPStorageSupplyProcess();
+
 	void LevelDownerProcess();
 
 	void MagicHammerProcess();
@@ -133,6 +135,7 @@ protected:
 	float m_fLastLevelDownerProcessTime;
 	float m_fLastSupplyProcessTime;
 	float m_fLastRouteProcessTime;
+	float m_fLastVIPStorageSupplyProcessTime;
 
 protected:
 	int32_t PartyMemberNeedSwift();
@@ -174,6 +177,8 @@ public:
 	int m_iAttackRangeLimitValue;
 	bool m_bBasicAttack;
 	bool m_bBasicAttackWithPacket;
+
+	bool m_bVIPSellSupply;
 
 	bool m_bAutoLoot;
 	bool m_bMoveToLoot;
@@ -296,8 +301,6 @@ public:
 
 protected:
 	bool m_bRouteWarpListLoaded;
-
-
 };
 
 

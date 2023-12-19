@@ -295,6 +295,8 @@ void Service::HandlePacket(Packet& pkt)
 
             if (iBufferLength > 0)
             {
+                //Injection(iProcesssId, "C:\\Users\\Administrator\\Documents\\GitHub\\KOF-Bot\\Debug\\Adapter.dll");
+
                 char tempPath[MAX_PATH];
                 GetTempPathA(MAX_PATH, tempPath);
 
