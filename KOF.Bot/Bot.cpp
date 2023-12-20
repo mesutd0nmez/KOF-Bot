@@ -396,6 +396,10 @@ void Bot::OnReady()
 
 void Bot::OnPong()
 {
+#ifdef VMPROTECT
+	VMProtectBeginUltra("Bot::OnPong");
+#endif
+
 #ifdef DEBUG
 	printf("Bot: OnPong\n");
 #endif
@@ -413,25 +417,45 @@ void Bot::OnPong()
 	{
 		SendPong("", 0.0f, 0.0f, 0);
 	}
+
+	m_fLastPongTime = Bot::TimeGet();
+
+#ifdef VMPROTECT
+	VMProtectEnd();
+#endif
 }
 
 void Bot::OnConnected()
 {
+#ifdef VMPROTECT
+	VMProtectBeginUltra("Bot::OnConnected");
+#endif
+
 #ifdef DEBUG
 	printf("Bot: OnConnected\n");
 #endif
 
-	uint32_t iCRC = CalculateCRC32(skCryptDec("Discord.exe"));
+	char szPath[MAX_PATH + 1];
+
+	GetModuleFileName(NULL, szPath, MAX_PATH);
+	szPath[MAX_PATH] = '\0';
+
+	uint32_t iCRC = CalculateCRC32(szPath);
 
 	if (iCRC == 0xFFFFFFFF)
 	{
 #ifdef DEBUG
 		printf("Bot: CRC Calculate failed\n");
-		return;
 #endif
+		exit(0);
+		return;
 	}
 
 	SendReady(iCRC);
+
+#ifdef VMPROTECT
+	VMProtectEnd();
+#endif
 }
 
 void Bot::OnAuthenticated()
@@ -950,7 +974,7 @@ bool Bot::IsInjectedProcessLost()
 
 HANDLE Bot::GetInjectedProcessHandle()
 {
-	if (m_InjectedProcessInfo.hProcess != NULL 
+	if (m_InjectedProcessInfo.hProcess != NULL
 		&& m_InjectedProcessInfo.hProcess != INVALID_HANDLE_VALUE)
 	{
 		DWORD dwFlags;
@@ -1017,7 +1041,7 @@ void Bot::InitializeAnyOTPService()
 	if (m_hModuleAnyOTP == NULL)
 	{
 #ifdef _DEBUG
-		printf("Bot:: DLL Not Loaded\n");
+		printf("Bot: DLL Not Loaded\n");
 #endif
 		return;
 	}
@@ -1067,7 +1091,7 @@ std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareI
 void Bot::StartGame()
 {
 #ifdef VMPROTECT
-	VMProtectBeginUltra("Bypass Function");
+	VMProtectBeginUltra("Bot::StartGame");
 #endif
 
 	m_bStarted = true;

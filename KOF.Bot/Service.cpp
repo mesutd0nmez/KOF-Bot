@@ -43,10 +43,16 @@ void Service::Clear()
 
     m_szAnyOTPID.clear();
     m_szAnyOTPPassword.clear();
+
+    m_fLastPongTime = Bot::TimeGet();
 }
 
 void Service::Initialize()
 {
+#ifdef VMPROTECT
+    VMProtectBeginUltra("Service::Initialize");
+#endif
+
     std::string szIniPath = skCryptDec(".\\Config.ini");
 
     m_iniAppConfiguration = new Ini();
@@ -66,24 +72,20 @@ void Service::Initialize()
     m_szAnyOTPID = m_iniAppConfiguration->GetString(skCryptDec("AnyOTP"), skCryptDec("ID"), m_szAnyOTPID.c_str());
     m_szAnyOTPPassword = m_iniAppConfiguration->GetString(skCryptDec("AnyOTP"), skCryptDec("Password"), m_szAnyOTPPassword.c_str());
 
-#ifdef VMPROTECT
-    VMProtectBeginUltra("ServiceInitializeEncryptionKey");
-#endif
-
-    m_Cryption->SetEncryptionKey(skCryptDec("Dm9X2UPop7mghLqibu4aMgT7feXQmZkrrLwoWQMZKTK3dvoPKR2CCmUSJgHBxKn8"));
-
-#ifdef VMPROTECT
-    VMProtectEnd();
-#endif
+    m_Cryption->SetEncryptionKey(skCryptDec("fm3eJbEWuc556JcPQF6eDtabdm38KuRMEjyPwfEazsAcJwjYhwznShMEtPa4DH4f"));
 
     GenerateSeed((1881 * 2023) / 2009 << 16);
     m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
 #ifdef DEBUG
-    Connect(skCryptDec("127.0.0.1"), 8888);
+    Connect(skCryptDec("127.0.0.1"), 15000);
 #else
-    Connect(skCryptDec("51.195.101.149"), 8888);
+    Connect(skCryptDec("127.0.0.1"), 15000);
 #endif 
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Service::OnConnect()
@@ -115,6 +117,10 @@ void Service::OnClose(int32_t iErrorCode)
 
 void Service::HandlePacket(Packet& pkt)
 {
+#ifdef VMPROTECT
+    VMProtectBeginUltra("Service::HandlePacket");
+#endif
+
     uint8_t iHeader;
 
     pkt >> iHeader;
@@ -430,6 +436,10 @@ void Service::HandlePacket(Packet& pkt)
         break;
   
     }
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Service::SendReady(uint32_t iCRC)
@@ -441,10 +451,15 @@ void Service::SendReady(uint32_t iCRC)
         << uint32_t(iCRC);
 
     Send(pkt);
+
 }
 
 void Service::SendLogin(std::string szEmail, std::string szPassword)
 {
+#ifdef VMPROTECT
+    VMProtectBeginUltra("Service::SendLogin1");
+#endif
+
     Packet pkt = Packet(PacketHeader::LOGIN);
 
     pkt.DByte();
@@ -468,10 +483,18 @@ void Service::SendLogin(std::string szEmail, std::string szPassword)
     pkt << szGPUs;
 
     Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Service::SendLogin(std::string szToken)
 {
+#ifdef VMPROTECT
+    VMProtectBeginUltra("Service::SendLogin2");
+#endif
+
     Packet pkt = Packet(PacketHeader::LOGIN);
 
     pkt.DByte();
@@ -495,6 +518,9 @@ void Service::SendLogin(std::string szToken)
 
     Send(pkt);
 
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Service::SendPointerRequest()
@@ -715,9 +741,4 @@ void Service::DeleteRoute(std::string szRouteName, uint8_t iMapIndex)
         if (inner.size() == 0)
             m_mapRouteList.erase(iMapIndex);
     }
-
-
-
-    //std::string routePath = skCryptDec("Data\\Route\\") + szRouteName + skCryptDec(".json");
-    //remove(routePath.c_str());
 }

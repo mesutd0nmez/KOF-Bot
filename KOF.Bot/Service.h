@@ -116,5 +116,7 @@ public:
 
 	std::string m_szAnyOTPID;
 	std::string m_szAnyOTPPassword;
+
+	float m_fLastPongTime;
 };
 

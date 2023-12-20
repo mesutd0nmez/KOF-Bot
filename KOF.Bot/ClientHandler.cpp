@@ -224,7 +224,7 @@ void ClientHandler::Initialize()
 	printf("Client handler initializing\n");
 #endif
 
-	PatchSocket();
+	OnReady();
 }
 
 void ClientHandler::InitializeUserConfiguration()
@@ -410,11 +410,17 @@ void ClientHandler::OnReady()
 
 	new std::thread([&]()
 	{
+		//TODO: Bu Kontrol baska bir yere koyulacak
 		WaitCondition(m_Bot->m_bInternalMailslotWorking == false);
+		WaitCondition(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO"))) == 0);
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 		PushPhase(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO")));
 
 		WaitCondition(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
+
+		PatchSocket();
 
 		if (m_Bot->m_bAutoLogin
 			&& m_Bot->m_szID.size() > 0 && m_Bot->m_szPassword.size())
@@ -451,8 +457,6 @@ void ClientHandler::PatchSocket()
 	PatchSendAddress();
 
 	m_bMailSlotWorking = true;
-
-	OnReady();
 }
 
 void ClientHandler::PatchRecvAddress(DWORD iAddress)
@@ -475,7 +479,7 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\KOF1\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\Worker1\\") + std::to_string(m_Bot->GetInjectedProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
 
 	if (m_hMailSlotRecv == nullptr)
@@ -640,7 +644,7 @@ void ClientHandler::PatchSendAddress()
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\KOF2\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\Worker2\\") + std::to_string(m_Bot->GetInjectedProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotSendName.begin(), m_szMailSlotSendName.end());
 
 	if (m_hMailSlotSend == nullptr)

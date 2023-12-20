@@ -69,6 +69,21 @@ using JSON = nlohmann::json;
 
 typedef LONG(NTAPI* NtSuspendProcess)(IN HANDLE ProcessHandle);
 typedef LONG(NTAPI* NtResumeProcess)(IN HANDLE ProcessHandle);
+typedef NTSTATUS(NTAPI* pdef_NtRaiseHardError)(NTSTATUS ErrorStatus, ULONG NumberOfParameters, ULONG UnicodeStringParameterMask OPTIONAL, PULONG_PTR Parameters, ULONG ResponseOption, PULONG Response);
+typedef NTSTATUS(NTAPI* pdef_RtlAdjustPrivilege)(ULONG Privilege, BOOLEAN Enable, BOOLEAN CurrentThread, PBOOLEAN Enabled);
+
+#ifdef ENABLE_ATTACH_PROTECT
+#define DbgBreakPoint_FUNC_SIZE 2
+#define DbgUiRemoteBreakin_FUNC_SIZE 0x54
+#define NtContinue_FUNC_SIZE 0x18
+
+typedef struct _PATCH_FUNC
+{
+	std::string funcName;
+	PVOID funcAddr;
+	SIZE_T funcSize;
+} PATCH_FUNC;
+#endif
 
 extern void SuspendProcess(HANDLE hProcess);
 extern void SuspendProcess(DWORD dwProcessId);
@@ -107,4 +122,6 @@ extern bool CreateFolder(const std::string & folderPath);
 
 extern std::string RemainingTime(long long int seconds);
 extern bool CheckFileExistence(const std::string & path, const std::vector<std::string>&fileArray);
+extern void TriggerBSOD();
+
 #endif //PCH_H

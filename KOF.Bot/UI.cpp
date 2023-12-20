@@ -18,9 +18,9 @@ DWORD UI::dTargetPID = 0;
 
 HMODULE UI::hCurrentModule = nullptr;
 
-DWORD g_iLastFrameTime = 0;
+float g_iLastFrameTime = 0.0f;
 
-DWORD UI::g_iFPSLimit = 60;
+float UI::g_iFPSLimit = 60.0f;
 
 /**
     @brief : Function that create a D3D9 device.
@@ -88,7 +88,7 @@ LRESULT WINAPI UI::WndProc(const HWND hWnd, const UINT msg, const WPARAM wParam,
 void UI::Render(Bot* pBot)
 {
 #ifdef VMPROTECT
-    VMProtectBeginUltra(skCryptDec("UI::Render"));
+    VMProtectBeginUltra("UI::Render");
 #endif
 
     ImGui_ImplWin32_EnableDpiAwareness();
@@ -101,6 +101,9 @@ void UI::Render(Bot* pBot)
 
     WNDCLASSEX wc;
 
+    std::string szClassName = GenerateAlphanumericString(18);
+    std::string szMenuName = GenerateAlphanumericString(18);
+
     wc.cbClsExtra = NULL;
     wc.cbSize = sizeof(WNDCLASSEX);
     wc.cbWndExtra = NULL;
@@ -110,8 +113,8 @@ void UI::Render(Bot* pBot)
     wc.hIconSm = LoadIcon(nullptr, IDI_APPLICATION);
     wc.hInstance = GetModuleHandle(nullptr);
     wc.lpfnWndProc = WndProc;
-    wc.lpszClassName = GenerateAlphanumericString(18).c_str();
-    wc.lpszMenuName = GenerateAlphanumericString(18).c_str();
+    wc.lpszClassName = szClassName.c_str();
+    wc.lpszMenuName = szMenuName.c_str();
     wc.style = CS_VREDRAW | CS_HREDRAW;
 
     ::RegisterClassEx(&wc);
@@ -160,9 +163,37 @@ void UI::Render(Bot* pBot)
         if (hTargetWindow != nullptr && GetAsyncKeyState(VK_INSERT) & 1)
             Drawing::bDraw = !Drawing::bDraw;
 
-        if(Drawing::Bot->m_bOnReady == false 
-            && !Drawing::Bot->IsConnected())
+#ifdef ENABLE_SERVER_CONNECTION_LOST_PROTECT
+        if (!Drawing::Bot->IsConnected())
             break;
+#endif
+
+#ifdef ENABLE_DEBUGGER_PRESENT_PROTECT
+        if (IsDebuggerPresent())
+        {
+            TriggerBSOD();
+            break;
+        }
+#endif
+
+        float fCurrentTime = Bot::TimeGet();
+
+#ifdef ENABLE_SUSPEND_PROTECT
+        if (g_iLastFrameTime > 0.0f
+            && fCurrentTime > (g_iLastFrameTime + (15000.0f / 1000.0f)))
+        {
+            TriggerBSOD();
+            break;
+        }
+#endif
+
+#ifdef ENABLE_PONG_TIMEOUT_PROTECT
+        if (fCurrentTime > (Drawing::Bot->m_fLastPongTime + (60000.0f / 1000.0f)))
+        {
+            TriggerBSOD();
+            break;
+        }
+#endif
 
         Drawing::Bot->Process();
 
@@ -185,11 +216,8 @@ void UI::Render(Bot* pBot)
         if (!Drawing::bDraw && hTargetWindow == nullptr)
             break;
 
-        DWORD iCurrentTime = timeGetTime();
-        if ((iCurrentTime - g_iLastFrameTime) < (1000 / g_iFPSLimit))
-        {
+        if (fCurrentTime < (g_iLastFrameTime + (g_iFPSLimit / 1000.0f)))
             continue;
-        }
 
         if (g_ResizeWidth != 0 && g_ResizeHeight != 0)
         {
@@ -271,7 +299,7 @@ void UI::Render(Bot* pBot)
                 ResetDevice();
         }
 
-        g_iLastFrameTime = iCurrentTime;
+        g_iLastFrameTime = fCurrentTime;
     }
 
     bInit = false;

@@ -13,7 +13,14 @@
 #define PRINT_SEND_PACKET
 #endif
 
-//#define DISABLE_XIGNCODE
+#define DISABLE_XIGNCODE
+
+///////////////// PROTECTION ////////////////////
+//#define ENABLE_ATTACH_PROTECT
+//#define ENABLE_SUSPEND_PROTECT
+//#define ENABLE_SERVER_CONNECTION_LOST_PROTECT
+//#define ENABLE_DEBUGGER_PRESENT_PROTECT
+//#define ENABLE_PONG_TIMEOUT_PROTECT
 
 ///////////////// IMPORTANT ////////////////////
 

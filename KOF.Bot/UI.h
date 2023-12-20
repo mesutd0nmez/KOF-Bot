@@ -51,7 +51,7 @@ public:
 	static void SetTargetWindow(HWND hWindow);
 	static HWND GetProcessWindowHandle(DWORD targetProcessId);
 
-	static DWORD g_iFPSLimit;
+	static float g_iFPSLimit;
 };
 
 #endif

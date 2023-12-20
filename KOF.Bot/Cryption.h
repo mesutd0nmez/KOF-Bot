@@ -18,11 +18,11 @@ public:
 	void SetInitialVector(std::string szInitialVector)
 	{
 #ifdef VMPROTECT
-		VMProtectBeginUltra("SetInitialVector");
+		VMProtectBeginUltra("Cryption::SetInitialVector");
 #endif
 		std::string szTmpInitialVector(szInitialVector
 			+ skCryptDec(".")
-			+ skCryptDec("GyFbVKv89rHQtoe9iqfLFtJhkwfwA7jn9ZqvwC56bPTk47DBTLu3DutoXBCzTPe6"));
+			+ skCryptDec("MzHSPsjqY69QBdFGYBgrzhRMZmS6C79XGaVcVwgpNYCynaAmAZSS7rNTGdAE4d84"));
 		uint8_t byTmpInitialVector[CryptoPP::SHA256::DIGESTSIZE];
 		CryptoPP::SHA256().CalculateDigest(byTmpInitialVector, (uint8_t*)szTmpInitialVector.data(), szTmpInitialVector.size());
 		CryptoPP::Weak::MD5().CalculateDigest(m_initialVector, byTmpInitialVector, CryptoPP::SHA256::DIGESTSIZE);
@@ -34,6 +34,9 @@ public:
 
 	int Encryption(uint8_t* datain, size_t length, std::vector<uint8_t>& dataout)
 	{
+#ifdef VMPROTECT
+		VMProtectBeginMutation("Cryption::Encryption");
+#endif
 		try
 		{
 			std::string szOutput = "";
@@ -57,10 +60,17 @@ public:
 		}
 
 		return 0;
+
+#ifdef VMPROTECT
+		VMProtectEnd();
+#endif
 	}
 
 	int Decryption(uint8_t* datain, size_t length, std::vector<uint8_t>& dataout)
 	{
+#ifdef VMPROTECT
+		VMProtectBeginMutation("Cryption::Decryption");
+#endif
 		try
 		{
 			std::string szOutput = "";
@@ -84,6 +94,10 @@ public:
 		}
 
 		return 0;
+
+#ifdef VMPROTECT
+		VMProtectEnd();
+#endif
 	}
 
 private:
