@@ -78,7 +78,7 @@ namespace skc
 	};
 }
 
-#ifdef DEBUG
+#ifdef _DEBUG
 #define skCrypt(str) str
 #define skCrypt_key(str, key1, key2) str
 #define skCryptDec(str) str
