@@ -23,15 +23,15 @@ public:
 	void StartHandler();
 	void StopHandler();
 	void Process();
+	void PatchClient();
 	void PatchSocket();
+	void OnReady();
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
 	TPlayer InitializePlayer(Packet& pkt);
 
 private:
-	virtual void OnReady();
-
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
 
@@ -96,8 +96,12 @@ private:
 	void RouteRecorderProcess();
 
 private:
+	bool m_bReady;
 	bool m_bWorking;
 	bool m_bMailSlotWorking;
+
+public:
+	bool IsReady() { return m_bReady; }
 
 private:
 	std::string m_szAccountId;
@@ -107,7 +111,7 @@ private:
 	float m_fLastSupplyTime;
 
 private:
-	bool SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
+	void SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
 
 public:
 	int GetRegionUserCount(bool bExceptPartyMember = false, float fRangeLimit = 0.0f);
@@ -141,9 +145,6 @@ protected:
 	int32_t PartyMemberNeedSwift();
 	int32_t PartyMemberNeedHeal(uint32_t iSkillBaseID);
 	int32_t PartyMemberNeedBuff(uint32_t iSkillBaseID);
-
-protected:
-	bool IsSkillHasZoneLimit(uint32_t iSkillBaseID);
 
 public:
 	bool m_bAttackSpeed;
@@ -243,6 +244,7 @@ public:
 	std::unordered_set<int> m_vecSupplyList;
 
 	bool m_bAutoSupply;
+	bool m_bAutoRPRChangeWeapon;
 
 	int m_iSlotExpLimit;
 	bool m_bSlotExpLimitEnable;
@@ -301,6 +303,21 @@ public:
 
 protected:
 	bool m_bRouteWarpListLoaded;
+
+public:
+	Ini* GetUserConfiguration();
+	Ini* m_iniUserConfiguration;
+
+public:
+	typedef std::map<std::string, std::vector<Route>> RouteList;
+	typedef std::map<uint8_t, RouteList> RouteData;
+
+	RouteData m_mapRouteList;
+
+public:
+	bool GetRouteList(uint8_t iMapIndex, RouteList& pRouteList);
+	void SaveRoute(std::string szRouteName, uint8_t iMapIndex, std::vector<Route> vecRoute);
+	void DeleteRoute(std::string szRouteName, uint8_t iMapIndex);
 };
 
 

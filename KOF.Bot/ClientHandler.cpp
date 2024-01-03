@@ -25,6 +25,7 @@ ClientHandler::~ClientHandler()
 
 void ClientHandler::Clear()
 {
+	m_bReady = false;
 	m_bWorking = false;
 
 	m_bMailSlotWorking = false;
@@ -84,6 +85,15 @@ void ClientHandler::Clear()
 	m_setSelectedSupplyRouteList.clear();
 	m_setSelectedDeathRouteList.clear();
 	m_setSelectedLoginRouteList.clear();
+
+	if (m_iniUserConfiguration)
+	{
+		delete m_iniUserConfiguration;
+	}
+
+	m_iniUserConfiguration = nullptr;
+
+	m_mapRouteList.clear();
 
 	ClearUserConfiguration();
 }
@@ -186,6 +196,7 @@ void ClientHandler::ClearUserConfiguration()
 	m_vecSupplyList.clear();
 
 	m_bAutoSupply = false;
+	m_bAutoRPRChangeWeapon = false;
 
 	m_iSlotExpLimit = 35000;
 	m_bSlotExpLimitEnable = false;
@@ -220,15 +231,18 @@ void ClientHandler::ClearUserConfiguration()
 
 void ClientHandler::Initialize()
 {
-#ifdef DEBUG
-	printf("Client handler initializing\n");
-#endif
+}
 
-	OnReady();
+Ini* ClientHandler::GetUserConfiguration()
+{
+	return m_iniUserConfiguration;
 }
 
 void ClientHandler::InitializeUserConfiguration()
 {
+	if (!GetUserConfiguration())
+		return;
+
 	m_bAttackSpeed = GetUserConfiguration()->GetBool("Attack", "AttackSpeed", m_bAttackSpeed);
 	m_iAttackSpeedValue = GetUserConfiguration()->GetInt("Attack", "AttackSpeedValue", m_iAttackSpeedValue);
 	m_bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), m_bAttackStatus);
@@ -303,6 +317,7 @@ void ClientHandler::InitializeUserConfiguration()
 	m_bArcherCombo = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), m_bArcherCombo);
 	m_bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), m_bAutoRepair);
 	m_vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), m_vecSupplyList);
+	m_bAutoRPRChangeWeapon = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoRPRChangeWeapon"), m_bAutoRPRChangeWeapon);
 	m_bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), m_bAutoSupply);
 	m_iSlotExpLimit = GetUserConfiguration()->GetInt(skCryptDec("Bot"), skCryptDec("SlotExpLimit"), m_iSlotExpLimit);
 	m_bSlotExpLimitEnable = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("SlotExpLimitEnable"), m_bSlotExpLimitEnable);
@@ -329,23 +344,18 @@ void ClientHandler::InitializeUserConfiguration()
 
 void ClientHandler::StartHandler()
 {
-#ifdef DEBUG
-	printf("Client handler starting\n");
-#endif
-
 	m_bWorking = true;
 }
 
 void ClientHandler::StopHandler()
 {
-#ifdef DEBUG
-	printf("Client handler stopped\n");
-#endif
-
+	m_bReady = false;
 	m_bWorking = false;
 	m_bMailSlotWorking = false;
 
 	GetClient()->Clear();
+
+	Clear();
 }
 
 void ClientHandler::Process()
@@ -358,10 +368,10 @@ void ClientHandler::Process()
 
 	if (m_bWorking)
 	{
-		if (IsDisconnect())
+		if (IsDisconnect() || m_Bot->IsInjectedProcessLost())
 		{
-#ifdef DEBUG
-			printf("Client connection closed\n");
+#ifdef DEBUG_LOG
+			Print("Client connection closed");
 #endif
 			StopHandler();
 		}
@@ -404,23 +414,15 @@ void ClientHandler::Process()
 
 void ClientHandler::OnReady()
 {
-#ifdef DEBUG
-	printf("Client handler ready\n");
-#endif
-
 	new std::thread([&]()
 	{
-		//TODO: Bu Kontrol baska bir yere koyulacak
-		WaitCondition(m_Bot->m_bInternalMailslotWorking == false);
-		WaitCondition(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO"))) == 0);
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
 		PushPhase(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO")));
 
 		WaitCondition(m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_INTRO"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_UI_LOGIN_INTRO"))) == 0);
 
-		PatchSocket();
+		PatchClient();
 
 		if (m_Bot->m_bAutoLogin
 			&& m_Bot->m_szID.size() > 0 && m_Bot->m_szPassword.size())
@@ -435,8 +437,28 @@ void ClientHandler::OnReady()
 			}
 		}
 
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
 		m_Bot->InitializeStaticData();
 	});
+
+	m_bReady = true;
+}
+
+void ClientHandler::PatchClient()
+{
+	BYTE byPatch1[] =
+	{
+		0x90,
+		0x90,
+		0x90,
+		0x90,
+		0x90
+	};
+
+	WriteProcessMemory(m_Bot->GetInjectedProcessHandle(), (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
+
+	PatchSocket();
 }
 
 void ClientHandler::PatchSocket()
@@ -463,14 +485,12 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 {
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
 
-	WaitCondition(m_Bot->Read4Byte(iAddress) == 0);
-
 	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
 
 	if (hModuleKernel32 == nullptr)
 	{
-#ifdef DEBUG
-		printf("hModuleKernel32 == nullptr\n");
+#ifdef DEBUG_LOG
+		Print("hModuleKernel32 == nullptr");
 #endif
 		return;
 	}
@@ -488,8 +508,8 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 
 		if (m_hMailSlotRecv == INVALID_HANDLE_VALUE)
 		{
-#ifdef DEBUG
-			printf("CreateMailslot recv failed with %d\n", GetLastError());
+#ifdef DEBUG_LOG
+			Print("CreateMailslot recv failed with %d", GetLastError());
 #endif
 			return;
 		}
@@ -619,8 +639,8 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 	m_Bot->Write4Byte(m_Bot->Read4Byte(m_Bot->Read4Byte(iAddress)) + 0x8, (DWORD)pPatchAddress);
 	VirtualProtectEx(hProcess, (LPVOID)iRecvAddress, 1, dwOldProtection, &dwOldProtection);
 
-#ifdef DEBUG
-	printf("PatchRecvAddress: 0x%x patched\n", iRecvAddress);
+#ifdef _DEBUG
+	Print("0x%x patched", iRecvAddress);
 #endif
 }
 
@@ -628,14 +648,12 @@ void ClientHandler::PatchSendAddress()
 {
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
 
-	WaitCondition(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_SND_FNC"))) == 0);
-
 	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
 
 	if (hModuleKernel32 == nullptr)
 	{
-#ifdef DEBUG
-		printf("hModuleKernel32 == nullptr\n");
+#ifdef DEBUG_LOG
+		Print("hModuleKernel32 == nullptr");
 #endif
 		return;
 	}
@@ -653,8 +671,8 @@ void ClientHandler::PatchSendAddress()
 
 		if (m_hMailSlotSend == INVALID_HANDLE_VALUE)
 		{
-#ifdef DEBUG
-			printf("CreateMailslot send failed with %d\n", GetLastError());
+#ifdef DEBUG_LOG
+			Print("CreateMailslot send failed with %d", GetLastError());
 #endif
 			return;
 		}
@@ -775,8 +793,8 @@ void ClientHandler::PatchSendAddress()
 	m_Bot->WriteBytes(m_Bot->GetAddress(skCryptDec("KO_SND_FNC")), vecPatch2);
 	VirtualProtectEx(hProcess, (LPVOID)m_Bot->GetAddress(skCryptDec("KO_SND_FNC")), 1, iOldProtection, &iOldProtection);
 
-#ifdef DEBUG
-	printf("PatchSendAddress: 0x%x patched\n", m_Bot->GetAddress("KO_SND_FNC"));
+#ifdef _DEBUG
+	Print("0x%x patched", m_Bot->GetAddress("KO_SND_FNC"));
 #endif
 }
 
@@ -817,8 +835,8 @@ void ClientHandler::MailSlotRecvProcess()
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("MailSlotRecvProcess: Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -862,8 +880,8 @@ void ClientHandler::MailSlotSendProcess()
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("MailSlotSendProcess: Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -875,10 +893,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 	Packet pkt = Packet(byBuffer[0], (size_t)iLength);
 	pkt.append(&byBuffer[1], iLength - 1);
 
-#ifdef DEBUG
 #ifdef PRINT_RECV_PACKET
-	printf("RecvProcess: %s\n", pkt.convertToHex().c_str());
-#endif
+	Print("RecvProcess: %s", pkt.convertToHex().c_str());
 #endif
 
 	uint8_t iHeader;
@@ -898,23 +914,23 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				case AUTH_BANNED:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_LOGIN_REQ: Account Banned\n");
+#ifdef DEBUG_LOG
+					Print("LS_LOGIN_REQ | Account Banned");
 #endif
 				}
 				break;
 
 				case AUTH_IN_GAME:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_LOGIN_REQ: Account already in-game\n");
+#ifdef DEBUG_LOG
+					Print("LS_LOGIN_REQ | Account already in-game");
 #endif
 					if (m_Bot->GetPlatformType() == PlatformType::CNKO)
 					{
 						new std::thread([this]()
 						{
-#ifdef DEBUG
-							printf("RecvProcess::LS_LOGIN_REQ: Reconnecting login server\n");
+#ifdef DEBUG_LOG
+							Print("LS_LOGIN_REQ | Reconnecting login server");
 #endif
 							std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -928,17 +944,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				case AUTH_SUCCESS:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_LOGIN_REQ: Login Success\n");
-#endif
 				}
 				break;
 
 				case AUTH_OTP:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_LOGIN_REQ: OTP Validation\n");
-#endif
 					if (m_Bot->m_hModuleAnyOTP != NULL  
 						&& m_Bot->m_bAutoLogin
 						&& m_Bot->m_szID.size() > 0 && m_Bot->m_szPassword.size() > 0
@@ -954,8 +964,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						}
 						else
 						{
-#ifdef DEBUG
-							printf("RecvProcess::LS_OTP: Otp code generation failed! Response: 000000\n");
+#ifdef DEBUG_LOG
+							Print("LS_OTP | Otp code generation failed! Response: 000000");
 #endif
 						}
 					}
@@ -964,8 +974,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_LOGIN_REQ: %d not implemented!\n", byResult);
+#ifdef DEBUG_LOG
+					Print("LS_LOGIN_REQ | %d not implemented!", byResult);
 #endif
 				}
 				break;
@@ -984,22 +994,19 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				case 1:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_OTP: OTP Success\n");
-#endif
 				}
 				break;
 
 				case 2:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_OTP: OTP Failed, Retry Count: %d\n", m_iOTPRetryCount);
+#ifdef DEBUG_LOG
+					Print("LS_OTP | OTP Failed, Retry Count: %d", m_iOTPRetryCount);
 #endif
 
 					if (m_iOTPRetryCount <= 3)
 					{
-#ifdef DEBUG
-						printf("RecvProcess::LS_OTP: Retrying OTP\n");
+#ifdef DEBUG_LOG
+						Print("LS_OTP | Retrying OTP");
 #endif
 
 						if (m_Bot->m_hModuleAnyOTP != NULL
@@ -1017,8 +1024,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							}
 							else
 							{
-#ifdef DEBUG
-								printf("RecvProcess::LS_OTP: Otp code generation failed! Response: 000000\n");
+#ifdef DEBUG_LOG
+								Print("LS_OTP | Otp code generation failed! Response: 000000");
 #endif
 							}
 						}
@@ -1028,10 +1035,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				case 3:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_OTP: OTP code cannot be reused\n");
-#endif
-
 					if (m_Bot->m_hModuleAnyOTP != NULL
 						&& m_Bot->m_bAutoLogin
 						&& m_Bot->m_szID.size() > 0 && m_Bot->m_szPassword.size() > 0
@@ -1049,11 +1052,10 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							}
 							else
 							{
-#ifdef DEBUG
-								printf("RecvProcess::LS_OTP: Otp code generation failed! Response: 000000\n");
+#ifdef DEBUG_LOG
+								Print("LS_OTP | Otp code generation failed! Response: 000000");
 #endif
 							}
-
 						});
 					}
 				}
@@ -1061,16 +1063,16 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				case 10:
 				{
-#ifdef DEBUG
-					printf("OTP Login failed with unknown issue. Please Contact customer service\n");
+#ifdef DEBUG_LOG
+					Print("LS_OTP | OTP Login failed with unknown issue. Please Contact customer service");
 #endif
 				}
 				break;
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::LS_OTP: %d not implemented!\n", iResult);
+#ifdef DEBUG_LOG
+					Print("LS_OTP | %d not implemented!", iResult);
 #endif
 				}
 				break;
@@ -1086,10 +1088,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			if (byServerCount > 0)
 			{
-#ifdef DEBUG
-				printf("RecvProcess::LS_SERVERLIST: %d Server loaded\n", byServerCount);
-#endif
-
 				if (m_Bot->m_bAutoLogin
 					&& m_Bot->m_szID.size() > 0 && m_Bot->m_szPassword.size() > 0)
 				{
@@ -1131,20 +1129,11 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			if (bLoaded)
 			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Character list loaded\n");
-#endif
-
 				if (m_Bot->m_bAutoLogin
 					&& m_Bot->m_szID.size() > 0 && m_Bot->m_szPassword.size() > 0)
 				{
-
 					new std::thread([this]()
 					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_ALLCHAR_INFO_REQ: Selecting character %d\n", 1);
-#endif
-
 						SelectCharacterSkip();
 
 						if (m_Bot->m_iSlotID - 1 > 0)
@@ -1155,7 +1144,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 								SelectCharacterLeft();
 								std::this_thread::sleep_for(std::chrono::milliseconds(100));
 								SelectCharacterSkip();
-
 							}
 						}
 
@@ -1182,11 +1170,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				m_PlayerMySelf.fZ = (pkt.read<int16_t>()) / 10.0f;
 
 				uint8_t iVictoryNation = pkt.read<uint8_t>();
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_SEL_CHAR Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n", 
-					m_PlayerMySelf.iCity, m_PlayerMySelf.fX, m_PlayerMySelf.fY, m_PlayerMySelf.fZ, iVictoryNation);
-#endif
 			}
 		}
 		break;
@@ -1300,11 +1283,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				m_PlayerMySelf.tInventory[i].iExpirationTime = pkt.read<uint32_t>();
 			}
 
-			m_Bot->SendLoadUserConfiguration(GetServerId(), m_PlayerMySelf.szName);
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_MYINFO: %s loaded\n", m_PlayerMySelf.szName.c_str());
-#endif
+			m_Bot->SendLoadUserConfiguration(GetServerId(), m_PlayerMySelf.szName, m_Bot->m_ePlatformType);
 		}
 		break;
 
@@ -1331,10 +1310,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					LoadSkillData();
 				}
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", m_PlayerMySelf.szName.c_str(), iLevel);
-#endif
 			}
 			else
 			{
@@ -1344,10 +1319,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				if (it != m_vecPlayer.end())
 				{
 					it->iLevel = iLevel;
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_LEVEL_CHANGE: %s %d\n", it->szName.c_str(), iLevel);
-#endif
 				}
 			}
 		}
@@ -1360,10 +1331,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			m_PlayerMySelf.iSkillInfo[iType] = (uint8_t)iValue;
 			m_PlayerMySelf.iSkillInfo[0]++;
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_SKILLPT_CHANGE: %d,%d,%d\n", iType, iValue, m_PlayerMySelf.iSkillInfo[0]);
-#endif
 		}
 		break;
 
@@ -1375,9 +1342,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				case N3_SP_CLASS_CHANGE_PURE:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_PURE\n");
-#endif
 				}
 				break;
 
@@ -1389,33 +1353,21 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 						case N3_SP_CLASS_CHANGE_SUCCESS:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_SUCCESS\n");
-#endif
 						}
 						break;
 
 						case N3_SP_CLASS_CHANGE_NOT_YET:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_NOT_YET\n");
-#endif
 						}
 						break;
 
 						case N3_SP_CLASS_CHANGE_ALREADY:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_ALREADY\n");
-#endif
 						}
 						break;
 
 						case N3_SP_CLASS_CHANGE_FAILURE:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CLASS_CHANGE: N3_SP_CLASS_CHANGE_FAILURE\n");
-#endif
 						}
 						break;
 					}
@@ -1481,9 +1433,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				case N3_SP_CLASS_POINT_CHANGE_PRICE_QUERY:
 				{
 					uint32_t iGold = pkt.read<uint32_t>();
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_CLASS_CHANGE: Point change price %d\n", iGold);
-#endif
 				}
 				break;
 
@@ -1509,48 +1458,41 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 		case WIZ_GAMESTART:
 		{
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_GAMESTART: Started\n");
-#endif
-			new std::thread([this]()
+			LoadSkillData();
+
+			m_iStartCoin = m_PlayerMySelf.iGold;
+
+			SetAuthority(m_bWallHack ? 0 : 1);
+			PatchObjectCollision(m_bLegalWallHack);
+			PatchDeathEffect(m_bDeathEffect);
+			UpdateSkillSuccessRate(m_bDisableCasting);
+			HidePlayer(m_bHidePlayer);
+
+			if (m_bCharacterSizeEnable)
 			{
-				WaitCondition(GetUserConfiguration() == nullptr)
-				WaitCondition(GetUserConfiguration()->GetConfigMap()->size() == 0)
+				DWORD iMyBase = Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_CHR")));
+				SetScale(iMyBase, (float)m_iCharacterSize, (float)m_iCharacterSize, (float)m_iCharacterSize);
+			}
 
-				LoadSkillData();
+			m_bAttackStatus = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
+			m_bCharacterStatus = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
 
-				m_iStartCoin = m_PlayerMySelf.iGold;
+			if (m_bSaveCPUEnable)
+			{
+				SetSaveCPUSleepTime(m_iSaveCPUValue);
+			}
 
-				SetAuthority(m_bWallHack ? 0 : 1);
-				PatchObjectCollision(m_bLegalWallHack);
-				PatchDeathEffect(m_bDeathEffect);
-				UpdateSkillSuccessRate(m_bDisableCasting);
-				HidePlayer(m_bHidePlayer);
+			if (m_bSpeedHack)
+			{
+				SetCharacterSpeed(1.5);
+				PatchSpeedHack(true);
+			}
 
-				if (m_bCharacterSizeEnable)
-				{
-					DWORD iMyBase = Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_CHR")));
-					SetScale(iMyBase, (float)m_iCharacterSize, (float)m_iCharacterSize, (float)m_iCharacterSize);
-				}
+			std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
-				m_bAttackStatus = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Attack"), 0);
-				m_bCharacterStatus = GetUserConfiguration()->SetInt(skCryptDec("Automation"), skCryptDec("Character"), 0);
+			StartHandler();
 
-				if (m_bSaveCPUEnable)
-				{
-					SetSaveCPUSleepTime(m_iSaveCPUValue);
-				}
-
-				if (m_bSpeedHack)
-				{
-					SetCharacterSpeed(1.5);
-					PatchSpeedHack(true);
-				}
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
-				StartHandler();
-			});
+			Drawing::SetScene(Drawing::Scene::UI);
 		}
 		break;
 
@@ -1575,10 +1517,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						*it = pNpc;
 				}
 			}
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_REQ_NPCIN: Size %d\n", iNpcCount);
-#endif
 		}
 		break;
 
@@ -1601,10 +1539,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					}
 					else
 						*it = pNpc;
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_NPC_INOUT: INOUT_IN - %d,%d\n", iType, pNpc.iID);
-#endif
 				}
 				break;
 
@@ -1616,17 +1550,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
 							[&](const TNpc& a) { return a.iID == iNpcID; }),
 						m_vecNpc.end());
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_NPC_INOUT: INOUT_OUT - %d,%d\n", iType, iNpcID);
-#endif
 				}
 				break;
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_NPC_INOUT: %d not implemented\n", iType);
+#ifdef DEBUG_LOG
+					Print("WIZ_NPC_INOUT | %d not implemented", iType);
 #endif
 				}
 				break;
@@ -1658,10 +1588,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							m_vecNpc.end());
 					}
 				}
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_NPC_REGION: Npc region change completed! Region list size %d, current npc list %d\n", vecRegionNpcList.size(), m_vecNpc.size());
-#endif
 			}
 		}
 		break;
@@ -1685,27 +1611,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						m_vecPlayer.push_back(pPlayer);
 					else
 						*it = pPlayer;
-
-					/*bool bSendTownIfThereIsGMNearby = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("bSendTownIfThereIsGMNearby"), false);
-					bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
-					bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
-
-					if ((bAttackStatus || bCharacterStatus)
-						&& bSendTownIfThereIsGMNearby && pPlayer.iAuthority == 0)
-					{
-						SendTownPacket();
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_REQ_USERIN: !! GM !!, Gamemaster: %s\n", pPlayer.szName.c_str());
-#endif
-
-					}*/
 				}
 
 			}
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_REQ_USERIN: Size %d\n", iUserCount);
-#endif
 		}
 		break;
 
@@ -1716,61 +1624,41 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			switch (iType)
 			{
-			case InOut::INOUT_IN:
-			case InOut::INOUT_RESPAWN:
-			case InOut::INOUT_WARP:
-			{
-				auto pPlayer = InitializePlayer(pkt);
-
-				auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-					[&](const TPlayer& a) { return a.iID == pPlayer.iID; });
-
-				if (it == m_vecPlayer.end())
-					m_vecPlayer.push_back(pPlayer);
-				else
-					*it = pPlayer;
-
-				/*bool bSendTownIfThereIsGMNearby = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("bSendTownIfThereIsGMNearby"), false);
-				bool bAttackStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Attack"), false);
-				bool bCharacterStatus = GetUserConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Character"), false);
-
-				if ((bAttackStatus || bCharacterStatus) 
-					&& bSendTownIfThereIsGMNearby && pPlayer.iAuthority == 0)
+				case InOut::INOUT_IN:
+				case InOut::INOUT_RESPAWN:
+				case InOut::INOUT_WARP:
 				{
-					SendTownPacket();
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_USER_INOUT: !! GM !!, Gamemaster: %s\n", pPlayer.szName.c_str());
+					auto pPlayer = InitializePlayer(pkt);
+
+					auto it = std::find_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+						[&](const TPlayer& a) { return a.iID == pPlayer.iID; });
+
+					if (it == m_vecPlayer.end())
+						m_vecPlayer.push_back(pPlayer);
+					else
+						*it = pPlayer;
+				}
+				break;
+
+				case InOut::INOUT_OUT:
+				{
+					int32_t iPlayerID = pkt.read<int32_t>();
+
+					m_vecPlayer.erase(
+						std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
+							[&](const TPlayer& a) { return a.iID == iPlayerID; }),
+						m_vecPlayer.end());
+				}
+				break;
+
+				default:
+				{
+#ifdef DEBUG_LOG
+					Print("WIZ_USER_INOUT | %d not implemented", iType);
 #endif
-				}*/
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_USER_INOUT: INOUT_IN | INOUT_RESPAWN | INOUT_WARP - %d,%d\n", iType, pPlayer.iID);
-#endif
-			}
-			break;
+				}
 
-			case InOut::INOUT_OUT:
-			{
-				int32_t iPlayerID = pkt.read<int32_t>();
-
-				m_vecPlayer.erase(
-					std::remove_if(m_vecPlayer.begin(), m_vecPlayer.end(),
-						[&](const TPlayer& a) { return a.iID == iPlayerID; }),
-					m_vecPlayer.end());
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_USER_INOUT: INOUT_OUT - %d,%d\n", iType, iPlayerID);
-#endif
-			}
-			break;
-
-			default:
-			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_USER_INOUT: %d not implemented\n", iType);
-#endif
-			}
-
-			break;
+				break;
 			}
 		}
 		break;
@@ -1784,10 +1672,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				case 0:
 				{
 					m_vecRegionUserList.clear();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_REGIONCHANGE: Region change activity start, current user count: %d\n", m_vecPlayer.size());
-#endif
 				}
 				break;
 
@@ -1804,10 +1688,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						m_vecRegionUserList.insert(iUserID);
 					}
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_REGIONCHANGE: Region change activity user count: %d\n", m_vecRegionUserList.size());
-#endif
 				}
 				break;
 
@@ -1828,18 +1708,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						m_vecPlayer.erase(m_vecPlayer.begin() + indicesToRemove[i]);
 					}
 
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_REGIONCHANGE: Region change activity end region user count: %d, current user list: %d\n", m_vecRegionUserList.size(), m_vecPlayer.size());
-#endif
-
 					m_vecRegionUserList.clear();
 				}
 				break;
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_REGIONCHANGE: Type %d not implemented! [%s]\n", iType, pkt.convertToHex().c_str());
+#ifdef DEBUG_LOG
+					Print("WIZ_REGIONCHANGE | Type %d not implemented! [%s]", iType, pkt.convertToHex().c_str());
 #endif
 				}
 				break;
@@ -1876,9 +1752,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					pMember->fMindBuffTime = 0.0f;
 					pMember->iMindBuffAttemptCount = 0;
 				}
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_DEAD: MySelf Dead\n");
-#endif
 			}
 			else
 			{
@@ -1895,10 +1768,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							std::remove_if(m_vecNpc.begin(), m_vecNpc.end(),
 								[&](const TNpc& a) { return a.iID == it->iID; }),
 							m_vecNpc.end());
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_DEAD: %d Npc Dead\n", iID);
-#endif
 					}
 				}
 				else
@@ -1925,10 +1794,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							pMember->fMindBuffTime = 0.0f;
 							pMember->iMindBuffAttemptCount = 0;
 						}
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_DEAD: %d Player Dead\n", iID);
-#endif
 					}
 				}
 			}
@@ -1946,10 +1811,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					int32_t iAttackID = pkt.read<int32_t>();
 					int32_t iTargetID = pkt.read<int32_t>();
-
-	#ifdef DEBUG
-					printf("RecvProcess::WIZ_ATTACK: %d,%d FAIL\n", iAttackID, iTargetID);
-	#endif
 				}
 				break;
 
@@ -1978,10 +1839,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							}
 						}
 					}
-
-	#ifdef DEBUG
-					printf("RecvProcess::WIZ_ATTACK: %d,%d SUCCESS\n", iAttackID, iTargetID);
-	#endif
 				}
 				break;
 
@@ -1999,9 +1856,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						if (it != m_vecNpc.end())
 						{
 							it->eState = PSA_DEATH;
-	#ifdef DEBUG
-							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Npc Dead\n", iTargetID);
-	#endif
 						}
 					}
 					else
@@ -2012,10 +1866,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						if (it != m_vecPlayer.end())
 						{
 							it->eState = PSA_DEATH;
-
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_ATTACK: TARGET_DEAD | TARGET_DEAD_OK - %d Player Dead\n", iTargetID);
-#endif
 						}
 					}
 				}
@@ -2023,9 +1873,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-	#ifdef DEBUG
-					printf("RecvProcess::WIZ_ATTACK: %d not implemented\n", iResult);
-	#endif
+#ifdef DEBUG_LOG
+					Print("WIZ_ATTACK | %d not implemented", iResult);
+#endif
 				}
 				break;
 			}
@@ -2049,11 +1899,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				//if (/*m_PlayerMySelf.iHPMax > 0 && */m_PlayerMySelf.iHP <= 0)
 					//m_PlayerMySelf.eState = PSA_DEATH;
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n",
-					m_PlayerMySelf.szName.c_str(), m_PlayerMySelf.iHP, m_PlayerMySelf.iHPMax);
-#endif
 			}
 			else
 			{
@@ -2069,10 +1914,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						//if (/*it->iHPMax > 0 && */it->iHP <= 0)
 							//it->eState = PSA_DEATH;
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_TARGET_HP: %d, %d / %d\n", iID, it->iHP, it->iHPMax);
-#endif
 					}
 				}
 				else
@@ -2087,11 +1928,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						//if (it->iHPMax > 0 && it->iHP <= 0)
 							//it->eState = PSA_DEATH;
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_TARGET_HP: %s, %d / %d\n",
-							it->szName.c_str(), it->iHP, it->iHPMax);
-#endif
 					}
 				}
 			}
@@ -2132,10 +1968,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					it->iMoveSpeed = iSpeed;
 					it->iMoveType = iMoveType;
 				}
-#ifdef DEBUG
-				else
-					printf("RecvProcess::WIZ_MOVE: %d not in m_vecPlayer list, is ghost player\n", iID);
-#endif
 			}
 		}
 		break;
@@ -2164,10 +1996,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				it->iMoveSpeed = iSpeed;
 				it->iMoveType = iMoveType;
 			}
-#ifdef DEBUG
-			else
-				printf("RecvProcess::WIZ_NPC_MOVE: %d not in m_vecNpc list, is ghost npc\n", iID);
-#endif
 
 		}
 		break;
@@ -2215,7 +2043,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 									case 111655: case 111642: case 111633: case 111624:
 									case 111615: case 111606:
 									{
-										pPartyMember->fHpBuffTime = Bot::TimeGet();
+										pPartyMember->fHpBuffTime = TimeGet();
 										pPartyMember->iHpBuffAttemptCount = 0;
 									}
 									break;
@@ -2223,14 +2051,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 									case 112674: case 111660: case 111651: case 111639:
 									case 111630: case 111621: case 111612: case 111603:
 									{
-										pPartyMember->fACBuffTime = Bot::TimeGet();
+										pPartyMember->fACBuffTime = TimeGet();
 										pPartyMember->iACBuffAttemptCount = 0;
 									}
 									break;
 
 									case 111645: case 111636: case 111627: case 111609:
 									{
-										pPartyMember->fMindBuffTime = Bot::TimeGet();
+										pPartyMember->fMindBuffTime = TimeGet();
 										pPartyMember->iMindBuffAttemptCount = 0;
 									}
 									break;
@@ -2285,9 +2113,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						|| iData[3] == SKILLMAGIC_FAIL_ATTACKZERO
 						|| iData[3] == SKILLMAGIC_FAIL_UNKNOWN)
 					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_MAGIC_PROCESS: %d - %d - Skill failed %d\n", iSourceID, iSkillID, iData[3]);
-#endif
 						if (iSourceID == m_PlayerMySelf.iID)
 						{
 							Client::SetSkillNextUseTime(iSkillID, 0.0f);
@@ -2326,7 +2151,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 												}
 												else
 												{
-													pPartyMember->fHpBuffTime = Bot::TimeGet();
+													pPartyMember->fHpBuffTime = TimeGet();
 												}
 											}
 										}
@@ -2348,7 +2173,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 												}
 												else
 												{
-													pPartyMember->fACBuffTime = Bot::TimeGet();
+													pPartyMember->fACBuffTime = TimeGet();
 												}
 											}
 										}
@@ -2369,7 +2194,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 												}
 												else
 												{
-													pPartyMember->fMindBuffTime = Bot::TimeGet();
+													pPartyMember->fMindBuffTime = TimeGet();
 												}
 											}
 										}
@@ -2397,8 +2222,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_MAGIC_PROCESS: %d Type Not Implemented!\n", iType);
+#ifdef DEBUG_LOG
+					Print("WIZ_MAGIC_PROCESS | %d Type Not Implemented!", iType);
 #endif
 				}
 				break;
@@ -2422,10 +2247,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
-	#ifdef DEBUG
-								printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_NORMAL\n", m_PlayerMySelf.szName.c_str());
-	#endif
-
 								m_PlayerMySelf.bBlinking = false;
 							}
 							else
@@ -2435,10 +2256,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 								if (it != m_vecPlayer.end())
 								{
-#ifdef DEBUG
-									printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_NORMAL\n", it->szName.c_str());
-#endif
-
 									it->bBlinking = false;
 								}
 							}
@@ -2449,10 +2266,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
-#ifdef DEBUG
-								printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING\n", m_PlayerMySelf.szName.c_str());
-#endif
-
 								m_PlayerMySelf.bBlinking = true;
 							}
 							else
@@ -2462,10 +2275,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 								if (it != m_vecPlayer.end())
 								{
-#ifdef DEBUG
-									printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING\n", it->szName.c_str());
-#endif
-
 									it->bBlinking = true;
 								}
 							}
@@ -2476,10 +2285,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						{
 							if (m_PlayerMySelf.iID == iID)
 							{
-#ifdef DEBUG
-								printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING_END\n", m_PlayerMySelf.szName.c_str());
-#endif
-
 								m_PlayerMySelf.bBlinking = false;
 							}
 							else
@@ -2489,10 +2294,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 								if (it != m_vecPlayer.end())
 								{
-#ifdef DEBUG
-									printf("RecvProcess::WIZ_STATE_CHANGE: %s - ABNORMAL_BLINKING_END\n", it->szName.c_str());
-#endif
-
 									it->bBlinking = false;
 								}
 							}
@@ -2501,8 +2302,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						default:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_STATE_CHANGE: Abnormal Type - %llu Buff not implemented\n", iBuff);
+#ifdef DEBUG_LOG
+							Print("WIZ_STATE_CHANGE | Abnormal Type - %llu Buff not implemented", iBuff);
 #endif
 						}
 						break;
@@ -2512,8 +2313,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_STATE_CHANGE: Type %d not implemented\n", iType);
+#ifdef DEBUG_LOG
+					Print("WIZ_STATE_CHANGE | Type %d not implemented", iType);
 #endif
 				}
 				break;
@@ -2535,8 +2336,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			default:
 			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_MAP_EVENT: Type %d not implemented\n", iType);
+#ifdef DEBUG_LOG
+				Print("WIZ_MAP_EVENT | Type %d not implemented", iType);
 #endif
 			}
 			break;
@@ -2558,15 +2359,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 						uint32_t iGold = pkt.read<uint32_t>();
 						int16_t iItemCount = pkt.read<int16_t>();
-
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Success - %d,%d \n", iGold, iItemCount);
-#endif
 					}
-#ifdef DEBUG
-					else
-						printf("RecvProcess::WIZ_EXCHANGE: TRADE_DONE - Failed\n");
-#endif
 				}
 				break;
 
@@ -2577,9 +2370,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-	#ifdef DEBUG
-					printf("RecvProcess::WIZ_EXCHANGE: Type %d not implemented\n", iType);
-	#endif
+#ifdef DEBUG_LOG
+					Print("WIZ_EXCHANGE | Type %d not implemented", iType);
+#endif
 				}
 				break;
 			}
@@ -2597,13 +2390,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			if (tLoot.iItemCount == 0)
 			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_DROP: Box empty!\n");
-#endif
 				if (IsMovingToLoot())
-				{
 					SetMovingToLoot(false);
-				}
 
 				return;
 			}
@@ -2617,19 +2405,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					});
 
 				if (pNpc == m_vecNpc.end())
-				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_DROP: Move to loot NPC Position not exist!\n");
-#endif
 					return;
-				}
 
 				tLoot.fNpcX = pNpc->fX;
 				tLoot.fNpcZ = pNpc->fZ;
 				tLoot.fNpcY = pNpc->fY;
 			}
 
-			tLoot.fDropTime = Bot::TimeGet();
+			tLoot.fDropTime = TimeGet();
 
 			auto pLoot = std::find_if(m_vecLootList.begin(), m_vecLootList.end(),
 				[&](const TLoot a) { return a.iBundleID == tLoot.iBundleID; });
@@ -2638,14 +2421,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				m_vecLootList.push_back(tLoot);
 			else
 				*pLoot = tLoot;
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_ITEM_DROP: %d,%d,%d,%f\n",
-				tLoot.iNpcID,
-				tLoot.iBundleID,
-				tLoot.iItemCount,
-				tLoot.fDropTime);
-#endif
 		}
 		break;
 
@@ -2658,9 +2433,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				case 0:
 				{
-	#ifdef DEBUG
-					printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Bundle open req failed\n");
-	#endif
 				}
 				break;
 
@@ -2792,9 +2564,9 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-	#ifdef DEBUG
-					printf("RecvProcess::WIZ_BUNDLE_OPEN_REQ: Result %d not implemented\n", iResult);
-	#endif
+#ifdef DEBUG_LOG
+					Print("WIZ_BUNDLE_OPEN_REQ | Result %d not implemented", iResult);
+#endif
 				}
 				break;
 			}
@@ -2809,20 +2581,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			{
 				case 0x00:
 				{
-					//uint32_t iBundleID = pkt.read<uint32_t>();
-
-					//// Unknown1: -15, -7 = No space in the inventory for this item
-					//int16_t Unknown1 = pkt.read<int16_t>();
-					//int16_t Unknown2 = pkt.read<int16_t>();		
-
-					//m_vecLootList.erase(
-					//	std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
-					//		[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
-					//	m_vecLootList.end());
-
-//#ifdef DEBUG
-//					printf("RecvProcess::WIZ_ITEM_GET: Failed - %d,%d,%d,%d\n", iType, iBundleID, Unknown1, Unknown2);
-//#endif
 				}
 				break;
 
@@ -2845,10 +2603,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					{
 						m_iCoinCounter += iItemCount;
 					}
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_GET: Success - %d,%d,%d,%d,%d,%d\n", iType, iBundleID, iPos, iItemID, iItemCount, iGold);
-#endif
 				}
 				break;
 
@@ -2856,9 +2610,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					uint32_t iBundleID = pkt.read<uint32_t>();
 
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_GET: %d,%d\n", iType, iBundleID);
-#endif
 				}
 				break;
 
@@ -2870,19 +2621,13 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						std::remove_if(m_vecLootList.begin(), m_vecLootList.end(),
 							[&](const TLoot& a) { return a.iBundleID == iBundleID; }),
 						m_vecLootList.end());
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_GET: Inventory Full\n");
-#endif
-
 				}
 				break;
 
-
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_GET: %d Type Not Implemented\n", iType);
+#ifdef DEBUG_LOG
+					Print("WIZ_ITEM_GET | %d Type Not Implemented", iType);
 #endif
 				}
 				break;
@@ -3127,11 +2872,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					m_vecNpc.clear();
 					m_vecPlayer.clear();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ZONE_CHANGE: Teleport Zone: [%d] Coordinate: [%f - %f - %f] VictoryNation: [%d]\n",
-						m_PlayerMySelf.iCity, m_PlayerMySelf.fX, m_PlayerMySelf.fY, m_PlayerMySelf.fZ, iVictoryNation);
-#endif
 				}
 				break;
 
@@ -3161,10 +2901,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 		case WIZ_WARP:
 		{
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_WARP\n");
-#endif
-
 			if (!IsRouting())
 			{
 				if (m_bTownOrTeleportStopBot)
@@ -3199,9 +2935,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					if (iResult == 1)
 					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_CAPTCHA: Image loaded\n");
-#endif
 						int iBufferLength;
 						pkt >> iBufferLength;
 
@@ -3212,17 +2945,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					}
 					else
 					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_CAPTCHA: Image loading failed(%d)\n", iResult);
+#ifdef DEBUG_LOG
+						Print("WIZ_CAPTCHA | Image loading failed(%d)", iResult);
 #endif	
 						new std::thread([&]()
 						{
 							std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 							RefreshCaptcha();
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
-#endif
 						});
 					}
 				}
@@ -3232,25 +2962,17 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				{
 					uint8_t iResult = pkt.read<uint8_t>();
 
-					if (iResult == 1)
+					if (iResult != 1)
 					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_CAPTCHA: Success\n");
-#endif
-					}
-					else
-					{	
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_CAPTCHA: Failed(%d)\n", iResult);
-#endif
+#ifdef DEBUG_LOG
+						Print("WIZ_CAPTCHA | Failed(%d)", iResult);
+#endif	
+
 						new std::thread([&]()
 						{
 							std::this_thread::sleep_for(std::chrono::milliseconds(3000));
 
 							RefreshCaptcha();
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_CAPTCHA: Refreshed\n");
-#endif
 						});
 					}
 				}
@@ -3258,8 +2980,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_CAPTCHA: Not implemented opcode(%d)\n", iOpCode);
+#ifdef DEBUG_LOG
+					Print("WIZ_CAPTCHA | Not implemented opcode(%d)", iOpCode);
 #endif
 				}
 				break;
@@ -3350,9 +3072,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 					if (found != std::string::npos)
 					{
-#ifdef DEBUG
-						printf("RecvProcess::WIZ_CHAT: !! GM !!, ban notification received! \n");
-
 						if (m_bPlayBeepfIfBanNotice)
 						{
 							Beep(1000, 500);
@@ -3364,20 +3083,14 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						{
 							SendTownPacket();
 						}
-#endif
 					}
-
-						
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_CHAT: PUBLIC_CHAT | ANNOUNCEMENT_CHAT : %s \n", szMessage.c_str());
-#endif
 				}
 				break;
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_CHAT: Not implemented chatmode(%d)\n", iChatMode);
+#ifdef DEBUG_LOG
+					Print("WIZ_CHAT | Not implemented chatmode(%d)", iChatMode);
 #endif
 				}
 				break;
@@ -3456,8 +3169,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_WAREHOUSE: Not implemented opcode(%d)\n", iOpCode);
+#ifdef DEBUG_LOG
+					Print("WIZ_WAREHOUSE | Not implemented opcode(%d)", iOpCode);
 #endif
 				}
 				break;
@@ -3510,10 +3223,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							m_bVipWarehouseInitialized = true;
 							m_bVipWarehouseEnabled = true;
 							m_bVipWarehouseLoaded = true;
-
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_VIPWAREHOUSE: VIP Warehouse initialized\n");
-#endif
 						}
 						break;
 
@@ -3523,16 +3232,16 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 							m_bVipWarehouseEnabled = false;
 							m_bVipWarehouseLoaded = false;
 
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_VIPWAREHOUSE: VIP Key doesn't exist\n");
+#ifdef DEBUG_LOG
+							Print("WIZ_VIPWAREHOUSE | VIP Key doesn't exist");
 #endif
 						}
 						break;
 
 						default:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_VIPWAREHOUSE: Opcode(%d), Not implemented result(%d)\n", iOpCode, iResult);
+#ifdef DEBUG_LOG
+							Print("WIZ_VIPWAREHOUSE | Opcode(%d), Not implemented result(%d)", iOpCode, iResult);
 #endif
 						}
 						break;
@@ -3542,8 +3251,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_VIPWAREHOUSE: Not implemented opcode(%d)\n", iOpCode);
+#ifdef DEBUG_LOG
+					Print("WIZ_VIPWAREHOUSE | Not implemented opcode(%d)", iOpCode);
 #endif
 				}
 				break;
@@ -3577,8 +3286,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 						default:
 						{
-#ifdef DEBUG
-							printf("RecvProcess::WIZ_STORY: Opcode(%d), Not implemented result(%d)\n", iOpCode, iResult);
+#ifdef DEBUG_LOG
+							Print("WIZ_STORY | Opcode(%d), Not implemented result(%d)", iOpCode, iResult);
 #endif						
 						}
 						break;
@@ -3589,8 +3298,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 				default:
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_STORY: Not implemented opcode(%d)\n", iOpCode);
+#ifdef DEBUG_LOG
+					Print("WIZ_STORY | Not implemented opcode(%d)", iOpCode);
 #endif
 					break;
 				}
@@ -3716,39 +3425,18 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 					m_PlayerMySelf.iRegistMagic = (uint8_t)pkt.read<uint16_t>();
 					m_PlayerMySelf.iRegistCurse = (uint8_t)pkt.read<uint16_t>();
 					m_PlayerMySelf.iRegistPoison = (uint8_t)pkt.read<uint16_t>();
-
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_MOVE: %d,%d,%d,Unknown1(%d),%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-						m_PlayerMySelf.iAttack,
-						m_PlayerMySelf.iGuard,
-						m_PlayerMySelf.iWeightMax,
-						iUnknown1,
-						m_PlayerMySelf.iHPMax,
-						m_PlayerMySelf.iMSPMax,
-						m_PlayerMySelf.iStrength_Delta,
-						m_PlayerMySelf.iStamina_Delta,
-						m_PlayerMySelf.iDexterity_Delta,
-						m_PlayerMySelf.iIntelligence_Delta,
-						m_PlayerMySelf.iMagicAttak_Delta,
-						m_PlayerMySelf.iRegistFire,
-						m_PlayerMySelf.iRegistCold,
-						m_PlayerMySelf.iRegistLight,
-						m_PlayerMySelf.iRegistMagic,
-						m_PlayerMySelf.iRegistCurse,
-						m_PlayerMySelf.iRegistPoison);
-#endif
 				}
 				else
 				{
-#ifdef DEBUG
-					printf("RecvProcess::WIZ_ITEM_MOVE: %d SubType Not Implemented\n", iSubType);
+#ifdef DEBUG_LOG
+					Print("WIZ_ITEM_MOVE | %d SubType Not Implemented", iSubType);
 #endif
 				}
 			}
 			else
 			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_MOVE: %d Type Not Implemented\n", iType);
+#ifdef DEBUG_LOG
+				Print("WIZ_ITEM_MOVE | %d Type Not Implemented", iType);
 #endif
 			}
 		}
@@ -3757,9 +3445,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 		case WIZ_WEIGHT_CHANGE:
 		{
 			m_PlayerMySelf.iWeight = pkt.read<uint32_t>();
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_WEIGHT_CHANGE: %d\n", m_PlayerMySelf.iWeight);
-#endif
 		}
 		break;
 
@@ -3769,10 +3454,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			uint16_t iDurability = pkt.read<uint16_t>();
 
 			m_PlayerMySelf.tInventory[iPos].iDurability = iDurability;
-
-#ifdef DEBUG
-			printf("RecvProcess::WIZ_DURATION: %d,%d\n", iPos, iDurability);
-#endif
 		}
 		break;
 
@@ -3788,58 +3469,40 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			switch (iType)
 			{
-			case 0x01:
-			{
-				m_PlayerMySelf.iStrength = (uint8_t)iVal;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: STR %d\n", iVal);
-#endif
-			}
-			break;
+				case 0x01:
+				{
+					m_PlayerMySelf.iStrength = (uint8_t)iVal;
+				}
+				break;
 
-			case 0x02:
-			{
-				m_PlayerMySelf.iStamina = (uint8_t)iVal;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: HP %d\n", iVal);
-#endif
-			}
-			break;
+				case 0x02:
+				{
+					m_PlayerMySelf.iStamina = (uint8_t)iVal;
+				}
+				break;
 
-			case 0x03:
-			{
-				m_PlayerMySelf.iDexterity = (uint8_t)iVal;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: DEX %d\n", iVal);
-#endif
-			}
-			break;
+				case 0x03:
+				{
+					m_PlayerMySelf.iDexterity = (uint8_t)iVal;
+				}
+				break;
 
-			case 0x04:
-			{
-				m_PlayerMySelf.iIntelligence = (uint8_t)iVal;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: INT %d\n", iVal);
-#endif
-			}
-			break;
+				case 0x04:
+				{
+					m_PlayerMySelf.iIntelligence = (uint8_t)iVal;
+				}
+				break;
 
-			case 0x05:
-			{
-				m_PlayerMySelf.iMagicAttak = (uint8_t)iVal;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: MP %d\n", iVal);
-#endif
-			}
-			break;
+				case 0x05:
+				{
+					m_PlayerMySelf.iMagicAttak = (uint8_t)iVal;
+				}
+				break;
 			}
 
 			if (iType >= 1 && iType <= 5)
 			{
 				m_PlayerMySelf.iBonusPointRemain--;
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_POINT_CHANGE: POINT %d\n", m_PlayerMySelf.iBonusPointRemain);
-#endif
 			}
 		}
 		break;
@@ -3850,29 +3513,23 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 
 			switch (iResult)
 			{
-			case 0x00:
-			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_REMOVE: 0\n");
-#endif
-			}
-			break;
+				case 0x00:
+				{
+				}
+				break;
 
-			case 0x01:
-			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_REMOVE: 1\n");
-#endif
-			}
-			break;
+				case 0x01:
+				{
+				}
+				break;
 
-			default:
-			{
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_REMOVE: %d Result Not Implemented\n", iResult);
+				default:
+				{
+#ifdef DEBUG_LOG
+					Print("WIZ_ITEM_REMOVE | %d Result Not Implemented", iResult);
 #endif
-			}
-			break;
+				}
+				break;
 			}
 		}
 		break;
@@ -3898,20 +3555,6 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 				m_PlayerMySelf.tInventory[14 + iIndex].iDurability = iDurability;
 				m_PlayerMySelf.tInventory[14 + iIndex].iSerial = iSerial;
 				m_PlayerMySelf.tInventory[14 + iIndex].iExpirationTime = iExpirationTime;
-
-#ifdef DEBUG
-				printf("RecvProcess::WIZ_ITEM_COUNT_CHANGE: %d,%d,%d,%d,%d,%d,%d,%d,%d\n",
-					iDistrict,
-					iIndex,
-					iID,
-					iCount,
-					iNewItem,
-					iNewItem,
-					iDurability,
-					iSerial,
-					iExpirationTime);
-#endif
-
 			}
 		}
 		break;
@@ -4801,10 +4444,8 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 	Packet pkt = Packet(byBuffer[0], (size_t)iLength);
 	pkt.append(&byBuffer[1], iLength - 1);
 
-#ifdef DEBUG
 #ifdef PRINT_SEND_PACKET
-	printf("SendProcess: %s\n", pkt.convertToHex().c_str());
-#endif
+	Print("SendProcess: %s", pkt.convertToHex().c_str());
 #endif
 
 	uint8_t iHeader;
@@ -4815,9 +4456,6 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 	{
 		case WIZ_HOME:
 		{
-#ifdef DEBUG
-			printf("SendProcess::WIZ_HOME\n");
-#endif
 			m_vecLootList.clear();
 
 			if (!IsRouting())
@@ -4885,27 +4523,18 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 							break;
 
 						default:
-	#ifdef DEBUG
-							printf("SendProcess::WIZ_ITEM_MOVE: Direction %d not implemented\n", iDirection);
-	#endif
+#ifdef DEBUG_LOG
+							Print("WIZ_ITEM_MOVE | Direction %d not implemented", iDirection);
+#endif
 							break;
 					}
-
-#ifdef DEBUG
-					printf("SendProcess::WIZ_ITEM_MOVE: iDirection(%d), iItemID(%d), iCurrentPosition(%d), iTargetPosition(%d)\n",
-						iDirection,
-						iItemID,
-						iCurrentPosition,
-						iTargetPosition
-					);
-#endif
 				}
 				break;
 
 				default:
 				{
-#ifdef DEBUG
-					printf("SendProcess::WIZ_ITEM_MOVE: Type %d not implemented\n", iType);
+#ifdef DEBUG_LOG
+					Print("WIZ_ITEM_MOVE | Type %d not implemented", iType);
 #endif
 				}
 				break;
@@ -4965,19 +4594,12 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 			int iType = pkt.read<uint8_t>();
 
 			LoadSkillData();
-
-#ifdef DEBUG
-			printf("SendProcess::WIZ_SKILLPT_CHANGE: %d\n", iType);
-#endif
 		}
 		break;
 
 		case WIZ_ATTACK:
 		{
-#ifdef DEBUG
-			printf("SendProcess::WIZ_ATTACK\n");
-#endif
-			m_fAttackTimeRecent = Bot::TimeGet();
+			m_fAttackTimeRecent = TimeGet();
 		}
 		break;
 
@@ -5046,19 +4668,12 @@ void ClientHandler::SendProcess(BYTE* byBuffer, DWORD iLength)
 			}
 		}
 		break;
-
-		case WIZ_MOVE:
-		{
-		}
-		break;
 	}
 }
 
-bool ClientHandler::SolveCaptcha(std::vector<uint8_t> vecImageBuffer)
+void ClientHandler::SolveCaptcha(std::vector<uint8_t> vecImageBuffer)
 {
 	m_Bot->SendCaptcha(vecImageBuffer);
-
-	return true;
 }
 
 TNpc ClientHandler::InitializeNpc(Packet& pkt)
@@ -5266,80 +4881,58 @@ void ClientHandler::SetLoginInformation(std::string szAccountId, std::string szP
 
 void ClientHandler::LoadSkillData()
 {
-#ifdef DEBUG
-	printf("Client::LoadSkillData: Start Load Character Skill Data\n");
-#endif
-
 	m_vecAvailableSkill.clear();
 
 	std::map<uint32_t, __TABLE_UPC_SKILL>* pSkillTable;
 	if (!m_Bot->GetSkillTable(&pSkillTable))
 		return;
 
-	bool bEnableTournamentSkills = false;
-
-#ifdef FEATURE_TOURNAMENT_SKILLS
-	bEnableTournamentSkills = true;
-#endif
-
 	for (const auto& [key, value] : *pSkillTable)
 	{
-		if ((bEnableTournamentSkills
-			&& (value.iID != 490803 
-				&& value.iID != 490811 
-				&& value.iID != 490808 
-				&& value.iID != 490809 
-				&& value.iID != 490810 
-				&& value.iID != 490800 
-				&& value.iID != 490801
-				&& value.iID != 490817))
-			|| !bEnableTournamentSkills)
+		if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(m_PlayerMySelf.eClass)))
+			continue;
+
+		if (value.iTarget != SkillTargetType::TARGET_SELF
+			&& value.iTarget != SkillTargetType::TARGET_PARTY
+			&& value.iTarget != SkillTargetType::TARGET_PARTY_ALL
+			&& value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME
+			&& value.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
+			&& value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY
+			&& value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+			continue;
+
+		if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
+			continue;
+
+		if (value.dwNeedItem == 811071000) //New Emotes
+			continue;
+
+		switch (value.iNeedSkill % 10)
 		{
-			if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(m_PlayerMySelf.eClass)))
+		case 0:
+			if (value.iNeedLevel > m_PlayerMySelf.iLevel)
 				continue;
+			break;
 
-			if (value.iTarget != SkillTargetType::TARGET_SELF 
-				&& value.iTarget != SkillTargetType::TARGET_PARTY 
-				&& value.iTarget != SkillTargetType::TARGET_PARTY_ALL 
-				&& value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME 
-				&& value.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
-				&& value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY 
-				&& value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+		case 5:
+			if (value.iNeedLevel > GetSkillPoint(0))
 				continue;
-		
-				if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
-					continue;
+			break;
 
-				if (value.dwNeedItem == 811071000) //New Emotes
-					continue;
+		case 6:
+			if (value.iNeedLevel > GetSkillPoint(1))
+				continue;
+			break;
 
-				switch (value.iNeedSkill % 10)
-				{
-					case 0:
-						if (value.iNeedLevel > m_PlayerMySelf.iLevel)
-							continue;
-						break;
+		case 7:
+			if (value.iNeedLevel > GetSkillPoint(2))
+				continue;
+			break;
 
-					case 5:
-						if (value.iNeedLevel > GetSkillPoint(0))
-							continue;
-						break;
-
-					case 6:
-						if (value.iNeedLevel > GetSkillPoint(1))
-							continue;
-						break;
-
-					case 7:
-						if (value.iNeedLevel > GetSkillPoint(2))
-							continue;
-						break;
-
-					case 8:
-						if (value.iNeedLevel > GetSkillPoint(3))
-							continue;
-						break;
-				}
+		case 8:
+			if (value.iNeedLevel > GetSkillPoint(3))
+				continue;
+			break;
 		}
 
 		m_vecAvailableSkill.push_back(value);
@@ -5350,7 +4943,7 @@ void ClientHandler::MoveToTargetProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastMoveToTargetProcessTime + (150.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastMoveToTargetProcessTime + (150.0f / 1000.0f)))
 			return;
 
 		if (!m_bAttackStatus)
@@ -5466,12 +5059,12 @@ void ClientHandler::MoveToTargetProcess()
 			}
 		}
 
-		m_fLastMoveToTargetProcessTime = Bot::TimeGet();
+		m_fLastMoveToTargetProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("MoveToTargetProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -5586,7 +5179,7 @@ void ClientHandler::BasicAttackProcess()
 		{
 			float fAttackInterval = fBasicAttackIntervalTable;
 
-			if (Bot::TimeGet() > m_fAttackTimeRecent + fAttackInterval)
+			if (TimeGet() > m_fAttackTimeRecent + fAttackInterval)
 			{
 				if (m_bBasicAttackWithPacket)
 				{
@@ -5601,8 +5194,8 @@ void ClientHandler::BasicAttackProcess()
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("BasicAttackPacketProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -5617,13 +5210,13 @@ void ClientHandler::AttackProcess()
 		{
 			if (m_iAttackSpeedValue > 0)
 			{
-				if (Bot::TimeGet() < (m_fLastAttackTime + (m_iAttackSpeedValue / 1000.0f)))
+				if (TimeGet() < (m_fLastAttackTime + (m_iAttackSpeedValue / 1000.0f)))
 					return;
 			}
 		}
 		else 
 		{
-			if (Bot::TimeGet() < (m_fLastAttackTime + (1000 / 1000.0f)))
+			if (TimeGet() < (m_fLastAttackTime + (1000 / 1000.0f)))
 				return;
 		}
 
@@ -5743,7 +5336,7 @@ void ClientHandler::AttackProcess()
 				if (IsSkillHasZoneLimit(iSkillID))
 					continue;
 
-				float fCurrentTime = Bot::TimeGet();
+				float fCurrentTime = TimeGet();
 				float fSkillNextUseTime = GetSkillNextUseTime(iSkillID);
 
 				if (fCurrentTime < fSkillNextUseTime)
@@ -5908,12 +5501,12 @@ void ClientHandler::AttackProcess()
 			m_qAttackSkillQueue.pop();
 		}
 
-		m_fLastAttackTime = Bot::TimeGet();
+		m_fLastAttackTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("AttackProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -5928,13 +5521,13 @@ void ClientHandler::SearchTargetProcess()
 		{
 			if (m_iSearchTargetSpeedValue > 0)
 			{
-				if (Bot::TimeGet() < (m_fLastSearchTargetTime + (m_iSearchTargetSpeedValue / 1000.0f)))
+				if (TimeGet() < (m_fLastSearchTargetTime + (m_iSearchTargetSpeedValue / 1000.0f)))
 					return;
 			}
 		}
 		else
 		{
-			if (Bot::TimeGet() < (m_fLastSearchTargetTime + (100.0f / 1000.0f)))
+			if (TimeGet() < (m_fLastSearchTargetTime + (100.0f / 1000.0f)))
 				return;
 		}
 
@@ -6068,12 +5661,12 @@ void ClientHandler::SearchTargetProcess()
 			}
 		}
 
-		m_fLastSearchTargetTime = Bot::TimeGet();
+		m_fLastSearchTargetTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("SearchTargetProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6084,7 +5677,7 @@ void ClientHandler::AutoLootProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastAutoLootProcessTime + (100.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastAutoLootProcessTime + (100.0f / 1000.0f)))
 			return;
 
 		if (!m_bAutoLoot)
@@ -6111,7 +5704,7 @@ void ClientHandler::AutoLootProcess()
 			[&](const TLoot& c)
 			{
 				return 
-					(Bot::TimeGet() - c.fDropTime < 30000.0f / 1000.0f && Bot::TimeGet() - c.fDropTime > 1000.0f / 1000.0f);
+					(TimeGet() - c.fDropTime < 30000.0f / 1000.0f && TimeGet() - c.fDropTime > 1000.0f / 1000.0f);
 			});
 
 		if (vecFilteredLoot.size() == 0)
@@ -6157,19 +5750,19 @@ void ClientHandler::AutoLootProcess()
 		}
 		else
 		{
-			if (Bot::TimeGet() > (m_fLastAutoLootBundleOpenTime + (200.0f / 1000.0f)))
+			if (TimeGet() > (m_fLastAutoLootBundleOpenTime + (200.0f / 1000.0f)))
 			{
 				SendRequestBundleOpen(pFindedLoot.iBundleID);
-				m_fLastAutoLootBundleOpenTime = Bot::TimeGet();
+				m_fLastAutoLootBundleOpenTime = TimeGet();
 			}
 		}
 
-		m_fLastAutoLootProcessTime = Bot::TimeGet();
+		m_fLastAutoLootProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("AutoLootProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6180,7 +5773,7 @@ void ClientHandler::MinorProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastMinorProcessTime + (500.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastMinorProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (!m_bCharacterStatus)
@@ -6225,13 +5818,13 @@ void ClientHandler::MinorProcess()
 				UseSkill(*it, m_PlayerMySelf.iID, 1);
 			}
 
-			m_fLastMinorProcessTime = Bot::TimeGet();
+			m_fLastMinorProcessTime = TimeGet();
 		}
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("MinorProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6242,7 +5835,7 @@ void ClientHandler::PotionProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastPotionProcessTime + (500.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastPotionProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (!m_bCharacterStatus)
@@ -6283,12 +5876,12 @@ void ClientHandler::PotionProcess()
 			}
 		}
 
-		m_fLastPotionProcessTime = Bot::TimeGet();
+		m_fLastPotionProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("PotionProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6299,7 +5892,7 @@ void ClientHandler::MagicHammerProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastMagicHammerProcessTime + (5000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastMagicHammerProcessTime + (5000.0f / 1000.0f)))
 			return;
 
 		if (!m_bAutoRepairMagicHammer)
@@ -6343,12 +5936,12 @@ void ClientHandler::MagicHammerProcess()
 			}
 		}
 
-		m_fLastMagicHammerProcessTime = Bot::TimeGet();
+		m_fLastMagicHammerProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("MagicHammerProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6359,7 +5952,7 @@ void ClientHandler::SpeedHackProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastSpeedHackProcessTime + (500.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastSpeedHackProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (!m_bSpeedHack)
@@ -6389,12 +5982,12 @@ void ClientHandler::SpeedHackProcess()
 			SendMovePacket(vecMoveCoordinate, vecMoveCoordinate, 45, GetMoveState());
 		}
 
-		m_fLastSpeedHackProcessTime = Bot::TimeGet();
+		m_fLastSpeedHackProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("SpeedHackProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6405,7 +5998,7 @@ void ClientHandler::TransformationProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastTransformationProcessTime + (5000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastTransformationProcessTime + (5000.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -6516,12 +6109,12 @@ void ClientHandler::TransformationProcess()
 			}
 		}
 
-		m_fLastTransformationProcessTime = Bot::TimeGet();
+		m_fLastTransformationProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("TransformationProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6541,7 +6134,7 @@ void ClientHandler::FlashProcess()
 		if (m_PlayerMySelf.eState == PSA_DEATH)
 			return;
 
-		if (Bot::TimeGet() < (m_fLastFlashProcessTime + (500.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastFlashProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (m_bAttackStatus || m_bCharacterStatus)
@@ -6580,12 +6173,12 @@ void ClientHandler::FlashProcess()
 			}
 		}
 
-		m_fLastFlashProcessTime = Bot::TimeGet();
+		m_fLastFlashProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("FlashProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6596,7 +6189,7 @@ void ClientHandler::RegionProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastRegionProcessTime + (500.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastRegionProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -6612,33 +6205,31 @@ void ClientHandler::RegionProcess()
 			&& m_bStartGenieIfUserInRegion
 			&& (m_bAttackStatus || m_bCharacterStatus))
 		{
-			std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-				std::chrono::system_clock::now().time_since_epoch()
-			);
+			float fTimeNow = TimeGet();
 
 			if (GetRegionUserCount(true, (float)m_iStartGenieIfUserInRegionMeter) > 0
-				&& m_msLastGenieStartTime == std::chrono::milliseconds(0))
+				&& m_fLastGenieStartTime == 0.0f)
 			{
 				SendStartGenie();
 
-				m_msLastGenieStartTime = msNow;
+				m_fLastGenieStartTime = fTimeNow;
 			}
 			else if (GetRegionUserCount(true, (float)m_iStartGenieIfUserInRegionMeter) == 0
-				&& m_msLastGenieStartTime != std::chrono::milliseconds(0)
-				&& (m_msLastGenieStartTime.count() + 180000) < msNow.count())
+				&& m_fLastGenieStartTime != 0.0f
+				&& TimeGet() > (m_fLastGenieStartTime + (180000.0f / 1000.0f)))
 			{
 				SendStopGenie();
 
-				m_msLastGenieStartTime = std::chrono::milliseconds(0);
+				m_fLastGenieStartTime = 0.0f;
 			}
 		}
 
-		m_fLastRegionProcessTime = Bot::TimeGet();
+		m_fLastRegionProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("RegionProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6681,8 +6272,8 @@ void ClientHandler::RouteRecorderProcess()
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("RouteRecorderProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -6693,7 +6284,7 @@ void ClientHandler::CharacterProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastCharacterProcessTime + (300.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastCharacterProcessTime + (300.0f / 1000.0f)))
 			return;
 
 		if (!m_bCharacterStatus)
@@ -6751,7 +6342,7 @@ void ClientHandler::CharacterProcess()
 				if (IsSkillHasZoneLimit(iSkillID))
 					return false;
 
-				float fCurrentTime = Bot::TimeGet();
+				float fCurrentTime = TimeGet();
 				float fSkillNextUseTime = GetSkillNextUseTime(iSkillID);
 
 				if (fCurrentTime < fSkillNextUseTime)
@@ -7025,12 +6616,12 @@ void ClientHandler::CharacterProcess()
 			}
 		}
 
-		m_fLastCharacterProcessTime = Bot::TimeGet();
+		m_fLastCharacterProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("CharacterProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -7121,7 +6712,7 @@ void ClientHandler::RouteProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastRouteProcessTime + (100.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastRouteProcessTime + (100.0f / 1000.0f)))
 			return;
 
 		if (m_vecRouteActive.size() == 0)
@@ -7141,7 +6732,7 @@ void ClientHandler::RouteProcess()
 
 		m_pCurrentRunningRoute = &m_vecRouteActive.front();
 
-		m_fLastRouteProcessTime = Bot::TimeGet();
+		m_fLastRouteProcessTime = TimeGet();
 
 		switch (m_pCurrentRunningRoute->eStepType)
 		{
@@ -7519,13 +7110,13 @@ void ClientHandler::RouteProcess()
 		if (m_vecRouteActive.size() == 0)
 		{
 			m_pCurrentRunningRoute = nullptr;
-			m_fLastSupplyTime = Bot::TimeGet();
+			m_fLastSupplyTime = TimeGet();
 		}
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("RouteProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -7536,10 +7127,10 @@ void ClientHandler::SupplyProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastSupplyProcessTime + (1000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastSupplyProcessTime + (1000.0f / 1000.0f)))
 			return;
 
-		if (Bot::TimeGet() < (m_fLastSupplyTime + ((60000.0f * 5.0f) / 1000.0f)))
+		if (TimeGet() < (m_fLastSupplyTime + ((60000.0f * 5.0f) / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -7581,11 +7172,11 @@ void ClientHandler::SupplyProcess()
 				|| (!m_bVIPSellSupply && IsInventoryFull() && bNeedSell) 
 				|| (m_bVIPSellSupply && m_bVipWarehouseFull && IsInventoryFull() && bNeedSell))
 			{
-				Bot::RouteList pRouteList;
+				RouteList pRouteList;
 
 				uint8_t iZoneID = GetRepresentZone(GetZone());
 
-				if (m_Bot->GetRouteList(iZoneID, pRouteList))
+				if (GetRouteList(iZoneID, pRouteList))
 				{
 					std::srand((unsigned int)std::time(0));
 
@@ -7603,12 +7194,12 @@ void ClientHandler::SupplyProcess()
 			}
 		}
 
-		m_fLastSupplyProcessTime = Bot::TimeGet();
+		m_fLastSupplyProcessTime = TimeGet();
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("SupplyProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -7619,7 +7210,7 @@ void ClientHandler::StatisticsProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastStatisticsProcessTime + (60000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastStatisticsProcessTime + (60000.0f / 1000.0f)))
 			return;
 
 		m_iEveryMinuteCoinPrevCounter = m_iEveryMinuteCoinCounter;
@@ -7628,13 +7219,13 @@ void ClientHandler::StatisticsProcess()
 		m_iEveryMinuteExpPrevCounter = m_iEveryMinuteExpCounter;
 		m_iEveryMinuteExpCounter = m_iExpCounter;
 
-		m_fLastStatisticsProcessTime = Bot::TimeGet();
+		m_fLastStatisticsProcessTime = TimeGet();
 		
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("StatisticsProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -7645,7 +7236,7 @@ void ClientHandler::RemoveItemProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastRemoveItemProcessTime + (45000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastRemoveItemProcessTime + (45000.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -7698,25 +7289,24 @@ void ClientHandler::RemoveItemProcess()
 			}
 		}
 
-		m_fLastRemoveItemProcessTime = Bot::TimeGet();
+		m_fLastRemoveItemProcessTime = TimeGet();
 
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("RemoveItemProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
 	}
 }
 
-
 void ClientHandler::VIPStorageSupplyProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastVIPStorageSupplyProcessTime + (15000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastVIPStorageSupplyProcessTime + (15000.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -7892,13 +7482,13 @@ void ClientHandler::VIPStorageSupplyProcess()
 			}
 		});
 
-		m_fLastVIPStorageSupplyProcessTime = Bot::TimeGet();
+		m_fLastVIPStorageSupplyProcessTime = TimeGet();
 
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("VIPStorageSupplyProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -7909,7 +7499,7 @@ void ClientHandler::LevelDownerProcess()
 {
 	try
 	{
-		if (Bot::TimeGet() < (m_fLastLevelDownerProcessTime + (500.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastLevelDownerProcessTime + (500.0f / 1000.0f)))
 			return;
 
 		if (IsZoneChanging())
@@ -7950,13 +7540,13 @@ void ClientHandler::LevelDownerProcess()
 			SendPacket(pkt);
 		}
 
-		m_fLastLevelDownerProcessTime = Bot::TimeGet();
+		m_fLastLevelDownerProcessTime = TimeGet();
 
 	}
 	catch (const std::exception& e)
 	{
-#ifdef DEBUG
-		printf("StatisticsProcess:Exception: %s\n", e.what());
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
 #else
 		UNREFERENCED_PARAMETER(e);
 #endif
@@ -8210,7 +7800,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 				if (pSkillExtension4Data->second.iBuffType == BUFF_TYPE_HP_MP)
 				{
 					if (pMember.fHpBuffTime > 0
-						&& Bot::TimeGet() < pMember.fHpBuffTime + (fBuffDuration / 1000.0f))
+						&& TimeGet() < pMember.fHpBuffTime + (fBuffDuration / 1000.0f))
 					{
 						continue;
 					}
@@ -8219,7 +7809,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 				if (pSkillExtension4Data->second.iBuffType == BUFF_TYPE_AC)
 				{
 					if (pMember.fACBuffTime > 0
-						&& Bot::TimeGet() < pMember.fACBuffTime + (fBuffDuration / 1000.0f))
+						&& TimeGet() < pMember.fACBuffTime + (fBuffDuration / 1000.0f))
 					{
 						continue;
 					}
@@ -8228,7 +7818,7 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 				if (pSkillExtension4Data->second.iBuffType == BUFF_TYPE_RESISTANCES)
 				{
 					if (pMember.fMindBuffTime > 0
-						&& Bot::TimeGet() < pMember.fMindBuffTime + (fBuffDuration / 1000.0f))
+						&& TimeGet() < pMember.fMindBuffTime + (fBuffDuration / 1000.0f))
 					{
 						continue;
 					}
@@ -8268,34 +7858,6 @@ int32_t ClientHandler::PartyMemberNeedBuff(uint32_t iSkillBaseID)
 	}
 
 	return -1;
-}
-
-
-bool ClientHandler::IsSkillHasZoneLimit(uint32_t iSkillBaseID)
-{
-	int iZoneIndex = m_PlayerMySelf.iCity;
-
-	switch (iSkillBaseID)
-	{
-		case 490803:
-		case 490811:
-		case 490808:
-		case 490809:
-		case 490810:
-		case 490800:
-		case 490801:
-		case 490817:
-		{
-			if (iZoneIndex == ZONE_DRAKI_TOWER ||
-				iZoneIndex == ZONE_MONSTER_STONE1 ||
-				iZoneIndex == ZONE_MONSTER_STONE2 ||
-				iZoneIndex == ZONE_MONSTER_STONE3)
-				return true;
-		}
-		break;
-	}
-
-	return false;
 }
 
 bool ClientHandler::UseSkill(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, int32_t iPriority, bool bWaitCastTime)
@@ -8438,4 +8000,84 @@ bool ClientHandler::IsNeedRepair()
 	}
 
 	return false;
+}
+
+bool ClientHandler::GetRouteList(uint8_t iMapIndex, RouteList& pRouteList)
+{
+	auto pRouteData = m_mapRouteList.find(iMapIndex);
+
+	if (pRouteData == m_mapRouteList.end())
+		return false;
+
+	pRouteList = pRouteData->second;
+
+	return true;
+}
+
+void ClientHandler::SaveRoute(std::string szRouteName, uint8_t iMapIndex, std::vector<Route> vecRoute)
+{
+	try
+	{
+		JSON jRouteData;
+
+		std::string szNameAttribute = skCryptDec("name");
+		jRouteData[szNameAttribute.c_str()] = szRouteName;
+		std::string szIndexAttribute = skCryptDec("index");
+		jRouteData[szIndexAttribute.c_str()] = iMapIndex;
+
+		for (auto& e : vecRoute)
+		{
+			JSON jRoute;
+
+			std::string szXAttribute = skCryptDec("x");
+			std::string szYAttribute = skCryptDec("y");
+			std::string szStepTypeAttribute = skCryptDec("steptype");
+			std::string szPacketAttribute = skCryptDec("packet");
+
+			jRoute[szXAttribute.c_str()] = e.fX;
+			jRoute[szYAttribute.c_str()] = e.fY;
+			jRoute[szStepTypeAttribute.c_str()] = e.eStepType;
+			jRoute[szPacketAttribute.c_str()] = e.szPacket;
+
+			std::string szStepListAttribute = skCryptDec("steplist");
+			jRouteData[szStepListAttribute.c_str()].push_back(jRoute);
+		}
+
+		m_Bot->SendRouteSaveRequest(szRouteName, jRouteData);
+
+		auto pRouteData = m_mapRouteList.find(iMapIndex);
+
+		if (pRouteData != m_mapRouteList.end())
+		{
+			pRouteData->second.insert(std::make_pair(jRouteData[szNameAttribute.c_str()].get<std::string>(), vecRoute));
+		}
+		else
+		{
+			m_mapRouteList.insert(std::make_pair(iMapIndex, std::map<std::string, std::vector<Route>> {
+				std::make_pair(jRouteData[szNameAttribute.c_str()].get<std::string>(), vecRoute)
+			}));
+		}
+	}
+	catch (const std::exception& e)
+	{
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
+#endif
+	}
+}
+
+void ClientHandler::DeleteRoute(std::string szRouteName, uint8_t iMapIndex)
+{
+	auto& inner = m_mapRouteList[iMapIndex];
+	const auto it = inner.find(szRouteName);
+
+	if (it != inner.end())
+	{
+		inner.erase(it);
+
+		if (inner.size() == 0)
+			m_mapRouteList.erase(iMapIndex);
+	}
 }

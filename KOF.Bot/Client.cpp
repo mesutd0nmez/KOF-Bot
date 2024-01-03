@@ -43,32 +43,20 @@ void Client::Clear()
 	m_vecRegionUserList.clear();
 
 	m_fAttackDelta = 1.0f;
-	m_fAttackTimeRecent = Bot::TimeGet();
+	m_fAttackTimeRecent = TimeGet();
 
-	m_msLastGenieStartTime = std::chrono::milliseconds(0);
+	m_fLastGenieStartTime = 0.0f;
 
 	m_iFlashCount = 0;
 
 	m_bVipWarehouseInitialized = false;
 	m_bVipWarehouseEnabled = false;
 
-	m_msLastDisconnectTime = std::chrono::milliseconds(0);
+	m_fLastDisconnectTime = 0.0f;
 
 	m_bSkillCasting = false;
 
 	m_bVipWarehouseFull = false;
-}
-
-Ini* Client::GetUserConfiguration()
-{
-	if (!m_Bot) return nullptr;
-	return m_Bot->GetUserConfiguration();
-}
-
-Ini* Client::GetAppConfiguration()
-{
-	if (!m_Bot) return nullptr;
-	return m_Bot->GetAppConfiguration();
 }
 
 int32_t Client::GetID(DWORD iBase)
@@ -982,7 +970,7 @@ void Client::BasicAttack()
 
 	m_Bot->SendInternalMailslot(pkt);
 
-	m_fAttackTimeRecent = Bot::TimeGet();
+	m_fAttackTimeRecent = TimeGet();
 }
 
 void Client::BasicAttackWithPacket(DWORD iTargetID, float fAttackInterval)
@@ -1006,7 +994,7 @@ void Client::BasicAttackWithPacket(DWORD iTargetID, float fAttackInterval)
 	SendBasicAttackPacket(iTargetID, fAttackInterval, fDistanceExceptRadius);*/
 	SendBasicAttackPacket(iTargetID, fAttackInterval, 0.2f);
 
-	m_fAttackTimeRecent = Bot::TimeGet();
+	m_fAttackTimeRecent = TimeGet();
 }
 
 DWORD Client::GetSkillBase(uint32_t iSkillID)
@@ -1249,7 +1237,7 @@ void Client::SendPacket(std::string szPacket)
 {
 	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
 
-	std::vector<uint8_t> vecPacketByte = fromHexString(szPacket);
+	std::vector<uint8_t> vecPacketByte = FromHexString(szPacket);
 
 	LPVOID pPacketAddress = VirtualAllocEx(hProcess, nullptr, vecPacketByte.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -1318,7 +1306,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 
 				SendStartSkillCastingAtTargetPacket(pSkillData, iTargetID);
 
-				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iReCastTime * 100.0f) / 1000.0f));
+				SetSkillNextUseTime(pSkillData.iID, TimeGet() + ((pSkillData.iReCastTime * 100.0f) / 1000.0f));
 
 				if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
 				{
@@ -1388,7 +1376,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 
 			if (pSkillData.iCooldown > 0)
 			{
-				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
+				SetSkillNextUseTime(pSkillData.iID, TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
 			}
 			else
 			{
@@ -1412,7 +1400,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 
 				SendStartSkillCastingAtPosPacket(pSkillData, v3TargetPosition);
 
-				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iReCastTime * 100.0f) / 1000.0f));	
+				SetSkillNextUseTime(pSkillData.iID, TimeGet() + ((pSkillData.iReCastTime * 100.0f) / 1000.0f));	
 
 				if (bWaitCastTime || (pSkillData.dw1stTableType == 3 || pSkillData.dw1stTableType == 4))
 				{
@@ -1430,7 +1418,7 @@ void Client::UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, b
 
 			if (pSkillData.iCooldown > 0)
 			{
-				SetSkillNextUseTime(pSkillData.iID, Bot::TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
+				SetSkillNextUseTime(pSkillData.iID, TimeGet() + ((pSkillData.iCooldown * 100.0f) / 1000.0f));
 			}
 			else
 			{
@@ -3192,4 +3180,31 @@ void Client::EquipItem(DWORD iItemBase, int32_t iSourcePosition, int32_t iTarget
 
 	VirtualFreeEx(hProcess, pMouseInputPatchAddress, 0, MEM_RELEASE);
 	VirtualFreeEx(hProcess, pCallReturnAddress, 0, MEM_RELEASE);
+}
+
+bool Client::IsSkillHasZoneLimit(uint32_t iSkillBaseID)
+{
+	int iZoneIndex = m_PlayerMySelf.iCity;
+
+	switch (iSkillBaseID)
+	{
+	case 490803:
+	case 490811:
+	case 490808:
+	case 490809:
+	case 490810:
+	case 490800:
+	case 490801:
+	case 490817:
+	{
+		if (iZoneIndex == ZONE_DRAKI_TOWER ||
+			iZoneIndex == ZONE_MONSTER_STONE1 ||
+			iZoneIndex == ZONE_MONSTER_STONE2 ||
+			iZoneIndex == ZONE_MONSTER_STONE3)
+			return true;
+	}
+	break;
+	}
+
+	return false;
 }

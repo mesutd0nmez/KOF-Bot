@@ -86,10 +86,6 @@ public:
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
 
 protected:
-	Ini* GetUserConfiguration();
-	Ini* GetAppConfiguration();
-
-protected:
 	Bot* m_Bot;
 
 public:
@@ -199,7 +195,6 @@ public:
 	void SendWarehouseOpen(uint32_t iNpcID);
 	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 	void SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
-	int32_t GetWarehouseItemCount(uint32_t iItemID);
 	int32_t GetWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
 
 public:
@@ -241,7 +236,7 @@ public:
 	void PatchObjectCollision(bool bEnable);
 
 protected:
-	std::chrono::milliseconds m_msLastGenieStartTime;
+	float m_fLastGenieStartTime;
 
 public:
 	void SendRearrangeInventory();
@@ -249,8 +244,6 @@ public:
 public:
 	void SendOpenVipWarehouse(uint32_t iItemID = 0);
 	void SendVipWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint16_t iCount);
-	int32_t GetVipWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
-	int32_t GetVipWarehouseItemCount(uint32_t iItemID);
 
 	bool GetVipWarehouseItemList(std::vector<TItemData>& vecItemList);
 	bool GetVipWarehouseInventoryItemList(std::vector<TItemData>& vecItemList);
@@ -300,7 +293,7 @@ public:
 	void SendSelectMessage(uint8_t iMenuIndex, std::string szLuaName, bool bAccept = false);
 
 public:
-	std::chrono::milliseconds m_msLastDisconnectTime;
+	float m_fLastDisconnectTime;
 
 protected:
 	bool m_bSkillCasting;
@@ -318,4 +311,7 @@ public:
 public:
 	bool IsInventoryFull() { return GetInventoryEmptySlotCount() == 0; };
 	int GetInventoryEmptySlotCount();
+
+protected:
+	bool IsSkillHasZoneLimit(uint32_t iSkillBaseID);
 };

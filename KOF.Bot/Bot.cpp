@@ -5,11 +5,15 @@
 #include "Memory.h"
 #include "Remap.h"
 #include "HardwareInformation.h"
+#include "Drawing.h"
+#include "Injector.h"
 
-Bot::Bot()
+Bot::Bot(HardwareInformation* pHardwareInformation)
 {
-	m_ClientHandler = nullptr;
+	m_pHardwareInformation = pHardwareInformation;
+	m_pClientHandler = nullptr;
 
+	m_bTableLoading = false;
 	m_bTableLoaded = false;
 	m_pTbl_Skill = nullptr;
 	m_pTbl_Skill_Extension2 = nullptr;
@@ -27,12 +31,9 @@ Bot::Bot()
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
-	m_szClientPath = skCryptDec(DEVELOPMENT_PATH);
-	m_szClientExe = skCryptDec(DEVELOPMENT_EXE);
-
-	m_bClosed = false;
-
-	m_msLastInitializeHandle = std::chrono::milliseconds(0);
+	m_szClientPath = skCryptDec(INJECT_PATH);
+	m_szClientExe = skCryptDec(INJECT_EXE);
+	m_ePlatformType = (PlatformType)INJECT_PLATFORM;
 
 	m_bInternalMailslotWorking = false;
 
@@ -43,22 +44,58 @@ Bot::Bot()
 
 	m_bAuthenticated = false;
 
-	m_bUpdate = false;
+	m_bUserSaveRequested = false;
+
+	m_bGameStarting = false;
+
+	m_iniAppConfiguration = nullptr;
+
+	m_bAutoLogin = false;
+	m_bAutoStart = false;
+
+	m_szID = "";
+	m_szPassword = "";
+
+	m_iServerID = 0;
+	m_iChannelID = 0;
+	m_iSlotID = 1;
+
+	m_szAnyOTPID.clear();
+	m_szAnyOTPPassword.clear();
+
+	m_szToken.clear();
+
+	m_fLastPongTime = TimeGet();
+
+	m_iSubscriptionEndAt = 0;
 
 	m_bUserSaveRequested = false;
 
-	m_bOnReady = false;
+	m_isAuthenticationMessage = false;
+	m_szAuthenticationMessage = "";
 
-	m_bStarted = false;
-	m_bForceClosed = false;
+	m_mapAddress.clear();
+
+	m_szOTPHardwareID.clear();
 
 	Initialize();
 }
 
 Bot::~Bot()
 {
-	m_ClientHandler = nullptr;
+	CloseSocket();
 
+	if (m_pClientHandler)
+	{
+		m_pClientHandler->Clear();
+		delete m_pClientHandler;
+	}
+
+	m_pClientHandler = nullptr;
+
+	m_pHardwareInformation = nullptr;
+
+	m_bTableLoading = false;
 	m_bTableLoaded = false;
 
 	m_pTbl_Skill = nullptr;
@@ -77,13 +114,6 @@ Bot::~Bot()
 	m_pTbl_ItemSell = nullptr;
 	m_pTbl_Disguise_Ring = nullptr;
 
-	m_szClientPath.clear();
-	m_szClientExe.clear();
-
-	m_bClosed = true;
-
-	m_msLastInitializeHandle = std::chrono::milliseconds(0);
-
 	m_hInternalMailslot = nullptr;
 	m_bInternalMailslotWorking = false;
 
@@ -91,29 +121,73 @@ Bot::~Bot()
 	m_InjectedProcessInfo = PROCESS_INFORMATION();
 
 	m_bAuthenticated = false;
-	m_bUpdate = false;
 
 	m_bUserSaveRequested = false;
 
-	m_bOnReady = false;
+	m_bGameStarting = false;
 
-	m_bStarted = false;
-	m_bForceClosed = false;
+	if (m_iniAppConfiguration)
+		delete m_iniAppConfiguration;
 
-	Close();
+	m_iniAppConfiguration = nullptr;
+
+	m_bAutoLogin = false;
+	m_bAutoStart = false;
+
+	m_szID = "";
+	m_szPassword = "";
+
+	m_iServerID = 0;
+	m_iChannelID = 0;
+	m_iSlotID = 1;
+
+	m_szAnyOTPID.clear();
+	m_szAnyOTPPassword.clear();
+
+	m_szToken.clear();
+
+	m_fLastPongTime = TimeGet();
+
+	m_iSubscriptionEndAt = 0;
+
+	m_bUserSaveRequested = false;
+
+	m_isAuthenticationMessage = false;
+	m_szAuthenticationMessage = "";
+
+	m_szClientPath = skCryptDec(INJECT_PATH);
+	m_szClientExe = skCryptDec(INJECT_EXE);
+	m_ePlatformType = (PlatformType)INJECT_PLATFORM;
+
+	m_mapAddress.clear();
+
+	m_szOTPHardwareID.clear();
+
+	Release();
 }
 
 void Bot::Initialize()
 {
-#ifdef DEBUG
-	printf("Bot: Initialize\n");
-#endif
+	std::string szIniPath = skCryptDec(".\\Config.ini");
 
-	m_hardwareInfo.LoadHardwareInformation();
+	m_iniAppConfiguration = new Ini();
+	m_iniAppConfiguration->Load(szIniPath.c_str());
+
+	m_szToken = m_iniAppConfiguration->GetString(skCryptDec("Internal"), skCryptDec("Token"), m_szToken.c_str());
+	m_bAutoLogin = m_iniAppConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Login"), m_bAutoLogin);
+	m_bAutoStart = m_iniAppConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Start"), m_bAutoStart);
+
+	m_szID = m_iniAppConfiguration->GetString(skCryptDec("AutoLogin"), skCryptDec("ID"), m_szID.c_str());
+	m_szPassword = m_iniAppConfiguration->GetString(skCryptDec("AutoLogin"), skCryptDec("Password"), m_szPassword.c_str());
+
+	m_iServerID = m_iniAppConfiguration->GetInt(skCryptDec("AutoLogin"), skCryptDec("Server"), m_iServerID);
+	m_iChannelID = m_iniAppConfiguration->GetInt(skCryptDec("AutoLogin"), skCryptDec("Channel"), m_iChannelID);
+	m_iSlotID = m_iniAppConfiguration->GetInt(skCryptDec("AutoLogin"), skCryptDec("Slot"), m_iSlotID);
+
+	m_szAnyOTPID = m_iniAppConfiguration->GetString(skCryptDec("AnyOTP"), skCryptDec("ID"), m_szAnyOTPID.c_str());
+	m_szAnyOTPPassword = m_iniAppConfiguration->GetString(skCryptDec("AnyOTP"), skCryptDec("Password"), m_szAnyOTPPassword.c_str());
 
 	InitializeAnyOTPService();
-
-	m_ePlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
 
 	GetService()->Initialize();
 
@@ -124,125 +198,87 @@ void Bot::Initialize()
 
 void Bot::Process()
 {
-	if (m_bUserSaveRequested)
-	{
-		SendSaveUserConfiguration(GetClientHandler()->GetServerId(), GetClientHandler()->GetName());
-		m_bUserSaveRequested = false;
-	}
-
-	if (m_bInternalMailslotWorking == false)
-	{
-		if (ConnectInternalMailslot())
-		{
-#ifdef DEBUG
-			printf("Bot: Internal Connection Ready\n");
-#endif
-			Packet pkt = Packet(PIPE_LOAD_POINTER);
-
-			pkt << int32_t(m_mapAddress.size());
-
-			for (auto& e : m_mapAddress)
-			{
-				pkt << e.first << e.second;
-			}
-
-			SendInternalMailslot(pkt);
-
-			m_bInternalMailslotWorking = true;
-		}
-	}
-
-	if (m_bAutoLogin && !m_bForceClosed)
-	{
-		if (GetInjectedProcessId() != 0 && IsInjectedProcessLost())
-		{
-#ifdef DEBUG
-			printf("Bot: Auto Login Process Started\n");
+#ifdef VMPROTECT
+	VMProtectBeginMutation("Bot::Process");
 #endif
 
-			PROCESS_INFORMATION botProcessInfo;
-			StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), "", botProcessInfo);
-
-			Close();
-
-			exit(0);
-		}
-	}
-
-	if (m_ClientHandler)
+	if (m_pClientHandler)
 	{
-		m_ClientHandler->Process();
+		if (m_bUserSaveRequested)
+		{
+			SendSaveUserConfiguration(
+				GetClientHandler()->GetServerId(), 
+				GetClientHandler()->GetName(), 
+				m_pClientHandler->m_iniUserConfiguration->Dump(),
+				m_ePlatformType);
+
+			m_bUserSaveRequested = false;
+		}
+
+		m_pClientHandler->Process();
 
 		if (m_bAutoLogin)
 		{
-			if (m_ClientHandler->IsDisconnect())
+			if (m_pClientHandler->IsDisconnect())
 			{
-				if (m_ClientHandler->m_msLastDisconnectTime == std::chrono::milliseconds(0))
+				if (m_pClientHandler->m_fLastDisconnectTime == 0.0f)
 				{
-#ifdef DEBUG
-					printf("Bot: Disconnected, Auto Login Process Starting In 60 Seconds\n");
+#ifdef DEBUG_LOG
+					Print("Disconnected, Auto Login Process Starting In 60 Seconds");
 #endif
 
-					m_ClientHandler->m_msLastDisconnectTime = duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch()
-					);
+					m_pClientHandler->m_fLastDisconnectTime = TimeGet();
 				}
 				else
 				{
-					std::chrono::milliseconds msNow = duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch()
-					);
-
-					if ((m_ClientHandler->m_msLastDisconnectTime.count() + 60000) < msNow.count())
+					if (TimeGet() > (m_pClientHandler->m_fLastDisconnectTime + (60000.0f / 1000.0f)))
 					{
-#ifdef DEBUG
-						printf("Bot: Auto Login Process Started\n");
-#endif
+						if (m_bTableLoading == true)
+						{
+#ifdef DEBUG_LOG
+							Print("Auto Login Process Waiting Static Data Load");
+#endif					
+						}
+						else
+						{
+#ifdef DEBUG_LOG
+							Print("Auto Login Process Started");
+#endif				
+							m_pClientHandler->Clear();
 
-						PROCESS_INFORMATION botProcessInfo;
-						StartProcess(std::filesystem::current_path().string(), skCryptDec("\\Discord.exe"), "", botProcessInfo);
+							delete m_pClientHandler;
+							m_pClientHandler = nullptr;
 
-						Close();
+							m_bInternalMailslotWorking = false;
 
-						exit(0);
-					}
+							Drawing::SetScene(Drawing::LOADER);
+
+							StartGame();
+						}
+					}				
 				}
 			}
 			else
 			{
-				if (m_ClientHandler->m_msLastDisconnectTime != std::chrono::milliseconds(0))
+				if (m_pClientHandler->m_fLastDisconnectTime != 0.0f)
 				{
-#ifdef DEBUG
-					printf("Bot: Auto Login Process Stopped, Connection Return Back\n");
+#ifdef DEBUG_LOG
+					Print("Auto Login Process Stopped, Connection Return Back");
 #endif
 				}
 
-				m_ClientHandler->m_msLastDisconnectTime = std::chrono::milliseconds(0);
+				m_pClientHandler->m_fLastDisconnectTime = 0.0f;
 			}
 		}
 	}
-}
 
-void Bot::Close()
-{
-#ifdef DEBUG
-	printf("Bot: Closing\n");
+#ifdef VMPROTECT
+	VMProtectEnd();
 #endif
-
-	m_bClosed = true;
-
-	if (m_ClientHandler)
-		m_ClientHandler->StopHandler();
-
-	Release();
 }
 
 void Bot::Release()
 {
-#ifdef DEBUG
-	printf("Bot: Release\n");
-#endif
-
 	if (m_pTbl_Skill)
 		m_pTbl_Skill->Release();
 
@@ -273,13 +309,18 @@ void Bot::Release()
 
 ClientHandler* Bot::GetClientHandler()
 {
-	return m_ClientHandler;
+	return m_pClientHandler;
 }
 
 void Bot::InitializeStaticData()
 {
-#ifdef DEBUG
-	printf("InitializeStaticData: Started\n");
+	if (m_bTableLoaded)
+		return;
+
+	m_bTableLoading = true;
+
+#ifdef DEBUG_LOG
+	Print("Started");
 #endif
 
 	std::string szPlatformPrefix = "us";
@@ -289,12 +330,6 @@ void Bot::InitializeStaticData()
 		case PlatformType::CNKO:
 		{
 			szPlatformPrefix = "nc";
-		}
-		break;
-
-		case PlatformType::JPKO:
-		{
-			szPlatformPrefix = "jp";
 		}
 		break;
 
@@ -320,105 +355,77 @@ void Bot::InitializeStaticData()
 	m_pTbl_Skill_Extension4 = new Table<__TABLE_UPC_SKILL_EXTENSION4>();
 	m_pTbl_Skill_Extension4->Load(m_szClientPath + skCryptDec("\\Data\\skill_magic_4.tbl"));
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d skills\n", m_pTbl_Skill->GetDataSize());
-#endif
-
 	m_pTbl_Item = new Table<__TABLE_ITEM>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\item_org_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
 	m_pTbl_Item->Load(szPath);
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d items\n", m_pTbl_Item->GetDataSize());
-#endif
 
 	for (size_t i = 0; i < 45; i++)
 	{
 		m_pTbl_Item_Extension[i] = new Table<__TABLE_ITEM_EXTENSION>();
 		snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\item_ext_%d_%s.tbl"), m_szClientPath.c_str(), i, szPlatformPrefix.c_str());
 		m_pTbl_Item_Extension[i]->Load(szPath);
-#ifdef DEBUG
-		printf("InitializeStaticData: Loaded item extension %d, size %d\n", i, m_pTbl_Item_Extension[i]->GetDataSize());
-#endif
 	}
 
 	m_pTbl_Npc = new Table<__TABLE_NPC>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\npc_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
 	m_pTbl_Npc->Load(szPath);
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d npcs\n", m_pTbl_Npc->GetDataSize());
-#endif
-
 	m_pTbl_Mob = new Table<__TABLE_MOB>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\mob_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
 	m_pTbl_Mob->Load(szPath);
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d mobs\n", m_pTbl_Mob->GetDataSize());
-#endif
-
 	m_pTbl_ItemSell = new Table<__TABLE_ITEM_SELL>();
 	m_pTbl_ItemSell->Load(m_szClientPath + skCryptDec("\\Data\\itemsell_table.tbl"));
-
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d selling item\n", m_pTbl_ItemSell->GetDataSize());
-#endif
 
 	m_pTbl_Disguise_Ring = new Table<__TABLE_DISGUISE_RING>();
 	snprintf(szPath, sizeof(szPath), skCryptDec("%s\\Data\\disguisering_%s.tbl"), m_szClientPath.c_str(), szPlatformPrefix.c_str());
 	m_pTbl_Disguise_Ring->Load(szPath);
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Loaded %d disquise mob\n", m_pTbl_Disguise_Ring->GetDataSize());
+#ifdef DEBUG_LOG
+	Print("Finished");
 #endif
 
-#ifdef DEBUG
-	printf("InitializeStaticData: Finished\n");
-#endif
-
+	m_bTableLoading = false;
 	m_bTableLoaded = true;
 }
 
 void Bot::OnReady()
 {
-#ifdef DEBUG
-	printf("Bot: OnReady\n");
-#endif
+	m_pHardwareInformation->ClearHardwareInformation();
+	delete m_pHardwareInformation;
 
 	if (m_szToken.size() > 0)
 	{
 		SendLogin(m_szToken);
 	}
-
-	m_bOnReady = true;
+	else
+	{
+		Drawing::SetScene(Drawing::Scene::LOGIN);
+	}
 }
 
-void Bot::OnPong()
+void Bot::OnPong(uint32_t iSubscriptionEndAt)
 {
 #ifdef VMPROTECT
-	VMProtectBeginUltra("Bot::OnPong");
+	VMProtectBeginMutation("Bot::OnPong");
 #endif
 
-#ifdef DEBUG
-	printf("Bot: OnPong\n");
-#endif
-
-	if (m_ClientHandler 
-		&& m_ClientHandler->IsWorking())
+	if (m_pClientHandler
+		&& m_pClientHandler->IsWorking())
 	{
 		SendPong(
-			m_ClientHandler->m_PlayerMySelf.szName, 
-			m_ClientHandler->m_PlayerMySelf.fX, 
-			m_ClientHandler->m_PlayerMySelf.fY, 
-			m_ClientHandler->m_PlayerMySelf.iCity);
+			m_pClientHandler->m_PlayerMySelf.szName,
+			m_pClientHandler->m_PlayerMySelf.fX,
+			m_pClientHandler->m_PlayerMySelf.fY,
+			m_pClientHandler->m_PlayerMySelf.iCity);
 	}
 	else
 	{
 		SendPong("", 0.0f, 0.0f, 0);
 	}
 
-	m_fLastPongTime = Bot::TimeGet();
+	m_iSubscriptionEndAt = iSubscriptionEndAt;
+	m_fLastPongTime = TimeGet();
 
 #ifdef VMPROTECT
 	VMProtectEnd();
@@ -431,59 +438,73 @@ void Bot::OnConnected()
 	VMProtectBeginUltra("Bot::OnConnected");
 #endif
 
-#ifdef DEBUG
-	printf("Bot: OnConnected\n");
-#endif
+	char szCurrentProcessFilePath[MAX_PATH + 1];
 
-	char szPath[MAX_PATH + 1];
+	GetModuleFileName(NULL, szCurrentProcessFilePath, MAX_PATH);
+	szCurrentProcessFilePath[MAX_PATH] = '\0';
 
-	GetModuleFileName(NULL, szPath, MAX_PATH);
-	szPath[MAX_PATH] = '\0';
-
-	uint32_t iCRC = CalculateCRC32(szPath);
+	uint32_t iCRC = CalculateCRC32(szCurrentProcessFilePath);
 
 	if (iCRC == 0xFFFFFFFF)
 	{
-#ifdef DEBUG
-		printf("Bot: CRC Calculate failed\n");
+#ifdef DEBUG_LOG
+		Print("CRC Calculate failed");
 #endif
 		exit(0);
 		return;
 	}
 
-	SendReady(iCRC);
+	std::filesystem::path fsFilePath(szCurrentProcessFilePath);
+	std::string szProcessFileName = fsFilePath.filename().string();
+
+	SendReady(szProcessFileName, iCRC, m_pHardwareInformation);
 
 #ifdef VMPROTECT
 	VMProtectEnd();
 #endif
 }
 
-void Bot::OnAuthenticated()
+void Bot::OnAuthenticated(uint8_t iStatus)
 {
-#ifdef DEBUG
-	printf("Bot: OnAuthenticated\n");
+#ifdef VMPROTECT
+	VMProtectBeginMutation("Bot::OnAuthenticated");
 #endif
-
-	SendRouteLoadRequest();
-
 	m_bAuthenticated = true;
+
+	switch (iStatus)
+	{
+		case 1:
+			SendPointerRequest(m_ePlatformType);
+			Drawing::SetScene(Drawing::Scene::LOADER);
+			break;
+
+		case 2:
+		{
+#ifdef DEBUG_LOG
+			SendPointerRequest(m_ePlatformType);
+			Drawing::SetScene(Drawing::Scene::LOADER);
+#else
+			OnUpdate();
+			Drawing::SetScene(Drawing::Scene::UPDATE);
+#endif
+		}
+		break;
+	}
+
+#ifdef VMPROTECT
+	VMProtectEnd();
+#endif
 }
 
 void Bot::OnUpdate()
 {
-#ifdef DEBUG
-	printf("Bot: OnUpdate\n");
-#endif
-
 	SendUpdate();
-
-	m_bUpdate = true;
 }
 
 void Bot::OnUpdateDownloaded(bool bStatus)
 {
-#ifdef DEBUG
-	printf("Bot: OnUpdateDownloaded: %d\n", bStatus);
+#ifdef DEBUG_LOG
+	Print("%d", bStatus);
 #endif
 
 	if (bStatus)
@@ -493,8 +514,8 @@ void Bot::OnUpdateDownloaded(bool bStatus)
 		PROCESS_INFORMATION updateProcessInfo;
 		if (!StartProcess(currentPath.string(), skCryptDec("Updater.exe"), "", updateProcessInfo))
 		{
-#ifdef DEBUG
-			printf("OnUpdateDownloaded: Update process start failed\n");
+#ifdef DEBUG_LOG
+			Print("Update process start failed");
 #endif
 		}
 	}
@@ -504,48 +525,181 @@ void Bot::OnUpdateDownloaded(bool bStatus)
 	}
 }
 
-void Bot::OnLoaded()
+void Bot::OnLoaded(std::string szPointerData)
 {
-#ifdef DEBUG
-	printf("Bot: OnLoaded\n");
-#endif
+	if (szPointerData.size() == 0)
+		return;
 
-	BuildAdress();
+	Ini* pIniPointer = new Ini();
 
-#ifdef DEBUG
-	printf("Bot: Knight Online process starting\n");
-#endif
+	pIniPointer->Load(szPointerData);
 
-	bool bAutoStart = GetAppConfiguration()->GetBool(skCryptDec("Automation"), skCryptDec("Start"), false);
+	auto pAddressMap = pIniPointer->GetConfigMap();
 
-	if (bAutoStart)
+	if (pAddressMap == nullptr)
+		return;
+
+	auto it = pAddressMap->find(skCryptDec("Address"));
+
+	if (it != pAddressMap->end())
 	{
-		StartGame();
+		for (auto& e : it->second)
+			m_mapAddress.insert(std::make_pair(e.first, std::strtoul(e.second.c_str(), NULL, 16)));
 	}
+
+	delete pIniPointer;
+
+	if (m_iniAppConfiguration)
+	{
+		bool bAutoStart = m_iniAppConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Start"), false);
+
+		if (bAutoStart)
+		{
+#ifdef DEBUG_LOG
+			Print("Knight Online process starting");
+#endif
+
+			StartGame();
+		}
+	}
+}
+
+void Bot::OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt)
+{
+	if (m_iniAppConfiguration)
+	{
+		m_szToken = m_iniAppConfiguration->SetString(skCryptDec("Internal"), skCryptDec("Token"), szToken.c_str());
+	}
+	
+	m_iSubscriptionEndAt = iSubscriptionEndAt;
+}
+
+void Bot::OnInjection(std::vector<uint8_t> vecBuffer)
+{
+	VitalCode eInjection = Injection(m_InjectedProcessInfo.hProcess, vecBuffer.data(), vecBuffer.size());
+
+	if (eInjection != VITAL_CODE_INJECTION_SUCCESS)
+	{
+		SendVital(eInjection);
+		return;
+	}
+
+	SendVital(eInjection);
+
+	new std::thread([&]()
+	{
+		m_bInternalMailslotWorking = false;
+
+		while (!m_bInternalMailslotWorking)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+			if (ConnectInternalMailslot())
+			{
+				Packet pkt = Packet(PIPE_LOAD_POINTER);
+
+				pkt << int32_t(m_mapAddress.size());
+
+				for (auto& e : m_mapAddress)
+				{
+					pkt << e.first << e.second;
+				}
+
+				SendInternalMailslot(pkt);
+
+				m_bInternalMailslotWorking = true;
+			}
+			else
+			{
+#ifdef DEBUG_LOG
+				Print("Internal Connection Failed");
+#endif
+			}
+		}
+	});
 }
 
 void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
 {
-#ifdef DEBUG
-	printf("Bot: OnCaptchaResponse: %d - %s\n", bStatus ? 1 : 0, szResult.c_str());
-#endif
-
 	if (!bStatus)
 	{
-		m_ClientHandler->RefreshCaptcha();
+		m_pClientHandler->RefreshCaptcha();
 	}
 	else
 	{
-		m_ClientHandler->SendCaptcha(szResult);
+		m_pClientHandler->SendCaptcha(szResult);
+	}
+}
+
+void Bot::OnAuthenticationMessage(bool bStatus, std::string szMessage)
+{
+	if (bStatus == true 
+		&& Drawing::GetScene() != Drawing::Scene::LOGIN)
+	{
+		Drawing::SetScene(Drawing::Scene::LOGIN);
+	}
+
+	m_isAuthenticationMessage = bStatus;
+	m_szAuthenticationMessage = szMessage;
+}
+
+void Bot::OnRouteLoaded(std::vector<uint8_t> vecBuffer)
+{
+	try
+	{
+		JSON jRouteData = JSON::parse(vecBuffer);
+
+		std::vector<Route> vecRoute;
+
+		std::string szStepListAttribute = skCryptDec("steplist");
+
+		for (size_t i = 0; i < jRouteData[szStepListAttribute.c_str()].size(); i++)
+		{
+			Route pRoute{};
+
+			std::string szXAttribute = skCryptDec("x");
+			std::string szYAttribute = skCryptDec("y");
+			std::string szStepTypeAttribute = skCryptDec("steptype");
+			std::string szPacketAttribute = skCryptDec("packet");
+
+			pRoute.fX = jRouteData[szStepListAttribute.c_str()][i][szXAttribute.c_str()].get<float>();
+			pRoute.fY = jRouteData[szStepListAttribute.c_str()][i][szYAttribute.c_str()].get<float>();
+			pRoute.eStepType = (RouteStepType)jRouteData[szStepListAttribute.c_str()][i][szStepTypeAttribute.c_str()].get<int>();
+			pRoute.szPacket = jRouteData[szStepListAttribute.c_str()][i][szPacketAttribute.c_str()].get<std::string>();
+
+			vecRoute.push_back(pRoute);
+		}
+
+		std::string szNameAttribute = skCryptDec("name");
+		std::string szIndexAttribute = skCryptDec("index");
+
+		uint8_t iIndex = jRouteData[szIndexAttribute.c_str()].get<uint8_t>();
+
+		auto pRouteData = m_pClientHandler->m_mapRouteList.find(iIndex);
+
+		if (pRouteData != m_pClientHandler->m_mapRouteList.end())
+		{
+			pRouteData->second.insert(std::make_pair(jRouteData[szNameAttribute.c_str()].get<std::string>(), vecRoute));
+		}
+		else
+		{
+			m_pClientHandler->m_mapRouteList.insert(std::make_pair(iIndex, std::map<std::string, std::vector<Route>> {
+				std::make_pair(jRouteData[szNameAttribute.c_str()].get<std::string>(), vecRoute)
+			}));
+		}
+	}
+	catch (const std::exception& e)
+	{
+#ifdef DEBUG_LOG
+		Print("%s", e.what());
+#else
+		DBG_UNREFERENCED_PARAMETER(e);
+#endif
 	}
 }
 
 void Bot::Patch(HANDLE hProcess)
 {
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	WaitCondition(Read4Byte(GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1"))) == 0);
-
 	BYTE byPatch1[] = 
 	{ 
 		0x90, 
@@ -556,43 +710,38 @@ void Bot::Patch(HANDLE hProcess)
 	};
 
 	WriteProcessMemory(hProcess, (LPVOID*)GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
-void Bot::OnConfigurationLoaded()
+void Bot::OnConfigurationLoaded(std::string szConfiguration)
 {
-#ifdef DEBUG
-	printf("Bot: OnConfigurationLoaded\n");
-#endif
-
-	if (m_ClientHandler == nullptr)
+	if (m_pClientHandler == nullptr)
 	{
-#ifdef DEBUG
-		printf("m_ClientHandler == nullptr\n");
+#ifdef DEBUG_LOG
+		Print("m_pClientHandler == nullptr");
 #endif
 		return;
 	}
 
-	m_ClientHandler->InitializeUserConfiguration();
+	m_pClientHandler->m_iniUserConfiguration = new Ini();
 
-#ifdef DEBUG
-	printf("User configuration loaded\n");
-#endif
+	if (szConfiguration.size() > 0)
+	{
+		m_pClientHandler->m_iniUserConfiguration->Load(szConfiguration);
+	}
 
-	m_iniUserConfiguration->onSaveEvent = [=]()
+	m_pClientHandler->InitializeUserConfiguration();
+
+	m_pClientHandler->m_iniUserConfiguration->onSaveEvent = [=]()
 	{
 		m_bUserSaveRequested = true;
 	};
+
+	SendRouteLoadRequest();
 }
 
 Ini* Bot::GetAppConfiguration()
 {
 	return m_iniAppConfiguration;
-}
-
-Ini* Bot::GetUserConfiguration()
-{
-	return m_iniUserConfiguration;
 }
 
 bool Bot::GetSkillTable(std::map<uint32_t, __TABLE_UPC_SKILL>** mapDataOut)
@@ -856,32 +1005,6 @@ DWORD Bot::GetAddress(std::string szAddressName)
 	return m_mapAddress[szAddressName];
 }
 
-void Bot::BuildAdress()
-{
-#ifdef DEBUG
-	printf("Bot: Address build started\n");
-#endif
-	auto pAddressMap = m_iniPointer->GetConfigMap();
-
-	if (pAddressMap == nullptr)
-		return;
-
-	auto it = pAddressMap->find(skCryptDec("Address"));
-
-	if (it != pAddressMap->end())
-	{
-		for (auto &e : it->second)
-			m_mapAddress.insert(std::make_pair(e.first, std::strtoul(e.second.c_str(), NULL, 16)));
-	}
-
-	delete m_iniPointer;
-	m_iniPointer = nullptr;
-
-#ifdef DEBUG
-	printf("Bot: Address build completed\n");
-#endif
-}
-
 bool Bot::ConnectInternalMailslot()
 {
 	m_hInternalMailslot = CreateFile(skCryptDec("\\\\.\\mailslot\\Internal"),
@@ -900,7 +1023,7 @@ bool Bot::ConnectInternalMailslot()
 	return false;
 }
 
-void Bot::SendInternalMailslot(Packet pkt)
+bool Bot::SendInternalMailslot(Packet pkt)
 {
 	if (m_hInternalMailslot != INVALID_HANDLE_VALUE)
 	{
@@ -908,47 +1031,21 @@ void Bot::SendInternalMailslot(Packet pkt)
 
 		if (!WriteFile(m_hInternalMailslot, pkt.contents(), pkt.size(), &bytesWritten, nullptr))
 		{
-#ifdef DEBUG
-			printf("SendInternalMailslot: Failed to write to mailslot. Error code: %d\n", GetLastError());
+#ifdef DEBUG_LOG
+			Print("Failed to write to mailslot. Error code: %d", GetLastError());
 #endif
+			return false;
 		}
 	}
 	else
 	{
-#ifdef DEBUG
-		printf("SendInternalMailslot: m_hInternalMailslot == INVALID_HANDLE_VALUE\n");
+#ifdef DEBUG_LOG
+		Print("m_hInternalMailslot == INVALID_HANDLE_VALUE");
 #endif
-	}
-}
-
-float Bot::TimeGet()
-{
-	static bool bInit = false;
-	static bool bUseHWTimer = FALSE;
-	static LARGE_INTEGER nTime, nFrequency;
-
-	if (bInit == false)
-	{
-		if (TRUE == ::QueryPerformanceCounter(&nTime))
-		{
-			::QueryPerformanceFrequency(&nFrequency);
-			bUseHWTimer = TRUE;
-		}
-		else
-		{
-			bUseHWTimer = FALSE;
-		}
-
-		bInit = true;
+		return false;
 	}
 
-	if (bUseHWTimer)
-	{
-		::QueryPerformanceCounter(&nTime);
-		return (float)((double)(nTime.QuadPart) / (double)nFrequency.QuadPart);
-	}
-
-	return (float)timeGetTime();
+	return true;
 }
 
 bool Bot::IsInjectedProcessLost()
@@ -985,7 +1082,6 @@ HANDLE Bot::GetInjectedProcessHandle()
 		}
 		else
 		{
-			//CloseHandle(m_InjectedProcessInfo.hProcess);
 			m_InjectedProcessInfo.hProcess = NULL;
 		}
 	}
@@ -998,9 +1094,9 @@ std::wstring Bot::GetAnyOTPHardwareID()
 {
 	std::wstring szOTPHardwareID = L"";
 
-	for (size_t i = 0; i < m_hardwareInfo.Disk.size(); i++)
+	for (size_t i = 0; i < m_pHardwareInformation->Disk.size(); i++)
 	{
-		HardwareInformation::DiskObject& Disk{ m_hardwareInfo.Disk.at(i) };
+		HardwareInformation::DiskObject& Disk{ m_pHardwareInformation->Disk.at(i) };
 
 		if (!Disk.IsBootDrive)
 			continue;
@@ -1041,23 +1137,24 @@ void Bot::InitializeAnyOTPService()
 	if (m_hModuleAnyOTP == NULL)
 	{
 #ifdef _DEBUG
-		printf("Bot: DLL Not Loaded\n");
+		Print("DLL Not Loaded");
 #endif
 		return;
 	}
 
 #ifdef _DEBUG
-	printf("Bot: AnyOTP Library Loaded\n");
+	Print("AnyOTP Library Loaded");
 #endif
 
-	m_szAnyOTPID = to_string(GetAnyOTPHardwareID().c_str());
+	m_szOTPHardwareID = GetAnyOTPHardwareID();
+	m_szAnyOTPID = to_string(m_szOTPHardwareID.c_str()); //?????
 }
 
 std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareID)
 {
 	std::wstring szCode = L"";
 	std::wstring szOTPPassword(szPassword.begin(), szPassword.end());
-	std::wstring szOTPHardwareID = GetAnyOTPHardwareID();
+	std::wstring szOTPHardwareID = m_szOTPHardwareID;
 
 	if (szHardwareID.size() > 0)
 	{
@@ -1065,6 +1162,7 @@ std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareI
 		szOTPHardwareID = szCustomOTPHardwareID;
 	}
 
+	typedef int(__stdcall* GenerateOTP)(int, LPCWSTR, LPCWSTR, int*);
 	auto pGenerateOTPAddress = (LPVOID)((DWORD)(m_hModuleAnyOTP)+0x6327);
 	GenerateOTP pGenerateOTP = reinterpret_cast<GenerateOTP>(pGenerateOTPAddress);
 
@@ -1078,7 +1176,7 @@ std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareI
 	if (!ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<LPVOID>(iCodeAddress), buffer, bufferSize, &bytesRead))
 	{
 #ifdef _DEBUG
-		printf("Bot: ReadProcessMemory Failed\n");
+		Print("ReadProcessMemory Failed");
 #endif
 		return szCode;
 	}
@@ -1091,70 +1189,60 @@ std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareI
 void Bot::StartGame()
 {
 #ifdef VMPROTECT
-	VMProtectBeginUltra("Bot::StartGame");
+	VMProtectBeginMutation("Bot::StartGame");
 #endif
 
-	m_bStarted = true;
+	m_bGameStarting = true;
 
 	new std::thread([&]()
 	{
-		std::vector<const char*> fileNames = {
-		#ifdef DEBUG
-			skCryptDec("KOF.exe"),
-		#endif
-			skCryptDec("Updater.exe"),
-			skCryptDec("Updater2.exe"),
+		std::vector<const char*> vecProcessNames = 
+		{
 			skCryptDec("KnightOnLine.exe"),
 			skCryptDec("xldr_KnightOnline_NA.exe"),
 			skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"),
 			skCryptDec("xldr_KnightOnline_GB.exe"),
-			skCryptDec("xldr_KnightOnline_GB_loader_win32.exe") 
+			skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"),
+			skCryptDec("xxd-0.xem"),
 		};
 
-		KillProcessesByFileNames(fileNames);
+		KillProcessesByFileName(vecProcessNames);
 
-		while (IsProcessRunning(skCryptDec("Updater.exe")))
-		{
-			Sleep(1000);
-			KillProcessesByFileName(skCryptDec("Updater.exe"));
-			Sleep(1000);
-		}
+		m_InjectedProcessInfo = PROCESS_INFORMATION();
 
 #ifndef DISABLE_XIGNCODE
-		if (m_ePlatformType == PlatformType::USKO)
-		{
-			PROCESS_INFORMATION loaderProcessInfo;
-			std::ostringstream strLoaderCommandLine;
-			strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
+		DWORD iLoaderExitCode = 0;
+		PROCESS_INFORMATION loaderProcessInfo;
 
-			if (!StartProcess(
-				m_szClientPath + skCryptDec("\\XIGNCODE\\"), skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"), strLoaderCommandLine.str(), loaderProcessInfo))
-			{
-#ifdef DEBUG
-				printf("Bot: Loader cannot started\n");
-#endif
-				Close();
-				exit(0);
-				return;
-			}
-		}
-		else if (m_ePlatformType == PlatformType::STKO)
-		{
-			PROCESS_INFORMATION loaderProcessInfo;
-			std::ostringstream strLoaderCommandLine;
-			strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
+		std::ostringstream strLoaderCommandLine;
+		strLoaderCommandLine << m_szClientPath + "\\" + m_szClientExe;
 
-			if (!StartProcess(
-				m_szClientPath + skCryptDec("\\XIGNCODE\\"), skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"), strLoaderCommandLine.str(), loaderProcessInfo))
-			{
-#ifdef DEBUG
-				printf("Bot: Loader cannot started\n");
-#endif
-				Close();
-				exit(0);
-				return;
-			}
+		if (!StartProcess(
+			m_szClientPath + skCryptDec("\\XIGNCODE\\"), skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"), strLoaderCommandLine.str(), loaderProcessInfo))
+		{
+			SendVital(VITAL_CODE_XIGN_LOADER_START_PROCESS_ERROR);
+			return;
 		}
+
+		SendVital(VITAL_CODE_XIGN_LOADER_STARTED);
+
+		if (WaitForSingleObject(loaderProcessInfo.hProcess, -1))
+		{
+			SendVital(VITAL_CODE_XIGN_LOADER_NOT_EXITED_NORMALLY);
+			return;
+		}
+
+		if (!GetExitCodeProcess(loaderProcessInfo.hProcess, &iLoaderExitCode))
+		{
+			SendVital(VITAL_CODE_XIGN_LOADER_NOT_EXITED_NORMALLY);
+			return;
+		}
+
+		if (iLoaderExitCode > 0)
+		{
+			SendVital(VITAL_CODE_XIGN_LOADER_EXIT_CODE_NOT_ZERO);
+			return;
+		}		
 #endif
 
 		std::ostringstream strCommandLine;
@@ -1172,38 +1260,28 @@ void Bot::StartGame()
 
 		if (!StartProcess(m_szClientPath, m_szClientExe, strCommandLine.str(), m_InjectedProcessInfo))
 		{
-#ifdef DEBUG
-			printf("Bot: Process cannot started\n");
-#endif
-			Close();
-			exit(0);
+			SendVital(VITAL_CODE_CLIENT_START_PROCESS_ERROR);
 			return;
 		}
 
-#ifdef DEBUG
-		printf("Bot: Knight Online process started\n");
+		SendVital(VITAL_CODE_CLIENT_PROCESS_STARTED);
+
+#ifndef DISABLE_XIGNCODE
+		if (!WaitForSingleObject(m_InjectedProcessInfo.hProcess, 3000))
+		{
+			SendVital(VITAL_CODE_CLIENT_PROCESS_EXITED_UNKNOWN_REASON);
+			return;
+		}
 #endif
+
+		while (Read4Byte(GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT"))) == 0)
+			continue;
 
 		if (m_ePlatformType == PlatformType::USKO
 			|| m_ePlatformType == PlatformType::KOKO
 			|| m_ePlatformType == PlatformType::STKO)
 		{
-
-#ifdef DEBUG
-			printf("Bot: Waiting entry point\n");
-#endif
-
-			WaitCondition(Read4Byte(GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT"))) == 0);
-
-#ifdef DEBUG
-			printf("Bot: Entry point ready, Knight Online process suspending\n");
-#endif
-
-			SuspendProcess(m_InjectedProcessInfo.hProcess);
-
-#ifdef DEBUG
-			printf("Bot: Knight Online process suspended, bypass started\n");
-#endif
+			NtSuspendProcess(m_InjectedProcessInfo.hProcess);
 
 			if (GetAddress(skCryptDec("KO_PATCH_ADDRESS1")) > 0)
 			{
@@ -1229,14 +1307,10 @@ void Bot::StartGame()
 					GetAddress(skCryptDec("KO_PATCH_ADDRESS3_SIZE")), PAGE_EXECUTE_READWRITE);
 			}
 
-#ifdef DEBUG
-			printf("Bot: Knight Online Patched\n");
-#endif
-
 #ifdef DISABLE_XIGNCODE
 			if (m_ePlatformType == PlatformType::USKO)
 			{
-				BYTE byPatch2[] = { 0xE9, 0x39, 0x03, 0x00, 0x00, 0x90 };
+				BYTE byPatch2[] = { 0xE9, 0x01, 0x03, 0x00, 0x00, 0x90 };
 				WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 			}
 			else if (m_ePlatformType == PlatformType::KOKO)
@@ -1250,22 +1324,16 @@ void Bot::StartGame()
 				WriteProcessMemory(m_InjectedProcessInfo.hProcess, (LPVOID*)GetAddress(skCryptDec("KO_XIGNCODE_ENTRY_POINT")), byPatch2, sizeof(byPatch2), 0);
 			}
 #endif
-
-#ifdef DEBUG
-			printf("Bot: Bypass finished, Knight Online process resuming\n");
-#endif
-
-			ResumeProcess(m_InjectedProcessInfo.hProcess);
 		}
 
-		SendInjectionRequest(m_InjectedProcessInfo.dwProcessId);
+		NtResumeProcess(m_InjectedProcessInfo.hProcess);
 
-		Patch(m_InjectedProcessInfo.hProcess);
+		m_pClientHandler = new ClientHandler(this);
+		m_pClientHandler->Initialize();
 
-		m_ClientHandler = new ClientHandler(this);
-		m_ClientHandler->Initialize();
+		SendInjectionRequest();
 
-		m_bForceClosed = false;
+		m_bGameStarting = false;
 	});
 
 #ifdef VMPROTECT
@@ -1275,34 +1343,27 @@ void Bot::StartGame()
 
 void Bot::StopStartGameProcess()
 {
-	if (!m_bStarted)
-		return;
+	m_bGameStarting = false;
 
-	m_bForceClosed = true;
-
-	std::vector<const char*> fileNames = 
+	std::vector<const char*> vecFileNames = 
 	{
-	#ifdef DEBUG
-		skCryptDec("KOF.exe"),
-	#endif
-		skCryptDec("Updater.exe"),
-		skCryptDec("Updater2.exe"),
 		skCryptDec("KnightOnLine.exe"),
 		skCryptDec("xldr_KnightOnline_NA.exe"),
 		skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"),
 		skCryptDec("xldr_KnightOnline_GB.exe"),
-		skCryptDec("xldr_KnightOnline_GB_loader_win32.exe")
+		skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"),
+		skCryptDec("xxd-0.xem")
 	};
 
-	KillProcessesByFileNames(fileNames);
+	KillProcessesByFileName(vecFileNames);
 
-	if (m_ClientHandler) 
+	m_InjectedProcessInfo = PROCESS_INFORMATION();
+
+	if (m_pClientHandler)
 	{
-		m_ClientHandler->Clear();
+		m_pClientHandler->Clear();
 
-		delete m_ClientHandler;
-		m_ClientHandler = nullptr;
+		delete m_pClientHandler;
+		m_pClientHandler = nullptr;
 	}
-
-	m_bStarted = false;
 }

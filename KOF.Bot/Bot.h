@@ -8,7 +8,7 @@ class Client;
 class Bot : public Service
 {
 public:
-	Bot();
+	Bot(HardwareInformation* pHardwareInformation);
 	~Bot();
 
 	ClientHandler* GetClientHandler();
@@ -19,14 +19,11 @@ public:
 	void InitializeStaticData();
 
 	void Process();
-
-	void Close();
 	void Release();
 
 	DWORD GetAddress(std::string szAddressName);
 
 	Ini* GetAppConfiguration();
-	Ini* GetUserConfiguration();
 
 	bool GetSkillTable(std::map<uint32_t, __TABLE_UPC_SKILL>** mapDataOut);
 	bool GetSkillExtension2Table(std::map<uint32_t, __TABLE_UPC_SKILL_EXTENSION2>** mapDataOut);
@@ -49,16 +46,20 @@ public:
 private:
 	void OnConnected();
 	void OnReady();
-	void OnPong();
-	void OnAuthenticated();
+	void OnPong(uint32_t iSubscriptionEndAt);
+	void OnAuthenticated(uint8_t iStatus);
 	void OnUpdate();
 	void OnUpdateDownloaded(bool bStatus);
-	void OnLoaded();
-	void OnConfigurationLoaded();
+	void OnLoaded(std::string szPointerData);
+	void OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt);
+	void OnInjection(std::vector<uint8_t> vecBuffer);
+	void OnConfigurationLoaded(std::string szConfiguration);
 	void OnCaptchaResponse(bool bStatus, std::string szResult);
+	void OnRouteLoaded(std::vector<uint8_t> vecBuffer);
+	void OnAuthenticationMessage(bool bStatus, std::string szMessage);
 
 private:
-	ClientHandler* m_ClientHandler;
+	ClientHandler* m_pClientHandler;
 
 	Table<__TABLE_UPC_SKILL>* m_pTbl_Skill;
 	Table<__TABLE_UPC_SKILL_EXTENSION2>* m_pTbl_Skill_Extension2;
@@ -75,34 +76,26 @@ private:
 	std::string m_szAccountListFilePath;
 
 public:
-	bool IsClosed() { return m_bClosed; }
 	bool IsInjectedProcessLost();
-	bool IsTableLoaded() { return m_bTableLoaded; }
 
 	PlatformType GetPlatformType() { return m_ePlatformType; }
 
 public:
-	bool m_bClosed;
 	std::string m_szClientPath;
 	std::string m_szClientExe;
 
+	bool m_bTableLoading;
 	bool m_bTableLoaded;
 
 public:
-	void BuildAdress();
-
-private:
 	std::unordered_map<std::string, DWORD> m_mapAddress;
-
-private:
-	std::chrono::milliseconds m_msLastInitializeHandle;
 
 public:
 	HANDLE m_hInternalMailslot;
 	bool m_bInternalMailslotWorking;
 
 	bool ConnectInternalMailslot();
-	void SendInternalMailslot(Packet pkt);
+	bool SendInternalMailslot(Packet pkt);
 
 public:
 	BYTE ReadByte(DWORD dwAddress);
@@ -120,9 +113,6 @@ public:
 	bool ExecuteRemoteCode(HANDLE hProcess, LPVOID pAddress);
 
 public:
-	static float TimeGet();
-
-public:
 	void Patch(HANDLE hProcess);
 
 public:
@@ -133,12 +123,12 @@ private:
 	PROCESS_INFORMATION m_InjectedProcessInfo;
 
 public:
+	std::wstring m_szOTPHardwareID;
 	HMODULE m_hModuleAnyOTP;
 	std::wstring GetAnyOTPHardwareID();
 private:
 
 	void InitializeAnyOTPService();
-	typedef int(__stdcall* GenerateOTP)(int, LPCWSTR, LPCWSTR, int*);
 
 public:
 	std::wstring ReadAnyOTPCode(std::string szOTPPassword, std::string szHardwareID);
@@ -148,12 +138,6 @@ private:
 
 public:
 	bool IsAuthenticated() { return m_bAuthenticated; };
-
-private:
-	bool m_bUpdate;
-
-public:
-	bool IsUpdating() { return m_bUpdate; };
 
 public:
 	std::chrono::time_point<std::chrono::system_clock> m_startTime;
@@ -166,10 +150,42 @@ public:
 	void StopStartGameProcess();
 
 public:
-	bool m_bStarted;
-	bool m_bForceClosed;
+	bool m_bGameStarting;
+
 public:
-	bool IsStarted() { return m_bStarted; };
-	bool IsForceClosed() { return m_bForceClosed; };
+	bool IsGameStarting() { return m_bGameStarting; };
+
+public:
+	Ini* m_iniAppConfiguration;
+
+public:
+	bool m_bAutoLogin;
+	bool m_bAutoStart;
+
+	std::string m_szID;
+	std::string m_szPassword;
+
+	int m_iServerID;
+	int m_iChannelID;
+	int m_iSlotID;
+
+	std::string m_szAnyOTPID;
+	std::string m_szAnyOTPPassword;
+
+	uint32_t m_iSubscriptionEndAt;
+	float m_fLastPongTime;
+
+	bool m_isAuthenticationMessage;
+	std::string m_szAuthenticationMessage;
+
+protected:
+	std::string m_szToken;
+	bool m_bUserSaveRequested;
+
+public:
+	PlatformType m_ePlatformType;
+
+private:
+	HardwareInformation* m_pHardwareInformation;
 };
 
