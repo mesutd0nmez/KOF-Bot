@@ -2,36 +2,15 @@
 
 #include "BaseSocket.h"
 #include "Packet.h"
-#include <vector>
-#include <string>
-#include <string.h>
-#include <functional>
-#include <thread>
 
 class TCPSocket : public BaseSocket
 {
 public:
-    // Event Listeners:
+
     std::function<void(uint8_t*, int32_t)> onMessageReceived;
-    std::function<void(int32_t)> onSocketClosed;
+    std::function<void()> onSocketClosed;
 
     explicit TCPSocket(FDR_ON_ERROR, int socketId = -1) : BaseSocket(onError, TCP, socketId) {}
-
-    // Send TCP Packages
-    int Send(const char* bytes, size_t byteslength)
-    {
-        if (this->isClosed)
-            return -1;
-
-        int sent = 0;
-        if ((sent = send(this->sock, bytes, byteslength, 0)) < 0)
-        {
-            perror(skCryptDec("send"));
-        }
-        return sent;
-    }
-
-    int Send(Packet vecBuffer) { return this->Send((char*)vecBuffer.contents(), vecBuffer.size()); }
 
     void Connect(std::string host, uint16_t port, std::function<void()> onConnected = []() {}, FDR_ON_ERROR)
     {
@@ -40,7 +19,6 @@ public:
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
 
-        // Get address info from DNS
         int status;
         if ((status = getaddrinfo(host.c_str(), NULL, &hints, &res)) != 0) {
             onError(errno);
@@ -51,7 +29,7 @@ public:
         {
             if (it->ai_family == AF_INET) { // IPv4
                 memcpy((void*)(&this->address), (void*)it->ai_addr, sizeof(sockaddr_in));
-                break; // for now, just get first ip (ipv4).
+                break;
             }
         }
 
@@ -65,27 +43,14 @@ public:
         this->address.sin_port = htons(port);
         this->address.sin_addr.s_addr = ipv4;
 
-        /*uint32_t iTcpNoDelay = 1;
-        setsockopt(this->sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&iTcpNoDelay, sizeof(iTcpNoDelay));*/
-
         u_long iBlocking = 0;
         ioctlsocket(this->sock, FIONBIO, &iBlocking);
 
-       /* int iKeepAlive = 1;
-        setsockopt(this->sock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&iKeepAlive, sizeof(iKeepAlive));
-
-        int iKeepAliveCnt = 10;
-        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPCNT, (const char*)&iKeepAliveCnt, sizeof(iKeepAliveCnt));
-
-        int iKeepAliveIdle = 1800;
-        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPIDLE, (const char*)&iKeepAliveIdle, sizeof(iKeepAliveIdle));
-
-        int iKeepAliveInterval = 1;
-        setsockopt(this->sock, IPPROTO_TCP, TCP_KEEPINTVL, (const char*)&iKeepAliveInterval, sizeof(iKeepAliveInterval));*/
+        setsockopt(this->sock, SOL_SOCKET, SO_SNDBUF, (const char*)&BUFFER_SIZE, sizeof(BUFFER_SIZE));
+        setsockopt(this->sock, SOL_SOCKET, SO_RCVBUF, (const char*)&BUFFER_SIZE, sizeof(BUFFER_SIZE));
 
         this->setTimeout(5);
 
-        // Try to connect.
         if (connect(this->sock, (const sockaddr*)&this->address, sizeof(sockaddr_in)) < 0)
         {
             onError(errno);
@@ -95,10 +60,8 @@ public:
 
         this->setTimeout(0);
 
-        // Connected to the server, fire the event.
         onConnected();
 
-        // Start listening from server:
         this->Listen();
     }
 
@@ -115,6 +78,9 @@ public:
 private:
     static void Receive(TCPSocket* socket)
     {
+#ifdef VMPROTECT
+        VMProtectBeginMutation("TcpSocket::Receive");
+#endif
         try
         {
             std::vector<char> vecRecieveBuffer;
@@ -128,14 +94,27 @@ private:
 
                 if (iMessageLength > socket->BUFFER_SIZE)
                 {
-#ifdef DEBUG
-                    printf("Received message to long, iMessageLength(%u) > BUFFER_SIZE(%u)\n", iMessageLength, socket->BUFFER_SIZE);
+#ifdef DEBUG_LOG
+                    Print("Received message to long, iMessageLength(%u) > BUFFER_SIZE(%u)", iMessageLength, socket->BUFFER_SIZE);
 #endif
+                    vecStreamBuffer.clear();
+                    vecStreamBuffer.resize(socket->BUFFER_SIZE);
                     continue;
                 }
 
                 vecStreamBuffer.resize(iMessageLength);
                 vecRecieveBuffer.insert(std::end(vecRecieveBuffer), std::begin(vecStreamBuffer), std::end(vecStreamBuffer));
+
+                if (vecRecieveBuffer.size() > (size_t)socket->BUFFER_SIZE)
+                {
+#ifdef DEBUG_LOG
+                    Print("Received buffer message to long, vecRecieveBufferSize(%u) > BUFFER_SIZE(%u)", vecRecieveBuffer.size(), socket->BUFFER_SIZE);
+#endif
+                    vecRecieveBuffer.clear();
+                    vecStreamBuffer.clear();
+                    vecStreamBuffer.resize(socket->BUFFER_SIZE);
+                    continue;
+                }
 
                 if ((uint8_t)vecStreamBuffer[iMessageLength - 2] == 0xAA
                     && (uint8_t)vecStreamBuffer[iMessageLength - 1] == 0x55)
@@ -155,7 +134,7 @@ private:
                 socket->Close();
 
                 if (socket->onSocketClosed)
-                    socket->onSocketClosed(errno);
+                    socket->onSocketClosed();
 
                 if (socket->deleteAfterClosed && socket != nullptr)
                     delete socket;
@@ -163,12 +142,16 @@ private:
         }
         catch (const std::exception& e)
         {
-#ifdef DEBUG
-            printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+            Print("%s", e.what());
 #else
             DBG_UNREFERENCED_PARAMETER(e);
 #endif
         }
+
+#ifdef VMPROTECT
+        VMProtectEnd();
+#endif
     }
 
     void setTimeout(int seconds)
@@ -180,4 +163,20 @@ private:
         setsockopt(this->sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof(tv));
         setsockopt(this->sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&tv, sizeof(tv));
     }
+
+public:
+    int Send(const char* bytes, size_t byteslength)
+    {
+        if (this->isClosed)
+            return -1;
+
+        int sent = 0;
+        if ((sent = send(this->sock, bytes, byteslength, 0)) < 0)
+        {
+            perror(skCryptDec("send"));
+        }
+        return sent;
+    }
+
+    int Send(Packet vecBuffer) { return this->Send((char*)vecBuffer.contents(), vecBuffer.size()); }
 };
