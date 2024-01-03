@@ -197,7 +197,7 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
@@ -213,7 +213,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
-      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Debug;..\KOF.Dependencies\snappy-1.1.10\Debug;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Debug;..\KOF.Dependencies\VMProtect\Lib\Windows</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui-1.90\Debug;..\KOF.Dependencies\snappy-1.1.10\Debug;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Debug;..\KOF.Dependencies\VMProtect\Lib\Windows</AdditionalLibraryDirectories>
       <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;snappy.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
@@ -229,7 +229,7 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
@@ -244,7 +244,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
       <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;snappy.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows;..\KOF.Dependencies\snappy-1.1.10\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui-1.90\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows;..\KOF.Dependencies\snappy-1.1.10\Release</AdditionalLibraryDirectories>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <GenerateMapFile>true</GenerateMapFile>
@@ -265,7 +265,7 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
@@ -280,7 +280,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
       <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;snappy.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows;..\KOF.Dependencies\snappy-1.1.10\Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui-1.90\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows;..\KOF.Dependencies\snappy-1.1.10\Release</AdditionalLibraryDirectories>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <GenerateMapFile>true</GenerateMapFile>
