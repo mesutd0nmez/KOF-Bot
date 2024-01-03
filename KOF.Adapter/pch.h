@@ -14,6 +14,8 @@
 #include "Enum.h"
 #include "Packet.h"
 
+#define Print(a, ...) printf("%s: " a "\n", __func__, ##__VA_ARGS__)
+
 typedef int (WINAPI* WSAConnectTrampoline)(SOCKET s, const struct sockaddr* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS);
 
 struct SkillQueue

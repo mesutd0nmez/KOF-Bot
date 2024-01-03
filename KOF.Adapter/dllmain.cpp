@@ -1,7 +1,20 @@
 #include "pch.h"
 #include <stdio.h>
 
+HANDLE g_hThread = NULL;
+
 typedef void(__thiscall* Send)(DWORD, uint8_t*, uint32_t);
+
+void GlobalExitThread()
+{
+    if (g_hThread != NULL)
+    {
+        TerminateThread(g_hThread, 0);
+        CloseHandle(g_hThread);
+
+        g_hThread = NULL;
+    }
+}
 
 DWORD GetAddress(std::string szAddressName)
 {
@@ -391,8 +404,8 @@ void PatchSaveCPUThread()
     WriteProcessMemory(GetCurrentProcess(), (LPVOID)GetAddress(skCryptDec("KO_PTR_SAVE_CPU")), &byPatch2[0], sizeof(byPatch2), 0);
     VirtualProtectEx(GetCurrentProcess(), (LPVOID)GetAddress(skCryptDec("KO_PTR_SAVE_CPU")), sizeof(byPatch2), iOldProtection, &iOldProtection);
 
-#ifdef DEBUG
-    printf("Save CPU Thread Patched\n");
+#ifdef DEBUG_LOG
+    Print("Save CPU Thread Patched");
 #endif
 }
 
@@ -435,8 +448,8 @@ void PatchGameProcMainThread()
     WriteProcessMemory(GetCurrentProcess(), (LPVOID)GetAddress(skCryptDec("KO_PTR_MAIN_THREAD")), &byPatch2[0], sizeof(byPatch2), 0);
     VirtualProtectEx(GetCurrentProcess(), (LPVOID)GetAddress(skCryptDec("KO_PTR_MAIN_THREAD")), sizeof(byPatch2), iOldProtection, &iOldProtection);
 
-#ifdef DEBUG
-    printf("Main Thread Patched\n");
+#ifdef DEBUG_LOG
+    Print("Main Thread Patched");
 #endif
 }
 
@@ -495,8 +508,8 @@ int WINAPI WSAConnectHook(SOCKET s, const struct sockaddr* name, int namelen, LP
 
         if (iStreamLength > 0)
         {
-#ifdef DEBUG
-            printf("Proxy Recv Size: %d\n", iStreamLength);
+#ifdef DEBUG_LOG
+            Print("Proxy Recv Size: %d", iStreamLength);
             printf("Proxy Recv: ");
 
             for (int i = 0; i < iStreamLength; i++)
@@ -527,16 +540,16 @@ int WINAPI WSAConnectHook(SOCKET s, const struct sockaddr* name, int namelen, LP
                 // Send the proxy connection message
                 if (send(s, reinterpret_cast<const char*>(vecConnectionMessage.data()), 10, 0) == SOCKET_ERROR)
                 {
-#ifdef DEBUG
-                    printf("Proxy server connected but target information send failed\n");
+#ifdef DEBUG_LOG
+                    Print("Proxy server connected but target information send failed");
 #endif
                     WSACleanup();
                     break;
                 }
                 else
                 {
-#ifdef DEBUG
-                    printf("Proxy connection successful, target information being sent\n");
+#ifdef DEBUG_LOG
+                    Print("Proxy connection successful, target information being sent");
 #endif
                 }
             }
@@ -561,16 +574,16 @@ int WINAPI WSAConnectHook(SOCKET s, const struct sockaddr* name, int namelen, LP
                 // Sending the prepared data.
                 if (send(s, reinterpret_cast<const char*>(vecAuthenticationMessage.data()), vecAuthenticationMessage.size(), 0) == SOCKET_ERROR)
                 {
-#ifdef DEBUG
-                    printf("Proxy authentication information send failed\n");
+#ifdef DEBUG_LOG
+                    Print("Proxy authentication information send failed");
 #endif
                     WSACleanup();
                     break;
                 }
                 else
                 {
-#ifdef DEBUG
-                    printf("Proxy authentication information sended\n");
+#ifdef DEBUG_LOG
+                    Print("Proxy authentication information sended");
 #endif
                 }
             }
@@ -578,8 +591,8 @@ int WINAPI WSAConnectHook(SOCKET s, const struct sockaddr* name, int namelen, LP
             {
                 bStreamHandshakeComplete = true;
 
-#ifdef DEBUG
-                printf("Proxy handshake completed\n");
+#ifdef DEBUG_LOG
+                Print("Proxy handshake completed");
 #endif
                 break;
             }
@@ -599,22 +612,26 @@ void SetProxyInformation(std::string szIP, int iPort, std::string szUsername = "
 
 void StartMailslot()
 {
-#ifdef DEBUG
+#ifdef DEBUG_LOG
     AllocConsole();
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 
-    printf("Internal connection starting\n");
+    Print("Internal connection starting");
 #endif
 
     HANDLE hMailslot = CreateMailslot(skCryptDec("\\\\.\\mailslot\\Internal"), 0, MAILSLOT_WAIT_FOREVER, nullptr);
 
     if (hMailslot == INVALID_HANDLE_VALUE)
     {
-        std::cout << "Failed to create mailslot. Exiting...\n";
+#ifdef DEBUG_LOG
+        Print("Failed to create mailslot. Exiting");
+#endif
         return;
     }
 
-    printf("Internal connection ready\n");
+#ifdef DEBUG_LOG
+    Print("Internal connection ready");
+#endif
 
     while (true)
     {
@@ -661,15 +678,11 @@ void StartMailslot()
                     DWORD iAddress;
 
                     pkt >> szAddressName >> iAddress;
-#ifdef DEBUG
-                    printf("%s=%d\n", szAddressName.c_str(), iAddress);
+#ifdef DEBUG_LOG
+                    Print("%s=%d", szAddressName.c_str(), iAddress);
 #endif
                     m_mapAddress.insert(std::make_pair(szAddressName, iAddress));
                 }
-
-#ifdef DEBUG
-                printf("Loaded address count: %d\n", iAddressCount);
-#endif
 
                 if (iAddressCount > 0)
                 {
@@ -688,8 +701,8 @@ void StartMailslot()
 
                 m_qBasicAttackQueue.push(true);
 
-#ifdef DEBUG
-                printf("Basic Attack: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Basic Attack: %d", iEnable);
 #endif
             }
             break;
@@ -705,8 +718,13 @@ void StartMailslot()
                     >> sSkillQueue.iAttacking
                     >> sSkillQueue.iBasicAttack;
 
-#ifdef DEBUG
-                printf("Use Skill: %d, %d, %d, %d, %d\n", sSkillQueue.iTargetID, sSkillQueue.iSkillID, sSkillQueue.iPriority, sSkillQueue.iAttacking, sSkillQueue.iBasicAttack);
+#ifdef DEBUG_LOG
+                Print("Use Skill: %d, %d, %d, %d, %d",
+                    sSkillQueue.iTargetID, 
+                    sSkillQueue.iSkillID, 
+                    sSkillQueue.iPriority, 
+                    sSkillQueue.iAttacking, 
+                    sSkillQueue.iBasicAttack);
 #endif
 
                 m_qSkillQueue.push(sSkillQueue);
@@ -721,8 +739,8 @@ void StartMailslot()
 
                 m_qLoginRequestQueue.push(true);
 
-#ifdef DEBUG
-                printf("Login Requested: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Login Requested: %d", iEnable);
 #endif
             }
             break;
@@ -734,8 +752,8 @@ void StartMailslot()
 
                 m_qSelectCharacterSkipQueue.push(true);
 
-#ifdef DEBUG
-                printf("Select character skip: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Select character skip: %d", iEnable);
 #endif
             }
             break;
@@ -747,8 +765,8 @@ void StartMailslot()
 
                 m_qSelectCharacterLeftQueue.push(true);
 
-#ifdef DEBUG
-                printf("Select character left: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Select character left: %d", iEnable);
 #endif
             }
             break;
@@ -760,8 +778,8 @@ void StartMailslot()
 
                 m_qSelectCharacterRightQueue.push(true);
 
-#ifdef DEBUG
-                printf("Select character right: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Select character right: %d", iEnable);
 #endif
             }
             break;
@@ -773,8 +791,8 @@ void StartMailslot()
 
                 m_qSelectCharacterQueue.push(true);
 
-#ifdef DEBUG
-                printf("Select character enter: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Select character enter: %d", iEnable);
 #endif
             }
             break;
@@ -786,8 +804,8 @@ void StartMailslot()
 
                 m_qLoadServerListQueue.push(true);
 
-#ifdef DEBUG
-                printf("Load Server List: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Load Server List: %d", iEnable);
 #endif
             }
             break;
@@ -799,8 +817,8 @@ void StartMailslot()
 
                 m_qSelectServerQueue.push(iIndex);
 
-#ifdef DEBUG
-                printf("Select Server Index: %d\n", iIndex);
+#ifdef DEBUG_LOG
+                Print("Select Server Index: %d", iIndex);
 #endif
             }
             break;
@@ -812,8 +830,8 @@ void StartMailslot()
 
                 m_qShowChannelQueue.push(iEnable);
 
-#ifdef DEBUG
-                printf("Show Channel: %d\n", iEnable);
+#ifdef DEBUG_LOG
+                Print("Show Channel: %d", iEnable);
 #endif
             }
             break;
@@ -825,8 +843,8 @@ void StartMailslot()
 
                 m_qSelectChannelQueue.push(iIndex);
 
-#ifdef DEBUG
-                printf("Select Channel: %d\n", iIndex);
+#ifdef DEBUG_LOG
+                Print("Select Channel: %d", iIndex);
 #endif
             }
             break;
@@ -838,8 +856,8 @@ void StartMailslot()
 
                 m_qConnectServerQueue.push(iIndex);
 
-#ifdef DEBUG
-                printf("Connect Server: %d\n", iIndex);
+#ifdef DEBUG_LOG
+                Print("Connect Server: %d", iIndex);
 #endif
             }
             break;
@@ -851,8 +869,8 @@ void StartMailslot()
 
                 iSaveCPUSleepTime = iValue;
 
-#ifdef DEBUG
-                printf("Save CPU Value: %d\n", iValue);
+#ifdef DEBUG_LOG
+                Print("Save CPU Value: %d", iValue);
 #endif
             }
             break;
@@ -874,7 +892,9 @@ void StartMailslot()
         }
         else
         {
-            std::cerr << "Error reading from mailslot. Exiting...\n";
+#ifdef DEBUG_LOG
+            Print("Error reading from mailslot. Exiting");
+#endif
             break;
         }
     }
@@ -887,15 +907,17 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 {
     switch (ul_reason_for_call)
     {
-    case DLL_PROCESS_ATTACH:
-    {
-        CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&StartMailslot, 0, 0, 0);
-    }
-    break;
-    case DLL_THREAD_ATTACH:
-    case DLL_THREAD_DETACH:
-    case DLL_PROCESS_DETACH:
+        case DLL_PROCESS_ATTACH:
+        {
+            g_hThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&StartMailslot, 0, 0, 0);
+        }
         break;
+        case DLL_PROCESS_DETACH:
+            GlobalExitThread();
+            break;
+        case DLL_THREAD_ATTACH:
+        case DLL_THREAD_DETACH:
+            break;
     }
 
     return TRUE;
