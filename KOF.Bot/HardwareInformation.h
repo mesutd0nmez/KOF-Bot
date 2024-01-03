@@ -1,18 +1,5 @@
 #pragma once
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <unordered_map>
-#include <Windows.h>
-#include <comdef.h>
-#include <Wbemidl.h>
-#include <ntddscsi.h>
-#include <winioctl.h>
-#include <VersionHelpers.h>
-
-#pragma comment(lib, "wbemuuid.lib")
-
 class HardwareInformation
 {
 public:
@@ -98,14 +85,14 @@ public:
 		std::wstring ComputerHardwareId{};
 	} Registry;
 
-	std::unique_ptr<HardwareInformation> Pointer()
-	{
-		return std::make_unique<HardwareInformation>(*this);
-	}
-
 	HardwareInformation()
 	{
 		//GetHardwareInformation();
+	}
+
+	virtual ~HardwareInformation()
+	{
+		ClearHardwareInformation();
 	}
 
 	static std::wstring SafeString(const wchar_t* pString)
@@ -592,8 +579,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -622,8 +609,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -654,8 +641,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -694,8 +681,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -735,8 +722,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -766,7 +753,7 @@ private:
 			DBG_UNREFERENCED_PARAMETER(e);
 
 #ifdef _DEBUG
-			printf("QueryNetwork: %s\n", e.what());
+			Print("%s", e.what());
 #endif
 		}
 	}
@@ -789,8 +776,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -805,8 +792,8 @@ private:
 		}
 		catch (const std::exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -824,5 +811,15 @@ public:
 		//QueryPhysicalMemory();
 		QueryRegistry();
 		QueryDisk();
+	}
+
+	void ClearHardwareInformation()
+	{
+		this->GPU.clear();
+
+		memset(&this->System, 0, sizeof(this->System));
+		memset(&this->Registry, 0, sizeof(this->Registry));
+
+		this->Disk.clear();
 	}
 };
