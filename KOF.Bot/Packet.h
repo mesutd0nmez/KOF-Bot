@@ -2,8 +2,6 @@
 
 #include "ByteBuffer.h"
 #include "PacketHeader.h"
-#include <cstdint>
-#include <string>
 
 class Packet : public ByteBuffer
 {
