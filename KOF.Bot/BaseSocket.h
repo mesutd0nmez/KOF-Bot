@@ -1,6 +1,5 @@
 #pragma once
 
-
 #define FDR_UNUSED(expr){ (void)(expr); } 
 #define FDR_ON_ERROR std::function<void(int)> onError = [](int errorCode){FDR_UNUSED(errorCode)}
 
@@ -13,7 +12,8 @@ public:
         TCP = SOCK_STREAM,
         UDP = SOCK_DGRAM
     };
-    const int32_t BUFFER_SIZE = 262144;
+
+    const int32_t BUFFER_SIZE = 32 * (1024 * 1024); //32MB
     sockaddr_in address;
 
     bool isConnected = false;
@@ -50,7 +50,8 @@ protected:
 
     // Methods
 public:
-    virtual void Close() {
+    virtual void Close() 
+    {
         if (!isConnected || isClosed) return;
 
         isClosed = true;
