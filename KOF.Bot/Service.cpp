@@ -141,7 +141,11 @@ void Service::HandlePacket(Packet& pkt)
                 pkt >> iBufferLength;
 
                 std::vector<uint8_t> vecBuffer(iBufferLength);
-                pkt.read(&vecBuffer[0], iBufferLength);
+
+                if (iBufferLength > 0)
+                {
+                    pkt.read(&vecBuffer[0], iBufferLength);
+                }         
 
                 std::string szData(reinterpret_cast<const char*>(vecBuffer.data()), vecBuffer.size());
                 OnConfigurationLoaded(szData);
@@ -158,7 +162,11 @@ void Service::HandlePacket(Packet& pkt)
             pkt >> iBufferLength;
 
             std::vector<uint8_t> vecBuffer(iBufferLength);
-            pkt.read(&vecBuffer[0], iBufferLength);
+
+            if (iBufferLength > 0)
+            {
+                pkt.read(&vecBuffer[0], iBufferLength);
+            }       
 
             std::string szData((char*)vecBuffer.data(), vecBuffer.size());
             OnLoaded(szData);
@@ -197,7 +205,11 @@ void Service::HandlePacket(Packet& pkt)
             pkt >> iAdapterBufferLength;
 
             std::vector<uint8_t> vecAdapterBuffer(iAdapterBufferLength);
-            pkt.read(&vecAdapterBuffer[0], iAdapterBufferLength);
+
+            if (iAdapterBufferLength > 0)
+            {
+                pkt.read(&vecAdapterBuffer[0], iAdapterBufferLength);
+            }      
 
             OnInjection(vecAdapterBuffer);
         }
@@ -210,12 +222,20 @@ void Service::HandlePacket(Packet& pkt)
             pkt >> iUpdateBufferLength;
 
             std::vector<uint8_t> vecUpdateBuffer(iUpdateBufferLength);
-            pkt.read(&vecUpdateBuffer[0], iUpdateBufferLength);
+
+            if (iUpdateBufferLength > 0)
+            {
+                pkt.read(&vecUpdateBuffer[0], iUpdateBufferLength);
+            }          
 
             pkt >> iUpdaterBufferLength;
 
             std::vector<uint8_t> vecUpdaterBuffer(iUpdaterBufferLength);
-            pkt.read(&vecUpdaterBuffer[0], iUpdaterBufferLength);
+
+            if (iUpdaterBufferLength > 0)
+            {
+                pkt.read(&vecUpdaterBuffer[0], iUpdaterBufferLength);
+            }        
 
             std::ofstream updateFile(skCryptDec("Update.zip"), std::ios::binary);
             std::ofstream updaterFile(skCryptDec("Updater.exe"), std::ios::binary);
@@ -249,7 +269,11 @@ void Service::HandlePacket(Packet& pkt)
                 pkt >> iBufferLength;
 
                 std::vector<uint8_t> vecBuffer(iBufferLength);
-                pkt.read(&vecBuffer[0], iBufferLength);
+
+                if (iBufferLength > 0)
+                {
+                    pkt.read(&vecBuffer[0], iBufferLength);
+                }           
 
                 OnRouteLoaded(vecBuffer);
             }
