@@ -30,7 +30,7 @@ Project needs [KOF-Server](https://github.com/trkyshorty/KOF-Server) to run, see
 
 **KOF-Bot** utilizes **AES-256 CFB** encryption, and the keys for this encryption are configured through the ***KOF.Bot\Service.cpp*** and ***KOF.Bot\Cryption.h*** files
 
-These keys must be **64** characters in length.
+These keys must be **64** characters in length
 
 ## Compression
 
@@ -40,14 +40,14 @@ You can modify compression settings via the ***KOF.Bot\Compression.h*** file
 
 ## Configuration
 
-To make changes in the KOF.Bot dynamics and reliability, examine the ***KOF.Bot\Define.h*** file. The definitions here can lead to alterations in the runtime behavior and reliability of the application, which may be necessary during the development process.
+To make changes in the KOF.Bot dynamics and reliability, examine the ***KOF.Bot\Define.h*** file. The definitions here can lead to alterations in the runtime behavior and reliability of the application, which may be necessary during the development process
 
 ## Code Information
 
-The `Bot` class in the project serves as the main class, overseeing all aspects of bot management. The `Bot` establishes a connection to the [KOF-Server](https://github.com/trkyshorty/KOF-Server) through the `Service` class internally.
+The `Bot` class in the project serves as the main class, overseeing all aspects of bot management. The `Bot` establishes a connection to the [KOF-Server](https://github.com/trkyshorty/KOF-Server) through the `Service` class internally
 
-After successfully connecting to the game, the `ClientHandler` class takes charge of managing all **Knight Online** processes. Through the `Client` class, `ClientHandler` can read or modify **Knight Online** data.
+After successfully connecting to the game, the `ClientHandler` class takes charge of managing all **Knight Online** processes. Through the `Client` class, `ClientHandler` can read or modify **Knight Online** data
 
-The bot's user interface is created through the ***Drawing*** class, and for interface modifications, refer to the `Drawing` and `UI` classes.
+The bot's user interface is created through the ***Drawing*** class, and for interface modifications, refer to the `Drawing` and `UI` classes
 
 This is the structure of the project, and we strive to keep the code organized
