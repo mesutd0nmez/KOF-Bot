@@ -1,61 +1,6 @@
 // pch.cpp: source file corresponding to the pre-compiled header
 
 #include "pch.h"
-#include "Injection.h"
-
-void SuspendProcess(HANDLE hProcess)
-{
-	HMODULE hModuleNtdll = GetModuleHandle(skCryptDec("ntdll"));
-
-	if (hModuleNtdll != 0)
-	{
-		NtSuspendProcess pNtSuspendProcess = (NtSuspendProcess)GetProcAddress(
-			hModuleNtdll, skCryptDec("NtSuspendProcess"));
-
-		if (!pNtSuspendProcess)
-			return;
-
-		pNtSuspendProcess(hProcess);
-	}
-}
-
-void SuspendProcess(DWORD dwProcessId)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-	if (hProcess != nullptr)
-	{
-		SuspendProcess(hProcess);
-		CloseHandle(hProcess);
-	}
-}
-
-void ResumeProcess(HANDLE hProcess)
-{
-	HMODULE hModuleNtdll = GetModuleHandle(skCryptDec("ntdll"));
-
-	if (hModuleNtdll != 0)
-	{
-		NtResumeProcess pResumeProcess = (NtResumeProcess)GetProcAddress(
-			hModuleNtdll, skCryptDec("NtResumeProcess"));
-
-		if (!pResumeProcess)
-			return;
-
-		pResumeProcess(hProcess);
-	}
-}
-
-void ResumeProcess(DWORD dwProcessId)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-	if (hProcess != nullptr)
-	{
-		ResumeProcess(hProcess);
-		CloseHandle(hProcess);
-	}
-}
 
 BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szCommandLine, PROCESS_INFORMATION& processInfo)
 {
@@ -88,145 +33,22 @@ BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szComm
 	return TRUE;
 }
 
-BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-	if (hProcess == nullptr)
-		return false;
-
-	BOOL bStatus = TerminateProcess(hProcess, uExitCode);
-
-	CloseHandle(hProcess);
-
-	return bStatus;
-}
-
-bool Injection(DWORD iTargetProcess, std::string szPath)
-{
-	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Connector.dll"));
-
-	if (!hInjectionModule)
-	{
-		return false;
-	}
-
-	auto InjectA = (f_InjectA)GetProcAddress(hInjectionModule, skCryptDec("InjectA"));
-
-	INJECTIONDATAA data =
-	{
-		0,
-		"",
-		iTargetProcess,
-		INJECTION_MODE::IM_ManualMap,
-		LAUNCH_METHOD::LM_HijackThread,
-		INJ_ERASE_HEADER | INJ_UNLINK_FROM_PEB | INJ_CLEAN_DATA_DIR | INJ_SHIFT_MODULE | INJ_THREAD_CREATE_CLOAKED,
-		0,
-		NULL
-	};
-
-	strcpy(data.szDllPath, szPath.c_str());
-
-	(f_InjectA)InjectA(&data);
-
-	return true;
-}
-
-bool ConsoleCommand(const std::string& input, std::string& out)
-{
-	auto* shell_cmd = _popen(input.c_str(), "r");
-
-	if (!shell_cmd)
-	{
-		return false;
-	}
-
-	static char buffer[1024] = {};
-	while (fgets(buffer, 1024, shell_cmd))
-	{
-		out.append(buffer);
-	}
-	_pclose(shell_cmd);
-
-	while (out.back() == '\n' ||
-		out.back() == '\0' ||
-		out.back() == ' ' ||
-		out.back() == '\r' ||
-		out.back() == '\t') {
-		out.pop_back();
-	}
-
-	out.erase(std::remove(out.begin(), out.end(), '\n'), out.cend());
-
-	return !out.empty();
-}
-
 bool KillProcessesByFileName(const char* fileName) 
 {
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-	if (hSnapshot == INVALID_HANDLE_VALUE) 
-	{
-#ifdef DEBUG
-		std::cerr << "Bot: Error creating process snapshot" << std::endl;
-#endif
-		return false;
-	}
-
-	PROCESSENTRY32 pe;
-	pe.dwSize = sizeof(PROCESSENTRY32);
-
-	if (Process32First(hSnapshot, &pe)) 
-	{
-		do 
-		{
-			if (_stricmp(pe.szExeFile, fileName) == 0) 
-			{
-				HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-
-				if (hProcess) 
-				{
-					if (TerminateProcess(hProcess, 0)) 
-					{
-#ifdef DEBUG
-						std::cout << "Bot: Terminated process ID: " << pe.th32ProcessID << std::endl;
-#endif
-					}
-					else 
-					{
-#ifdef DEBUG
-						std::cerr << "Bot: Failed to terminate process ID: " << pe.th32ProcessID << std::endl;
-#endif
-					}
-
-					CloseHandle(hProcess);
-				}
-				else 
-				{
-#ifdef DEBUG
-					std::cerr << "Bot: Failed to open process for termination" << std::endl;
-#endif
-				}
-			}
-		} 
-		while (Process32Next(hSnapshot, &pe));
-	}
-
-	CloseHandle(hSnapshot);
-
-	return true;
+	std::vector<const char*> vecFileName { fileName };
+	return KillProcessesByFileName(vecFileName);
 }
 
-bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
+bool KillProcessesByFileName(const std::vector<const char*>& fileNames)
 {
-	DWORD currentProcessId = GetCurrentProcessId();
+	DWORD dwCurrentProcessId = GetCurrentProcessId();
 
 	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
 	if (hSnapshot == INVALID_HANDLE_VALUE)
 	{
-#ifdef DEBUG
-		std::cerr << "KillProcessesByFileNames: Error creating process snapshot" << std::endl;
+#ifdef DEBUG_LOG
+		Print("KillProcessesByFileNames: Error creating process snapshot");
 #endif
 		return false;
 	}
@@ -238,41 +60,26 @@ bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
 	{
 		do
 		{
-			if (pe.th32ProcessID == currentProcessId)
-			{
+			if (pe.th32ProcessID == dwCurrentProcessId)
 				continue;
-			}
 
 			for (const char* fileName : fileNames)
 			{
-				if (_stricmp(pe.szExeFile, fileName) == 0)
+				if (_stricmp(pe.szExeFile, fileName) != 0)
+					continue;
+
+				HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+
+				if (!hProcess)
+					continue;
+
+				if (!TerminateProcess(hProcess, 1))
 				{
-					HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
-
-					if (hProcess)
-					{
-						if (TerminateProcess(hProcess, 0))
-						{
-#ifdef DEBUG
-							printf("KillProcessesByFileNames: Terminated process ID: %d\n", pe.th32ProcessID);
-#endif
-						}
-						else
-						{
-#ifdef DEBUG
-							printf("KillProcessesByFileNames: Failed to terminate process ID: %d\n", pe.th32ProcessID);
-#endif
-						}
-
-						CloseHandle(hProcess);
-					}
-					else
-					{
-#ifdef DEBUG
-						printf("KillProcessesByFileNames: Failed to open process for termination\n\n");
-#endif
-					}
+					CloseHandle(hProcess);
+					continue;
 				}
+
+				CloseHandle(hProcess);
 			}
 		} while (Process32Next(hSnapshot, &pe));
 	}
@@ -282,7 +89,7 @@ bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
 	return true;
 }
 
-uint8_t hexCharToUint8(char c) 
+uint8_t HexCharToUint8(char c) 
 {
 	if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
 	if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
@@ -290,7 +97,7 @@ uint8_t hexCharToUint8(char c)
 	throw std::invalid_argument(skCryptDec("Invalid hex character"));
 }
 
-std::vector<uint8_t> fromHexString(const std::string& hexString) 
+std::vector<uint8_t> FromHexString(const std::string& hexString) 
 {
 	if (hexString.empty())
 		return {};
@@ -300,14 +107,15 @@ std::vector<uint8_t> fromHexString(const std::string& hexString)
 
 	std::vector<uint8_t> result(hexString.size() / 2);
 
-	for (size_t i = 0; i < hexString.size(); i += 2) {
-		result[i / 2] = (hexCharToUint8(hexString[i]) << 4) | hexCharToUint8(hexString[i + 1]);
+	for (size_t i = 0; i < hexString.size(); i += 2) 
+	{
+		result[i / 2] = (HexCharToUint8(hexString[i]) << 4) | HexCharToUint8(hexString[i + 1]);
 	}
 
 	return result;
 }
 
-std::string toHexString(const std::vector<uint8_t>& bytes) 
+std::string ToHexString(const std::vector<uint8_t>& bytes) 
 {
 	if (bytes.size() == 0)
 		return "";
@@ -319,57 +127,14 @@ std::string toHexString(const std::vector<uint8_t>& bytes)
 	return ss.str();
 }
 
-const char* stristr(const char* haystack, const char* needle)
-{
-	size_t needleLength = std::strlen(needle);
-	while (*haystack)
-	{
-		if (_strnicmp(haystack, needle, needleLength) == 0)
-		{
-			return haystack;
-		}
-		haystack++;
-	}
-	return nullptr;
-}
-
-std::string calculateElapsedTime(const std::chrono::time_point<std::chrono::system_clock>& start_time) 
-{
-	auto current_time = std::chrono::system_clock::now();
-
-	auto elapsed_time = std::chrono::duration_cast<std::chrono::minutes>(current_time - start_time);
-
-	auto minutes = elapsed_time.count() % 60;
-	auto hours = elapsed_time.count() / 60;
-
-	if (minutes == 0) 
-	{
-		minutes = 1;
-	}
-
-	std::stringstream result_stream;
-
-	if (hours > 0) 
-	{
-		result_stream << hours << skCryptDec(" saat ");
-	}
-
-	if (minutes > 0) 
-	{
-		result_stream << minutes << skCryptDec(" dakika");
-	}
-
-	return result_stream.str();
-}
-
 DWORD CalculateCRC32(const std::string& filePath)
 {
 	std::ifstream fileStream(filePath, std::ios::binary);
 
 	if (!fileStream.is_open())
 	{
-#ifdef DEBUG
-		printf("File not opened: %s\n", filePath.c_str());
+#ifdef DEBUG_LOG
+		Print("File not opened: %s\n", filePath.c_str());
 #endif
 		return 0xFFFFFFFF;
 	}
@@ -441,32 +206,6 @@ std::string to_string(wchar_t const* wcstr)
 	return str;
 }
 
-bool IsFolderExists(const std::string& folderPath) 
-{
-	DWORD dwAttrib = GetFileAttributesA(folderPath.c_str());
-
-	return (dwAttrib != INVALID_FILE_ATTRIBUTES &&
-		(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
-}
-
-bool IsFolderExistsOrCreate(const std::string& folderPath)
-{
-	if (IsFolderExists(folderPath))
-		return true;
-
-	return CreateFolder(folderPath);
-}
-
-bool CreateFolder(const std::string& folderPath) 
-{
-	if (CreateDirectoryA(folderPath.c_str(), NULL) ||
-		ERROR_ALREADY_EXISTS == GetLastError()) 
-	{
-		return true;
-	}
-	return false;
-}
-
 std::string RemainingTime(long long int seconds) 
 {
 	const int secondsPerMinute = 60;
@@ -511,44 +250,109 @@ std::string RemainingTime(long long int seconds)
 	return result;
 }
 
-bool CheckFileExistence(const std::string& path, const std::vector<std::string>& fileArray) 
+float TimeGet()
 {
-	std::filesystem::path folderPath(path);
+#ifdef VMPROTECT
+	VMProtectBeginMutation("TimeGet");
+#endif
 
-	for (const auto& fileName : fileArray) 
+	static BOOL bInit = FALSE;
+	static BOOL bUseHWTimer = FALSE;
+	static LARGE_INTEGER nTime, nFrequency;
+
+	if (bInit == FALSE)
 	{
-		std::filesystem::path filePath = folderPath / fileName;
-
-		if (!std::filesystem::exists(filePath)) 
+		if (TRUE == ::QueryPerformanceCounter(&nTime))
 		{
-			return false;
+			::QueryPerformanceFrequency(&nFrequency);
+			bUseHWTimer = TRUE;
 		}
+		else
+		{
+			bUseHWTimer = FALSE;
+		}
+
+		bInit = TRUE;
 	}
 
-	return true;
+	if (bUseHWTimer)
+	{
+		::QueryPerformanceCounter(&nTime);
+		return (float)((double)(nTime.QuadPart) / (double)nFrequency.QuadPart);
+	}
+
+	return (float)timeGetTime() / 1000.0f;
+
+#ifdef VMPROTECT
+	VMProtectEnd();
+#endif
 }
 
-void TriggerBSOD()
+std::vector<uint8_t> CaptureScreen(int width, int height, int x, int y)
 {
-	BOOLEAN bEnabled;
-	ULONG uResp;
+#ifdef VMPROTECT
+	VMProtectBeginMutation("CaptureScreen");
+#endif
 
-	HMODULE hNtdll = GetModuleHandle(skCryptDec("ntdll.dll"));
+	HDC hdcScreen = GetDC(NULL);
+	HDC hdcMem = CreateCompatibleDC(hdcScreen);
+	HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
+	SelectObject(hdcMem, hBitmap);
 
-	if (!hNtdll) return;
+	BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY);
 
-	LPVOID lpRtlAdjustPrivilege = GetProcAddress(hNtdll, skCryptDec("RtlAdjustPrivilege"));
-	LPVOID lpNtRaiseHardError = GetProcAddress(hNtdll, skCryptDec("NtRaiseHardError"));
+	BITMAPFILEHEADER bmpFileHeader;
+	bmpFileHeader.bfType = 0x4D42; // "BM"
+	bmpFileHeader.bfSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + width * height * 4;
+	bmpFileHeader.bfReserved1 = 0;
+	bmpFileHeader.bfReserved2 = 0;
+	bmpFileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
 
-	if (lpRtlAdjustPrivilege && lpNtRaiseHardError)
-	{
-		pdef_RtlAdjustPrivilege NtCall = (pdef_RtlAdjustPrivilege)lpRtlAdjustPrivilege;
-		pdef_NtRaiseHardError NtCall2 = (pdef_NtRaiseHardError)lpNtRaiseHardError;
+	BITMAPINFOHEADER bmpInfoHeader;
+	bmpInfoHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmpInfoHeader.biWidth = width;
+	bmpInfoHeader.biHeight = -height;
+	bmpInfoHeader.biPlanes = 1;
+	bmpInfoHeader.biBitCount = 32;
+	bmpInfoHeader.biCompression = BI_RGB;
+	bmpInfoHeader.biSizeImage = 0;
+	bmpInfoHeader.biXPelsPerMeter = 0;
+	bmpInfoHeader.biYPelsPerMeter = 0;
+	bmpInfoHeader.biClrUsed = 0;
+	bmpInfoHeader.biClrImportant = 0;
 
-		// Adjust privilege
-		NTSTATUS NtRet = NtCall(19, TRUE, FALSE, &bEnabled);
+	std::vector<uint8_t> vecImageData(sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + width * height * 4);
+	memcpy(vecImageData.data(), &bmpFileHeader, sizeof(BITMAPFILEHEADER));
+	memcpy(vecImageData.data() + sizeof(BITMAPFILEHEADER), &bmpInfoHeader, sizeof(BITMAPINFOHEADER));
+	GetDIBits(hdcScreen, hBitmap, 0, height, vecImageData.data() + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER), (BITMAPINFO*)&bmpInfoHeader, DIB_RGB_COLORS);
 
-		// Trigger BSOD
-		NtCall2(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResp);
-	}
+	DeleteObject(hBitmap);
+	DeleteDC(hdcMem);
+	ReleaseDC(NULL, hdcScreen);
+
+	return vecImageData;
+
+#ifdef VMPROTECT
+	VMProtectEnd();
+#endif
+}
+
+void DeleteFilesInPrefetchFolder() 
+{
+	WIN32_FIND_DATA findFileData;
+	HANDLE hFind = FindFirstFile(_T(skCryptDec("C:\\Windows\\Prefetch\\*")), &findFileData);
+
+	if (hFind == INVALID_HANDLE_VALUE) 
+		return;
+
+	do {
+		if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) 
+		{
+			TCHAR filePath[MAX_PATH];
+			_stprintf_s(filePath, _T(skCryptDec("C:\\Windows\\Prefetch\\%s")), findFileData.cFileName);
+			DeleteFile(filePath);
+		}
+	} while (FindNextFile(hFind, &findFileData) != 0);
+
+	FindClose(hFind);
 }
