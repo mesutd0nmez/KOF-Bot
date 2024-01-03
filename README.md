@@ -6,6 +6,11 @@ After gathering the project dependencies under ```PROJECT_DIR\KOF.Dependencies``
 
 Project needs [KOF-Server](https://github.com/trkyshorty/KOF-Server) to run, see the KOF-Server [documentation](https://github.com/trkyshorty/KOF-Server)
 
+## Table of Contents
+
+- [Dependencies](#dependencies)
+- [Protection](#protection)
+
 ## Dependencies
 
 - [cryptopp-8.7.0](https://github.com/weidai11/cryptopp/releases/tag/CRYPTOPP_8_7_0)
