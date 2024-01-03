@@ -1,26 +1,36 @@
 #include "pch.h"
 #include "UI.h"
 #include "Drawing.h"
-
-#include <D3dx9tex.h>
-#pragma comment(lib, "D3dx9")
-#pragma comment(lib, "D3d9")
+#include "AntiDebug.h"
+#include "InteractiveCheck.h"
+#include "Trap.h"
+#ifdef VMPROTECT
+#include "VMProtect.h"
+#endif
+#include "ClientHandler.h"
 
 LPDIRECT3DDEVICE9 UI::pD3DDevice = nullptr;
 LPDIRECT3D9 UI::pD3D = nullptr;
 D3DPRESENT_PARAMETERS UI::D3Dpp = {};
 UINT UI::g_ResizeHeight = 0;
 UINT UI::g_ResizeWidth = 0;
-bool UI::bInit = false;
+HWND UI::hWindow = nullptr;
 HWND UI::hTargetWindow = nullptr;
 BOOL UI::bTargetSet = FALSE;
 DWORD UI::dTargetPID = 0;
 
 HMODULE UI::hCurrentModule = nullptr;
 
-float g_iLastFrameTime = 0.0f;
+float g_iLastFrameTime = TimeGet();
+float g_iFPSLimit = 30.0f;
 
-float UI::g_iFPSLimit = 60.0f;
+float g_iLastAntiDebugCheckTime = TimeGet();
+float g_iLastAntiDebugTrapCheckTime = TimeGet();
+float g_iLastInteractiveCheckTime = TimeGet();
+
+#ifdef VMPROTECT
+float g_iLastVMProtectCheckTime = TimeGet();
+#endif
 
 /**
     @brief : Function that create a D3D9 device.
@@ -88,16 +98,10 @@ LRESULT WINAPI UI::WndProc(const HWND hWnd, const UINT msg, const WPARAM wParam,
 void UI::Render(Bot* pBot)
 {
 #ifdef VMPROTECT
-    VMProtectBeginUltra("UI::Render");
+    VMProtectBeginMutation("UI::Render");
 #endif
 
     ImGui_ImplWin32_EnableDpiAwareness();
-
-    // Get the main window of the process when overlay as DLL
-#ifdef _WINDLL
-    if (hTargetWindow == nullptr)
-        GetWindow();
-#endif
 
     WNDCLASSEX wc;
 
@@ -118,13 +122,13 @@ void UI::Render(Bot* pBot)
     wc.style = CS_VREDRAW | CS_HREDRAW;
 
     ::RegisterClassEx(&wc);
-    const HWND hWnd = ::CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE, wc.lpszClassName, Drawing::lpWindowName, WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), nullptr, nullptr, wc.hInstance, nullptr);
+    hWindow = ::CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE, wc.lpszClassName, Drawing::lpWindowName, WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), nullptr, nullptr, wc.hInstance, nullptr);
 
-    SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+    SetLayeredWindowAttributes(hWindow, RGB(0, 0, 0), 0, LWA_COLORKEY);
     const MARGINS margin = { -1, -1, -1, -1 };
-    DwmExtendFrameIntoClientArea(hWnd, &margin);
+    DwmExtendFrameIntoClientArea(hWindow, &margin);
 
-    if (!CreateDeviceD3D(hWnd))
+    if (!CreateDeviceD3D(hWindow))
     {
         CleanupDeviceD3D();
         ::UnregisterClass(wc.lpszClassName, wc.hInstance);
@@ -133,24 +137,23 @@ void UI::Render(Bot* pBot)
 
     int iWindowState = SW_SHOWDEFAULT;
 
-    ::ShowWindow(hWnd, iWindowState);
-    ::UpdateWindow(hWnd);
+    ::ShowWindow(hWindow, iWindowState);
+    ::UpdateWindow(hWindow);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.Framerate = g_iFPSLimit;
     
     ImGui::StyleColorsDark();
 
     ImGui::GetIO().IniFilename = nullptr;
 
-    ImGui_ImplWin32_Init(hWnd);
+    ImGui_ImplWin32_Init(hWindow);
     ImGui_ImplDX9_Init(pD3DDevice);
 
     const ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-
-    bInit = true;
 
     Drawing::Bot = pBot;
 
@@ -160,42 +163,208 @@ void UI::Render(Bot* pBot)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-        if (hTargetWindow != nullptr && GetAsyncKeyState(VK_INSERT) & 1)
-            Drawing::bDraw = !Drawing::bDraw;
-
-#ifdef ENABLE_SERVER_CONNECTION_LOST_PROTECT
+#ifdef ENABLE_SERVER_CONNECTION_LOST_CHECK
         if (!Drawing::Bot->IsConnected())
             break;
 #endif
 
-#ifdef ENABLE_DEBUGGER_PRESENT_PROTECT
-        if (IsDebuggerPresent())
+        float fCurrentTime = TimeGet();
+
+#ifdef ENABLE_ANTI_SUSPEND_PROTECT
+        if (fCurrentTime > (g_iLastFrameTime + (10000.0f / 1000.0f)))
         {
-            TriggerBSOD();
+            Drawing::Bot->SendReport(REPORT_CODE_DETECT_SUSPEND_PROCESS);
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+            std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+            Drawing::Bot->SendScreenshot(vecImageBuffer);
+#endif
+
+#ifdef ENABLE_TRIGGER_BSOD
+            BOOLEAN bEnabled;
+            ULONG uResponse;
+            RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+            NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
             break;
         }
 #endif
 
-        float fCurrentTime = Bot::TimeGet();
-
-#ifdef ENABLE_SUSPEND_PROTECT
-        if (g_iLastFrameTime > 0.0f
-            && fCurrentTime > (g_iLastFrameTime + (15000.0f / 1000.0f)))
+#ifdef ENABLE_PONG_TIMEOUT_CHECK
+        if (fCurrentTime > (Drawing::Bot->m_fLastPongTime + (60000.0f / 1000.0f))) 
         {
-            TriggerBSOD();
+            Drawing::Bot->SendReport(REPORT_CODE_DETECT_LAST_PONG_TIME_HIGH); 
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+            std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+            Drawing::Bot->SendScreenshot(vecImageBuffer);
+#endif
+
+#ifdef ENABLE_TRIGGER_BSOD
+            BOOLEAN bEnabled;
+            ULONG uResponse;
+            RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+            NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
             break;
         }
 #endif
 
-#ifdef ENABLE_PONG_TIMEOUT_PROTECT
-        if (fCurrentTime > (Drawing::Bot->m_fLastPongTime + (60000.0f / 1000.0f)))
+#ifndef _DEBUG
+#ifdef ENABLE_TRAP_CHECK
+        if (fCurrentTime > (g_iLastAntiDebugTrapCheckTime + (250.0f / 1000.0f)))
         {
-            TriggerBSOD();
-            break;
+            ReportCode eIsTrapped = Trap::IsTrapped();
+
+            if (eIsTrapped != REPORT_CODE_NONE)
+            {
+                Drawing::Bot->SendReport(eIsTrapped);
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+                std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+                Drawing::Bot->SendScreenshot(vecImageBuffer);
+#endif
+
+#ifdef ENABLE_TRIGGER_BSOD
+                BOOLEAN bEnabled;
+                ULONG uResponse;
+                RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+                NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
+                break;
+            }
+
+            g_iLastAntiDebugTrapCheckTime = TimeGet();
         }
+#endif      
+#endif
+
+#ifndef _DEBUG
+#ifdef ENABLE_ANTI_DEBUG
+        if (fCurrentTime > (g_iLastAntiDebugCheckTime + (500.0f / 1000.0f)))
+        {
+            ReportCode eIsDebugged = AntiDebug::IsDebugged();
+
+            if (eIsDebugged != REPORT_CODE_NONE)
+            {
+                Drawing::Bot->SendReport(eIsDebugged);
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+                std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+                Drawing::Bot->SendScreenshot(vecImageBuffer);
+#endif
+
+#ifdef ENABLE_TRIGGER_BSOD
+                BOOLEAN bEnabled;
+                ULONG uResponse;
+                RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+                NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
+                break;
+            }
+
+            g_iLastAntiDebugCheckTime = TimeGet();
+        }
+#endif  
+#endif
+
+#ifndef _DEBUG
+#ifdef ENABLE_INTERACTIVE_CHECK
+        if (fCurrentTime > (g_iLastInteractiveCheckTime + (2000.0f / 1000.0f)))
+        {
+            ReportCode eIsDetected = InteractiveCheck::IsDetected();
+
+            if (eIsDetected != REPORT_CODE_NONE)
+            {
+                Drawing::Bot->SendReport(eIsDetected, InteractiveCheck::GetLastPayload());
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+                std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+                Drawing::Bot->SendScreenshot(vecImageBuffer);
+#endif
+
+#ifdef ENABLE_TRIGGER_BSOD
+                BOOLEAN bEnabled;
+                ULONG uResponse;
+                RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+                NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
+               break;
+            }
+
+            g_iLastInteractiveCheckTime = TimeGet();
+        }
+#endif  
+#endif
+
+#ifndef _DEBUG
+#ifdef VMPROTECT
+        if (fCurrentTime > (g_iLastVMProtectCheckTime + (3000.0f / 1000.0f)))
+        {
+            ReportCode eIsDetected = VMProtect::IsDetected();
+
+            if (eIsDetected != REPORT_CODE_NONE)
+            {
+                Drawing::Bot->SendReport(eIsDetected);
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+                std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+                Drawing::Bot->SendScreenshot(vecImageBuffer);
+#endif
+
+#ifdef ENABLE_TRIGGER_BSOD
+                BOOLEAN bEnabled;
+                ULONG uResponse;
+                RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+                NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
+                break;
+            }
+
+            g_iLastVMProtectCheckTime = TimeGet();
+        }
+#endif        
 #endif
 
         Drawing::Bot->Process();
+
+        float fDeltaTime = fCurrentTime - g_iLastFrameTime;
+        float fTargetDeltaTime = 1.0f / g_iFPSLimit;
+
+        if (fDeltaTime < fTargetDeltaTime)
+            continue;
+
+        if (dTargetPID != 0 
+            && Drawing::Bot->IsInjectedProcessLost())
+        {
+            Drawing::SetScene(Drawing::LOADER);
+            ClearTargetWindow();
+        }
+
+        BOOL bTargetWindowAlive = IsWindowAlive();
+
+        if (!Drawing::Bot->IsInjectedProcessLost() 
+            && !bTargetWindowAlive
+            && dTargetPID != Drawing::Bot->GetInjectedProcessId())
+        {
+            HWND hTargetWindow = FindWindow(skCryptDec("Knight OnLine Client"), NULL);
+
+            if (hTargetWindow != nullptr)
+            {
+                UI::SetTargetWindow(hTargetWindow);
+
+                ClientHandler* pClientHandler = Drawing::Bot->GetClientHandler();
+
+                if (pClientHandler)
+                    pClientHandler->OnReady();
+            }
+        }
+
+        if (bTargetWindowAlive && GetAsyncKeyState(VK_INSERT) & 1)
+            Drawing::bDraw = !Drawing::bDraw;
+
+        if (Drawing::GetScene() != Drawing::Scene::UI && !Drawing::bDraw)
+            break;
 
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
@@ -206,18 +375,8 @@ void UI::Render(Bot* pBot)
                 bDone = true;
         }
 
-        // Check if the targeted window is still up.
-        if (!IsWindowAlive() && bTargetSet)
-            bDone = true;
-
         if (bDone)
             break;
-
-        if (!Drawing::bDraw && hTargetWindow == nullptr)
-            break;
-
-        if (fCurrentTime < (g_iLastFrameTime + (g_iFPSLimit / 1000.0f)))
-            continue;
 
         if (g_ResizeWidth != 0 && g_ResizeHeight != 0)
         {
@@ -227,19 +386,12 @@ void UI::Render(Bot* pBot)
             ResetDevice();
         }
 
-        // Move the window on top of the targeted window and handle resize.
-#ifdef _WINDLL 
-        if (hTargetWindow != nullptr)
-            MoveWindow(hWnd);
-        else
-            continue;
-#else
-        if (hTargetWindow != nullptr && bTargetSet)
-            MoveWindow(hWnd);
-#endif
+		if (hTargetWindow != nullptr && bTargetSet)
+            MoveWindow(hWindow);
 
-        // Clear overlay when the targeted window is not focus
-        if (!IsWindowFocus(hWnd) && bTargetSet)
+        // Clear overlay when the targeted window
+        if (Drawing::GetScene() == Drawing::Scene::HIDDEN 
+            || ((!IsWindowFocus(hWindow) || (bTargetWindowAlive && (Drawing::GetScene() != Drawing::Scene::UI || !Drawing::IsActive()))) && bTargetSet))
         {
             pD3DDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
             pD3DDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
@@ -267,10 +419,10 @@ void UI::Render(Bot* pBot)
             ImGui::EndFrame();
 
             // Overlay handle inputs when menu is showed.
-            if (Drawing::isActive())
-                SetWindowLong(hWnd, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+            if (Drawing::IsActive())
+                SetWindowLong(hWindow, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
             else
-                SetWindowLong(hWnd, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+                SetWindowLong(hWindow, GWL_EXSTYLE, WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
 
             ImGui::Render();
             ImGui::EndFrame();
@@ -280,10 +432,6 @@ void UI::Render(Bot* pBot)
             pD3DDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
             const D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
             pD3DDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
-
-            // Draw figure with DirectX
-            //if (IsWindowTargeted())
-            //    Drawing::DXDraw(pD3DDevice);
 
             if (pD3DDevice->BeginScene() >= 0)
             {
@@ -302,21 +450,13 @@ void UI::Render(Bot* pBot)
         g_iLastFrameTime = fCurrentTime;
     }
 
-    bInit = false;
-
     ImGui_ImplDX9_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
     CleanupDeviceD3D();
-    ::DestroyWindow(hWnd);
+    ::DestroyWindow(hWindow);
     ::UnregisterClass(wc.lpszClassName, wc.hInstance);
-
-#ifdef _WINDLL
-    CreateThread(nullptr, NULL, (LPTHREAD_START_ROUTINE)FreeLibrary, hCurrentModule, NULL, nullptr);
-#else
-    TerminateProcess(GetModuleHandleA(nullptr), 0);
-#endif
 
 #ifdef VMPROTECT
     VMProtectEnd();
@@ -604,4 +744,11 @@ HWND UI::GetProcessWindowHandle(DWORD targetProcessId)
     }, reinterpret_cast<LPARAM>(&result));
 
     return result;
+}
+
+void UI::ClearTargetWindow()
+{
+    hTargetWindow = nullptr;
+    bTargetSet = FALSE;
+    dTargetPID = 0;
 }

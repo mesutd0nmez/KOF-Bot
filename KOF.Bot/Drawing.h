@@ -1,7 +1,6 @@
 #ifndef DRAWING_H
 #define DRAWING_H
 
-#include "pch.h"
 #include "Bot.h"
 #include "UI.h"
 
@@ -16,7 +15,6 @@ private:
 
 	static void DrawFilledRectangle(int x, int y, int w, int h, unsigned char r, unsigned char g, unsigned char b);
 
-	static void DrawStatisticsController();
 	static void DrawMainController();
 	static void DrawProtectionController();
 	static void DrawAutoLootController();
@@ -32,6 +30,7 @@ private:
 	static void DrawSaveCPUController();
 	static void DrawSupplyController();
 	static void DrawSupplyListController();
+	static void DrawWeaponListController();
 	static void DrawListenerController();
 	static void DrawPartyController();
 	static void DrawSettingsController();
@@ -42,11 +41,10 @@ private:
 	static void DrawRouteListController();
 	static void DrawMainSettingsArea();
 
-	static void DrawExtraController();
 	static void DrawLevelDownerController();
 
 public:
-	static bool isActive();
+	static bool IsActive();
 	static void Draw();
 	static void DXDraw(LPDIRECT3DDEVICE9 pCurrentD3DDevice);
 	static void SetLegalModeSettings(bool bMode);
@@ -54,6 +52,21 @@ public:
 	static Bot* Bot;
 	static LPCSTR lpWindowName;
 	static bool bDraw;
+
+public:
+	enum Scene
+	{
+		HIDDEN,
+		LOGIN,
+		UPDATE,
+		LOADER,
+		UI,
+	};
+
+	static Scene m_Scene;
+	static void SetScene(Scene scene);
+	static Scene GetScene() { return m_Scene; }
+	static bool m_bUpdateSceneSize;
 };
 
 #endif

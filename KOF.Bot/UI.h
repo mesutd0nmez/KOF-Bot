@@ -1,8 +1,6 @@
 #ifndef UI_H
 #define UI_H
 
-#include <string>
-
 #include "pch.h"
 #include "Bot.h"
 
@@ -14,9 +12,7 @@ private:
 	static LPDIRECT3D9 pD3D;
 	static LPDIRECT3DDEVICE9 pD3DDevice;
 	static D3DPRESENT_PARAMETERS D3Dpp;
-	static bool bInit;
 	static UINT g_ResizeWidth, g_ResizeHeight;
-	static BOOL bTargetSet;
 	static DWORD dTargetPID;
 
 	static bool CreateDeviceD3D(HWND hWnd);
@@ -43,15 +39,16 @@ public:
 		char CurrentProcessName[125];
 	};
 
+	static HWND hWindow;
 	static HWND hTargetWindow;
+	static BOOL bTargetSet;
 
 	static void Render(Bot* pBot);
 	static BOOL IsWindowTargeted();
 	static void GetAllWindow(std::vector<WindowItem>* vWindowList);
 	static void SetTargetWindow(HWND hWindow);
 	static HWND GetProcessWindowHandle(DWORD targetProcessId);
-
-	static float g_iFPSLimit;
+	static void ClearTargetWindow();
 };
 
 #endif
