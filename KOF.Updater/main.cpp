@@ -54,7 +54,7 @@ bool StartProcess(std::string szFilePath, std::string szFile, std::string szComm
     return true;
 }
 
-bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
+bool KillProcessesByFileName(const std::vector<const char*>& fileNames)
 {
     DWORD currentProcessId = GetCurrentProcessId();
 
@@ -62,8 +62,8 @@ bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
 
     if (hSnapshot == INVALID_HANDLE_VALUE)
     {
-#ifdef DEBUG
-        std::cerr << "KillProcessesByFileNames: Error creating process snapshot" << std::endl;
+#ifdef DEBUG_LOG
+        Print("KillProcessesByFileNames: Error creating process snapshot");
 #endif
         return false;
     }
@@ -90,14 +90,14 @@ bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
                     {
                         if (TerminateProcess(hProcess, 0))
                         {
-#ifdef DEBUG
-                            printf("KillProcessesByFileNames: Terminated process ID: %d\n", pe.th32ProcessID);
+#ifdef DEBUG_LOG
+                            Print("KillProcessesByFileNames: Terminated process ID: %d", pe.th32ProcessID);
 #endif
                         }
                         else
                         {
-#ifdef DEBUG
-                            printf("KillProcessesByFileNames: Failed to terminate process ID: %d\n", pe.th32ProcessID);
+#ifdef DEBUG_LOG
+                            Print("KillProcessesByFileNames: Failed to terminate process ID: %d", pe.th32ProcessID);
 #endif
                         }
 
@@ -105,8 +105,8 @@ bool KillProcessesByFileNames(const std::vector<const char*>& fileNames)
                     }
                     else
                     {
-#ifdef DEBUG
-                        printf("KillProcessesByFileNames: Failed to open process for termination\n\n");
+#ifdef DEBUG_LOG
+                        Print("KillProcessesByFileNames: Failed to open process for termination");
 #endif
                     }
                 }
@@ -125,8 +125,8 @@ bool KillProcessesByFileName(const char* fileName)
 
     if (hSnapshot == INVALID_HANDLE_VALUE)
     {
-#ifdef DEBUG
-        std::cerr << "Bot: Error creating process snapshot" << std::endl;
+#ifdef DEBUG_LOG
+        Print("Error creating process snapshot");
 #endif
         return false;
     }
@@ -146,14 +146,14 @@ bool KillProcessesByFileName(const char* fileName)
                 {
                     if (TerminateProcess(hProcess, 0))
                     {
-#ifdef DEBUG
-                        std::cout << "Bot: Terminated process ID: " << pe.th32ProcessID << std::endl;
+#ifdef DEBUG_LOG
+                        Print("Terminated process ID: %d", pe.th32ProcessID);
 #endif
                     }
                     else
                     {
-#ifdef DEBUG
-                        std::cerr << "Bot: Failed to terminate process ID: " << pe.th32ProcessID << std::endl;
+#ifdef DEBUG_LOG
+                        Print("Failed to terminate process ID: %d", pe.th32ProcessID);
 #endif
                     }
 
@@ -161,8 +161,8 @@ bool KillProcessesByFileName(const char* fileName)
                 }
                 else
                 {
-#ifdef DEBUG
-                    std::cerr << "Bot: Failed to open process for termination" << std::endl;
+#ifdef DEBUG_LOG
+                    Print("Bot: Failed to open process for termination");
 #endif
                 }
             }
@@ -181,8 +181,8 @@ bool Unzip(const char* zipFilePath, const char* destPath)
 
     if (!mz_zip_reader_init_file(&zip, zipFilePath, 0)) 
     {
-#ifdef DEBUG
-        printf("Unzip: Input file not found\n");
+#ifdef DEBUG_LOG
+        Print("Unzip: Input file not found");
 #endif
         return false;
     }
@@ -198,8 +198,8 @@ bool Unzip(const char* zipFilePath, const char* destPath)
         mz_zip_archive_file_stat file_stat;
         if (!mz_zip_reader_file_stat(&zip, i, &file_stat)) 
         {
-#ifdef DEBUG
-            printf("Unzip: No file information\n");
+#ifdef DEBUG_LOG
+            Print("Unzip: No file information");
 #endif
             bExtracted = false;
             break;
@@ -218,8 +218,8 @@ bool Unzip(const char* zipFilePath, const char* destPath)
 
             if (!destFile) 
             {
-#ifdef DEBUG
-                printf("Unzip: File create failed - %s\n", destFilePath);
+#ifdef DEBUG_LOG
+                Print("Unzip: File create failed - %s", destFilePath);
 #endif
                 bExtracted = false;
                 break;
@@ -246,8 +246,8 @@ bool Unzip(const char* zipFilePath, const char* destPath)
 
 int main()
 {
-#ifdef DEBUG
-    printf("Main: Update starting\n");
+#ifdef DEBUG_LOG
+    Print("Main: Update starting");
 #endif
 
     // 1 - Check update file exist
@@ -255,20 +255,15 @@ int main()
 
     if (!fUpdateFile.is_open()) 
     {
-#ifdef DEBUG
-        printf("Main: Update file not found - %s\n", skCryptDec("Update.zip"));
+#ifdef DEBUG_LOG
+        Print("Main: Update file not found - %s", skCryptDec("Update.zip"));
 #endif
         return 0;
     }
 
     // 2 - Kill all depended process
     std::vector<const char*> fileNames = { 
-#ifdef DEBUG
-        skCryptDec("KOF.exe"), 
-#endif
-        skCryptDec("Discord.exe"),
-        skCryptDec("Updater.exe"),
-        skCryptDec("Updater2.exe"),
+        skCryptDec("DSAServiceHelper.exe"),
         skCryptDec("KnightOnLine.exe"), 
         skCryptDec("xldr_KnightOnline_NA.exe"),
         skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"),
@@ -277,20 +272,20 @@ int main()
         skCryptDec("xxd-0.xem.exe"),
     };
 
-    KillProcessesByFileNames(fileNames);
+    KillProcessesByFileName(fileNames);
 
-    while (IsProcessRunning(skCryptDec("Discord.exe")))
+    while (IsProcessRunning(skCryptDec("DSAServiceHelper.exe")))
     {
         Sleep(1000);
-        KillProcessesByFileName(skCryptDec("Discord.exe"));
+        KillProcessesByFileName(skCryptDec("DSAServiceHelper.exe"));
         Sleep(1000);
     }
 
     // 3 - Start update process
     if(!Unzip(skCryptDec("Update.zip"), "."))
     {
-#ifdef DEBUG
-        printf("Main: Update file extraction failed\n");
+#ifdef DEBUG_LOG
+        Print("Main: Update file extraction failed");
 #endif
         return 0;
     }
@@ -299,10 +294,10 @@ int main()
 
     // 4 - Re-Launch bot process
     PROCESS_INFORMATION botProcessInfo;
-    if (!StartProcess(".", skCryptDec("Discord.exe"), "", botProcessInfo))
+    if (!StartProcess(".", skCryptDec("DSAServiceHelper.exe"), "", botProcessInfo))
     {
-#ifdef DEBUG
-        printf("Main: Bot process start failed\n");
+#ifdef DEBUG_LOG
+        Print("Main: Bot process start failed");
 #endif
         return 0;
     }
@@ -312,8 +307,8 @@ int main()
     // 5 - Remove update file
     DeleteFileA(skCryptDec("Update.zip"));
 
-#ifdef DEBUG
-    printf("Main: Update completed\n");
+#ifdef DEBUG_LOG
+    Print("Main: Update completed");
 #endif
 
     return 0;

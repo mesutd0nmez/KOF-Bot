@@ -17,4 +17,6 @@
 #include "VMProtectSDK.h"
 #endif
 
+#define Print(a, ...) printf("%s: " a "\n", __func__, ##__VA_ARGS__)
+
 #endif
