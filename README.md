@@ -4,7 +4,7 @@ This project is a cheating program developed for the MMORPG game known as Knight
 
 After gathering the project dependencies under ```PROJECT_DIR\KOF.Dependencies```, you can compile the project using **Visual Studio 2022**
 
-Project needs [KOF-Server](https://github.com/trkyshorty/KOF-Server) to run, see the KOF-Server [documentation](https://github.com/trkyshorty/KOF-Server)
+Project needs [KOF-Server](https://github.com/trkyshorty/KOF-Server) to run, see the KOF-Server [documentation](https://github.com/trkyshorty/KOF-Server/blob/dev/README.md#configuration)
 
 ## Table of Contents
 
