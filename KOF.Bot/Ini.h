@@ -1,7 +1,4 @@
 #pragma once
-#include <map>
-#include <string>
-#include <vector>
 
 #define	INI_SECTION_START	'['
 #define	INI_SECTION_END		']'
@@ -26,6 +23,7 @@ private:
 
 public:
 	Ini();
+	~Ini();
 	Ini(const char* lpFilename);
 
 	bool Load(const char* lpFileName = nullptr);

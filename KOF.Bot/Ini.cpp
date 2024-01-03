@@ -1,15 +1,23 @@
 #include "pch.h"
 #include "Ini.h"
 #include "Trim.h"
-#include <unordered_set>
-#include <unordered_map>
-#include <sstream>
 
 #define INI_BUFFER 512
 
 Ini::Ini()
 {
+    m_configMap.clear();
+
     m_isMemory = true;
+    m_szFileName.clear();
+}
+
+Ini::~Ini()
+{
+    m_configMap.clear();
+
+    m_isMemory = true;
+    m_szFileName.clear();
 }
 
 Ini::Ini(const char* lpFilename)
@@ -28,8 +36,8 @@ bool Ini::Load(const char* lpFilename)
     std::ifstream file(fn);
     if (!file)
     {
-#ifdef DEBUG
-        printf("Warning: %s does not exist, will use configured defaults.\n", fn);
+#ifdef DEBUG_LOG
+        Print("%s does not exist, will use configured defaults", fn);
 #endif
         return false;
     }
