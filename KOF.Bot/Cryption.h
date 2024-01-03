@@ -1,11 +1,4 @@
 #pragma once
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-
-#include <cryptlib.h>
-#include <sha.h>
-#include <md5.h>
-#include <modes.h>
-#include <osrng.h>
 
 class Cryption
 {
@@ -52,8 +45,8 @@ public:
 		}
 		catch (const CryptoPP::Exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
@@ -86,8 +79,8 @@ public:
 		}
 		catch (const CryptoPP::Exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
