@@ -401,9 +401,7 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
-# KOF.Dependencies
-KOF.Dependencies
-
 Deployment
 Production
+Tools
 
