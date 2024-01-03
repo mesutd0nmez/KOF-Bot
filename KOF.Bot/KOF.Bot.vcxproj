@@ -197,9 +197,9 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10;..\KOF.Dependencies\nlohmann-3.11.3</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <IntrinsicFunctions>false</IntrinsicFunctions>
       <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -229,11 +229,11 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10;..\KOF.Dependencies\nlohmann-3.11.3</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <LanguageStandard_C>Default</LanguageStandard_C>
       <Optimization>MaxSpeed</Optimization>
     </ClCompile>
@@ -265,11 +265,11 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10;..\KOF.Dependencies\nlohmann-3.11.3</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <LanguageStandard_C>Default</LanguageStandard_C>
       <Optimization>MaxSpeed</Optimization>
     </ClCompile>
@@ -286,9 +286,7 @@
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
     <PostBuildEvent>
-      <Command>call "$(SolutionDir)Scripts\Deploy.bat"
-call "$(SolutionDir)Scripts\VMProtect.bat"
-call "$(SolutionDir)Scripts\CreateUpdate.bat"</Command>
+      <Command>call "$(SolutionDir)Scripts\VMProtect.bat"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

@@ -14,10 +14,7 @@
 #include "SkCrypter.h"
 #include "Enum.h"
 #include "Struct.h"
-#include "Json.h"
 #include "crc32.h"
-
-using JSON = nlohmann::json;
 
 #include <imgui.h>
 #include <imgui_impl_dx9.h>
@@ -30,11 +27,14 @@ using JSON = nlohmann::json;
 #include <modes.h>
 #include <osrng.h>
 
+#include "json.hpp"
+using JSON = nlohmann::json;
+
+#include <snappy-c.h>
+
 #ifdef VMPROTECT
 #include "VMProtectSDK.h"
 #endif
-
-#include <snappy-c.h>
 
 #pragma comment(lib, "D3dx9.lib")
 #pragma comment(lib, "D3d9.lib")
