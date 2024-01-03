@@ -403,8 +403,7 @@ FodyWeavers.xsd
 
 # KOF.Dependencies
 KOF.Dependencies
-KOF.DLL/syscall.h
-KOF.DLL/syscall.cpp
 
 Deployment
 Production
+
