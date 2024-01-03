@@ -12,4 +12,6 @@
 
 #include "../KOF.Bot/Define.h"
 
+#define Print(a, ...) printf("%s: " a "\n", __func__, ##__VA_ARGS__)
+
 #endif

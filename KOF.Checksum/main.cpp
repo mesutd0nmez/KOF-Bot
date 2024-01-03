@@ -6,9 +6,7 @@ DWORD CalculateCRC32(const std::string& filePath)
 
     if (!fileStream.is_open())
     {
-#ifdef DEBUG
-        printf("File not opened: %s", filePath.c_str());
-#endif
+        printf("File not opened: %s\n", filePath.c_str());
         return 0xFFFFFFFF;
     }
 
