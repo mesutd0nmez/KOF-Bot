@@ -31,7 +31,7 @@ private:
 	virtual void HandlePacket(Packet& pkt) = 0;
 	virtual void OnError(int32_t iErrorCode) = 0;
 	virtual void OnConnect() = 0;
-	virtual void OnClose(int32_t iErrorCode) = 0;
+	virtual void OnClose() = 0;
 
 private:
 	uint32_t m_iSeed;
