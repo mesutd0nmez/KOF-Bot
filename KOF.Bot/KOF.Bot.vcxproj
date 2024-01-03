@@ -27,18 +27,25 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AntiDebug.h" />
     <ClInclude Include="BaseSocket.h" />
     <ClInclude Include="Bot.h" />
     <ClInclude Include="ByteBuffer.h" />
     <ClInclude Include="Client.h" />
     <ClInclude Include="ClientHandler.h" />
+    <ClInclude Include="Compression.h" />
+    <ClInclude Include="Compression_LZF.h" />
+    <ClInclude Include="Compression_Snappy.h" />
     <ClInclude Include="crc32.h" />
     <ClInclude Include="Cryption.h" />
     <ClInclude Include="Define.h" />
     <ClInclude Include="Drawing.h" />
     <ClInclude Include="Enum.h" />
     <ClInclude Include="framework.h" />
-    <ClInclude Include="Json.h" />
+    <ClInclude Include="HardwareInformation.h" />
+    <ClInclude Include="Injector.h" />
+    <ClInclude Include="InteractiveCheck.h" />
+    <ClInclude Include="lzf.h" />
     <ClInclude Include="Memory.h" />
     <ClInclude Include="Password.h" />
     <ClInclude Include="Remap.h" />
@@ -54,16 +61,22 @@
     <ClInclude Include="Table.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TcpSocket.h" />
+    <ClInclude Include="Trap.h" />
     <ClInclude Include="Trim.h" />
     <ClInclude Include="UI.h" />
-    <ClInclude Include="HardwareInformation.h" />
+    <ClInclude Include="VMProtect.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Bot.cpp" />
     <ClCompile Include="Client.cpp" />
     <ClCompile Include="ClientHandler.cpp" />
+    <ClCompile Include="Compression.cpp" />
+    <ClCompile Include="Compression_LZF.cpp" />
+    <ClCompile Include="Compression_Snappy.cpp" />
     <ClCompile Include="crc32.cpp" />
     <ClCompile Include="Drawing.cpp" />
+    <ClCompile Include="Injector.cpp" />
+    <ClCompile Include="lzf.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Ini.cpp" />
     <ClCompile Include="main.cpp" />
@@ -160,18 +173,18 @@
     <TargetName>KOF</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <TargetName>Discord</TargetName>
+    <TargetName>KOF</TargetName>
     <LinkIncremental>true</LinkIncremental>
     <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86</LibraryPath>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <TargetName>Discord</TargetName>
+    <TargetName>DSAServiceHelper</TargetName>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include;</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Production|Win32'">
-    <TargetName>Discord</TargetName>
+    <TargetName>DSAServiceHelper</TargetName>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(DXSDK_DIR)Include;</IncludePath>
     <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);$(DXSDK_DIR)Lib\x86</LibraryPath>
   </PropertyGroup>
@@ -183,8 +196,8 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\curl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
@@ -193,13 +206,15 @@
       <FunctionLevelLinking>
       </FunctionLevelLinking>
       <LanguageStandard_C>Default</LanguageStandard_C>
+      <SupportJustMyCode>true</SupportJustMyCode>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
-      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Debug;..\KOF.Dependencies\snappy-1.1.9\Debug;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Debug;..\KOF.Dependencies\VMProtect\Lib\Windows</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Debug;..\KOF.Dependencies\snappy-1.1.10\Debug;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Debug;..\KOF.Dependencies\VMProtect\Lib\Windows</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;snappy.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
@@ -213,8 +228,8 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\curl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
@@ -228,10 +243,11 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
-      <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;snappy.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows;..\KOF.Dependencies\snappy-1.1.10\Release</AdditionalLibraryDirectories>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+      <GenerateMapFile>true</GenerateMapFile>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -248,8 +264,8 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\curl</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <OmitFramePointers>false</OmitFramePointers>
@@ -263,14 +279,16 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
-      <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ImGui.lib;cryptlib.lib;Winmm.lib;snappy.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\KOF.Dependencies\ImGui\Release;..\KOF.Dependencies\cryptopp-8.7.0\Win32\Output\Release;..\KOF.Dependencies\VMProtect\Lib\Windows;..\KOF.Dependencies\snappy-1.1.10\Release</AdditionalLibraryDirectories>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+      <GenerateMapFile>true</GenerateMapFile>
     </Link>
     <PostBuildEvent>
       <Command>call "$(SolutionDir)Scripts\Deploy.bat"
-call "$(SolutionDir)Scripts\VMProtect.bat"</Command>
+call "$(SolutionDir)Scripts\VMProtect.bat"
+call "$(SolutionDir)Scripts\CreateUpdate.bat"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
