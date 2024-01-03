@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cassert>
-#include <vector>
-#include <sstream>
-#include <iomanip>
-
 class ByteBuffer
 {
 public:
@@ -168,6 +163,7 @@ public:
 	}
 
 	uint8_t* contents() { return &_storage[0]; }
+	std::vector<uint8_t> data() { return _storage; }
 	inline size_t size() const { return _storage.size(); }
 
 	// one should never use resize
