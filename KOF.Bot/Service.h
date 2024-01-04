@@ -22,9 +22,9 @@ class Service : public Socket
 
 		virtual void OnReady() = 0;
 		virtual void OnConnected() = 0;
-		virtual void OnPong(uint32_t iSubscriptionEndAt) = 0;
+		virtual void OnPong(uint32_t iSubscriptionEndAt, int32_t iCredit) = 0;
 		virtual void OnAuthenticated(uint8_t iStatus) = 0;
-		virtual void OnSaveToken(std::string szToken, uint32_t m_iSubscriptionEndAt) = 0;
+		virtual void OnSaveToken(std::string szToken, uint32_t m_iSubscriptionEndAt, int32_t iCredit) = 0;
 		virtual void OnAuthenticationMessage(bool bStatus, std::string szMessage) = 0;
 		virtual void OnUpdate() = 0;
 		virtual void OnUpdateDownloaded(bool bStatus) = 0;
@@ -33,6 +33,7 @@ class Service : public Socket
 		virtual void OnConfigurationLoaded(std::string szConfiguration) = 0;
 		virtual void OnRouteLoaded(std::vector<uint8_t> vecBuffer) = 0;
 		virtual void OnCaptchaResponse(bool bStatus, std::string szResult) = 0;
+		virtual void OnPurchase(std::string szPurchaseUrl) = 0;
 
 	private:
 		void HandlePacket(Packet& pkt);
@@ -56,5 +57,6 @@ class Service : public Socket
 		void SendReport(uint32_t iCode, std::string szPayload = "");
 		void SendScreenshot(std::vector<uint8_t> vecImageBuffer);
 		void SendVital(uint32_t iCode, std::string szPayload = "");
+		void SendPurchase(uint8_t iType, int32_t iCredit, uint32_t iDay);
 };
 

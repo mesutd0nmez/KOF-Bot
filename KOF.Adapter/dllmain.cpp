@@ -1,20 +1,9 @@
 #include "pch.h"
 #include <stdio.h>
 
-HANDLE g_hThread = NULL;
+BOOL g_bWorking = FALSE;
 
 typedef void(__thiscall* Send)(DWORD, uint8_t*, uint32_t);
-
-void GlobalExitThread()
-{
-    if (g_hThread != NULL)
-    {
-        TerminateThread(g_hThread, 0);
-        CloseHandle(g_hThread);
-
-        g_hThread = NULL;
-    }
-}
 
 DWORD GetAddress(std::string szAddressName)
 {
@@ -634,7 +623,7 @@ void StartMailslot()
     Print("Internal connection ready");
 #endif
 
-    while (true)
+    while (g_bWorking)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
@@ -668,227 +657,238 @@ void StartMailslot()
 
             switch (iHeader)
             {
-            case PIPE_LOAD_POINTER:
-            {
-                int32_t iAddressCount;
-                pkt >> iAddressCount;
-
-                for (int32_t i = 0; i < iAddressCount; i++)
+                case PIPE_LOAD_POINTER:
                 {
-                    std::string szAddressName;
-                    DWORD iAddress;
+                    int32_t iAddressCount;
+                    pkt >> iAddressCount;
 
-                    pkt >> szAddressName >> iAddress;
-#ifdef DEBUG_LOG
-                    Print("%s=%d", szAddressName.c_str(), iAddress);
-#endif
-                    m_mapAddress.insert(std::make_pair(szAddressName, iAddress));
+                    for (int32_t i = 0; i < iAddressCount; i++)
+                    {
+                        std::string szAddressName;
+                        DWORD iAddress;
+
+                        pkt >> szAddressName >> iAddress;
+
+    #ifdef DEBUG_LOG
+                        Print("%s=%d", szAddressName.c_str(), iAddress);
+    #endif
+
+                        m_mapAddress.insert(std::make_pair(szAddressName, iAddress));
+                    }
+
+                    if (iAddressCount > 0)
+                    {
+                        iSaveCPUSleepTime = 0;
+
+                        PatchGameProcMainThread();
+                        PatchSaveCPUThread();
+                    }
                 }
+                break;
 
-                if (iAddressCount > 0)
+                case PIPE_BASIC_ATTACK:
                 {
-                    iSaveCPUSleepTime = 0;
+                    uint8_t iEnable;
+                    pkt >> iEnable;
 
-                    PatchGameProcMainThread();
-                    PatchSaveCPUThread();
+                    m_qBasicAttackQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Basic Attack: %d", iEnable);
+    #endif
                 }
-            }
-            break;
+                break;
 
-            case PIPE_BASIC_ATTACK:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
+                case PIPE_USE_SKILL:
+                {
+                    SkillQueue sSkillQueue;
 
-                m_qBasicAttackQueue.push(true);
+                    pkt
+                        >> sSkillQueue.iTargetID
+                        >> sSkillQueue.iSkillID
+                        >> sSkillQueue.iPriority
+                        >> sSkillQueue.iAttacking
+                        >> sSkillQueue.iBasicAttack;
+
+    #ifdef DEBUG_LOG
+                    Print("Use Skill: %d, %d, %d, %d, %d",
+                        sSkillQueue.iTargetID, 
+                        sSkillQueue.iSkillID, 
+                        sSkillQueue.iPriority, 
+                        sSkillQueue.iAttacking, 
+                        sSkillQueue.iBasicAttack);
+    #endif
+
+                    m_qSkillQueue.push(sSkillQueue);
+
+                }
+                break;
+
+                case PIPE_LOGIN:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qLoginRequestQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Login Requested: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_SELECT_CHARACTER_SKIP:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qSelectCharacterSkipQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Select character skip: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_SELECT_CHARACTER_LEFT:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qSelectCharacterLeftQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Select character left: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_SELECT_CHARACTER_RIGHT:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qSelectCharacterRightQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Select character right: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_SELECT_CHARACTER_ENTER:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qSelectCharacterQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Select character enter: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_LOAD_SERVER_LIST:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qLoadServerListQueue.push(true);
+
+    #ifdef DEBUG_LOG
+                    Print("Load Server List: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_SELECT_SERVER:
+                {
+                    uint8_t iIndex;
+                    pkt >> iIndex;
+
+                    m_qSelectServerQueue.push(iIndex);
+
+    #ifdef DEBUG_LOG
+                    Print("Select Server Index: %d", iIndex);
+    #endif
+                }
+                break;
+
+                case PIPE_SHOW_CHANNEL:
+                {
+                    uint8_t iEnable;
+                    pkt >> iEnable;
+
+                    m_qShowChannelQueue.push(iEnable);
+
+    #ifdef DEBUG_LOG
+                    Print("Show Channel: %d", iEnable);
+    #endif
+                }
+                break;
+
+                case PIPE_SELECT_CHANNEL:
+                {
+                    uint8_t iIndex;
+                    pkt >> iIndex;
+
+                    m_qSelectChannelQueue.push(iIndex);
+
+    #ifdef DEBUG_LOG
+                    Print("Select Channel: %d", iIndex);
+    #endif
+                }
+                break;
+
+                case PIPE_CONNECT_SERVER:
+                {
+                    uint8_t iIndex;
+                    pkt >> iIndex;
+
+                    m_qConnectServerQueue.push(iIndex);
+
+    #ifdef DEBUG_LOG
+                    Print("Connect Server: %d", iIndex);
+    #endif
+                }
+                break;
+
+                case PIPE_SAVE_CPU:
+                {
+                    int32_t iValue;
+                    pkt >> iValue;
+
+                    iSaveCPUSleepTime = iValue;
+
+    #ifdef DEBUG_LOG
+                    Print("Save CPU Value: %d", iValue);
+    #endif
+                }
+                break;
+
+                case PIPE_PROXY:
+                {
+                    std::string szProxyIP, szUsername, szPassword;
+                    int32_t iProxyPort;
+
+                    pkt >> szProxyIP >> iProxyPort >> szUsername >> szPassword;
 
 #ifdef DEBUG_LOG
-                Print("Basic Attack: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_USE_SKILL:
-            {
-                SkillQueue sSkillQueue;
-
-                pkt
-                    >> sSkillQueue.iTargetID
-                    >> sSkillQueue.iSkillID
-                    >> sSkillQueue.iPriority
-                    >> sSkillQueue.iAttacking
-                    >> sSkillQueue.iBasicAttack;
-
-#ifdef DEBUG_LOG
-                Print("Use Skill: %d, %d, %d, %d, %d",
-                    sSkillQueue.iTargetID, 
-                    sSkillQueue.iSkillID, 
-                    sSkillQueue.iPriority, 
-                    sSkillQueue.iAttacking, 
-                    sSkillQueue.iBasicAttack);
+                    Print("Proxy Information: %s:%d | %s | %s", szProxyIP.c_str(), iProxyPort, szUsername.c_str(), szPassword.c_str());
 #endif
 
-                m_qSkillQueue.push(sSkillQueue);
+                    SetProxyInformation(szProxyIP, iProxyPort, szUsername, szPassword);
+                    HookFunction(skCryptDec("ws2_32.dll"), skCryptDec("WSAConnect"), (LPVOID*)WSAConnectHook, &pWSAConnectTrampoline, 5);
+                }
+                break;
 
-            }
-            break;
-
-            case PIPE_LOGIN:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qLoginRequestQueue.push(true);
-
-#ifdef DEBUG_LOG
-                Print("Login Requested: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_SELECT_CHARACTER_SKIP:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qSelectCharacterSkipQueue.push(true);
-
-#ifdef DEBUG_LOG
-                Print("Select character skip: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_SELECT_CHARACTER_LEFT:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qSelectCharacterLeftQueue.push(true);
-
-#ifdef DEBUG_LOG
-                Print("Select character left: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_SELECT_CHARACTER_RIGHT:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qSelectCharacterRightQueue.push(true);
-
-#ifdef DEBUG_LOG
-                Print("Select character right: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_SELECT_CHARACTER_ENTER:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qSelectCharacterQueue.push(true);
-
-#ifdef DEBUG_LOG
-                Print("Select character enter: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_LOAD_SERVER_LIST:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qLoadServerListQueue.push(true);
-
-#ifdef DEBUG_LOG
-                Print("Load Server List: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_SELECT_SERVER:
-            {
-                uint8_t iIndex;
-                pkt >> iIndex;
-
-                m_qSelectServerQueue.push(iIndex);
-
-#ifdef DEBUG_LOG
-                Print("Select Server Index: %d", iIndex);
-#endif
-            }
-            break;
-
-            case PIPE_SHOW_CHANNEL:
-            {
-                uint8_t iEnable;
-                pkt >> iEnable;
-
-                m_qShowChannelQueue.push(iEnable);
-
-#ifdef DEBUG_LOG
-                Print("Show Channel: %d", iEnable);
-#endif
-            }
-            break;
-
-            case PIPE_SELECT_CHANNEL:
-            {
-                uint8_t iIndex;
-                pkt >> iIndex;
-
-                m_qSelectChannelQueue.push(iIndex);
-
-#ifdef DEBUG_LOG
-                Print("Select Channel: %d", iIndex);
-#endif
-            }
-            break;
-
-            case PIPE_CONNECT_SERVER:
-            {
-                uint8_t iIndex;
-                pkt >> iIndex;
-
-                m_qConnectServerQueue.push(iIndex);
-
-#ifdef DEBUG_LOG
-                Print("Connect Server: %d", iIndex);
-#endif
-            }
-            break;
-
-            case PIPE_SAVE_CPU:
-            {
-                int32_t iValue;
-                pkt >> iValue;
-
-                iSaveCPUSleepTime = iValue;
-
-#ifdef DEBUG_LOG
-                Print("Save CPU Value: %d", iValue);
-#endif
-            }
-            break;
-
-            case PIPE_PROXY:
-            {
-                SetProxyInformation("184.181.217.220", 4145);
-                HookFunction(skCryptDec("ws2_32.dll"), skCryptDec("WSAConnect"), (LPVOID*)WSAConnectHook, &pWSAConnectTrampoline, 5);
-            }
-            break;
-
-            case PIPE_SEND_PACKET:
-            {
-                Send pSendFnc = (Send)GetAddress("KO_SND_FNC");
-                pSendFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), pkt.contents() + 2, pkt.size());
-            }
-            break;
+                case PIPE_SEND_PACKET:
+                {
+                    Send pSendFnc = (Send)GetAddress("KO_SND_FNC");
+                    pSendFnc(*reinterpret_cast<DWORD*>(GetAddress("KO_PTR_PKT")), pkt.contents() + 2, pkt.size());
+                }
+                break;
             }
         }
         else
@@ -910,14 +910,15 @@ BOOL APIENTRY DllMain(HMODULE hModule,
     {
         case DLL_PROCESS_ATTACH:
         {
-            g_hThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&StartMailslot, 0, 0, 0);
+            DisableThreadLibraryCalls(hModule);
+
+            g_bWorking = TRUE;
+            CreateThread(0, 0, (LPTHREAD_START_ROUTINE)&StartMailslot, 0, 0, 0);
         }
         break;
+
         case DLL_PROCESS_DETACH:
-            GlobalExitThread();
-            break;
-        case DLL_THREAD_ATTACH:
-        case DLL_THREAD_DETACH:
+            g_bWorking = FALSE;
             break;
     }
 

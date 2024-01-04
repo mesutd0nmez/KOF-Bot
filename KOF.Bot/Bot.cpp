@@ -68,6 +68,7 @@ Bot::Bot(HardwareInformation* pHardwareInformation)
 	m_fLastPongTime = TimeGet();
 
 	m_iSubscriptionEndAt = 0;
+	m_iCredit = 0;
 
 	m_bUserSaveRequested = false;
 
@@ -77,6 +78,16 @@ Bot::Bot(HardwareInformation* pHardwareInformation)
 	m_mapAddress.clear();
 
 	m_szOTPHardwareID.clear();
+
+	m_szProxyIP.clear();
+	m_iProxyPort = 0;
+	m_szProxyUsername.clear();
+	m_szProxyPassword.clear();
+	m_bConnectWithProxy = 0;
+
+	m_bCheckingProxy = false;
+	m_szCheckingProxyResult.clear();
+	m_bCheckingProxyResult = false;
 
 	Initialize();
 }
@@ -149,6 +160,7 @@ Bot::~Bot()
 	m_fLastPongTime = TimeGet();
 
 	m_iSubscriptionEndAt = 0;
+	m_iCredit = 0;
 
 	m_bUserSaveRequested = false;
 
@@ -163,6 +175,16 @@ Bot::~Bot()
 
 	m_szOTPHardwareID.clear();
 
+	m_szProxyIP.clear();
+	m_iProxyPort = 0;
+	m_szProxyUsername.clear();
+	m_szProxyPassword.clear();
+	m_bConnectWithProxy = 0;
+
+	m_bCheckingProxy = false;
+	m_szCheckingProxyResult.clear();
+	m_bCheckingProxyResult = false;
+
 	Release();
 }
 
@@ -174,18 +196,24 @@ void Bot::Initialize()
 	m_iniAppConfiguration->Load(szIniPath.c_str());
 
 	m_szToken = m_iniAppConfiguration->GetString(skCryptDec("Internal"), skCryptDec("Token"), m_szToken.c_str());
+
 	m_bAutoLogin = m_iniAppConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Login"), m_bAutoLogin);
 	m_bAutoStart = m_iniAppConfiguration->GetBool(skCryptDec("Automation"), skCryptDec("Start"), m_bAutoStart);
 
 	m_szID = m_iniAppConfiguration->GetString(skCryptDec("AutoLogin"), skCryptDec("ID"), m_szID.c_str());
 	m_szPassword = m_iniAppConfiguration->GetString(skCryptDec("AutoLogin"), skCryptDec("Password"), m_szPassword.c_str());
-
 	m_iServerID = m_iniAppConfiguration->GetInt(skCryptDec("AutoLogin"), skCryptDec("Server"), m_iServerID);
 	m_iChannelID = m_iniAppConfiguration->GetInt(skCryptDec("AutoLogin"), skCryptDec("Channel"), m_iChannelID);
 	m_iSlotID = m_iniAppConfiguration->GetInt(skCryptDec("AutoLogin"), skCryptDec("Slot"), m_iSlotID);
 
 	m_szAnyOTPID = m_iniAppConfiguration->GetString(skCryptDec("AnyOTP"), skCryptDec("ID"), m_szAnyOTPID.c_str());
 	m_szAnyOTPPassword = m_iniAppConfiguration->GetString(skCryptDec("AnyOTP"), skCryptDec("Password"), m_szAnyOTPPassword.c_str());
+
+	m_szProxyIP = m_iniAppConfiguration->GetString(skCryptDec("Proxy"), skCryptDec("IP"), m_szProxyIP.c_str());
+	m_iProxyPort = m_iniAppConfiguration->GetInt(skCryptDec("Proxy"), skCryptDec("Port"), m_iProxyPort);
+	m_szProxyUsername = m_iniAppConfiguration->GetString(skCryptDec("Proxy"), skCryptDec("Username"), m_szProxyUsername.c_str());
+	m_szProxyPassword = m_iniAppConfiguration->GetString(skCryptDec("Proxy"), skCryptDec("Password"), m_szProxyPassword.c_str());
+	m_bConnectWithProxy = m_iniAppConfiguration->GetInt(skCryptDec("Proxy"), skCryptDec("Enable"), m_bConnectWithProxy);
 
 	InitializeAnyOTPService();
 
@@ -404,7 +432,7 @@ void Bot::OnReady()
 	}
 }
 
-void Bot::OnPong(uint32_t iSubscriptionEndAt)
+void Bot::OnPong(uint32_t iSubscriptionEndAt, int32_t iCredit)
 {
 #ifdef VMPROTECT
 	VMProtectBeginMutation("Bot::OnPong");
@@ -425,6 +453,7 @@ void Bot::OnPong(uint32_t iSubscriptionEndAt)
 	}
 
 	m_iSubscriptionEndAt = iSubscriptionEndAt;
+	m_iCredit = iCredit;
 	m_fLastPongTime = TimeGet();
 
 #ifdef VMPROTECT
@@ -564,7 +593,7 @@ void Bot::OnLoaded(std::string szPointerData)
 	}
 }
 
-void Bot::OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt)
+void Bot::OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt, int32_t iCredit)
 {
 	if (m_iniAppConfiguration)
 	{
@@ -572,6 +601,7 @@ void Bot::OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt)
 	}
 	
 	m_iSubscriptionEndAt = iSubscriptionEndAt;
+	m_iCredit = iCredit;
 }
 
 void Bot::OnInjection(std::vector<uint8_t> vecBuffer)
@@ -596,16 +626,25 @@ void Bot::OnInjection(std::vector<uint8_t> vecBuffer)
 
 			if (ConnectInternalMailslot())
 			{
-				Packet pkt = Packet(PIPE_LOAD_POINTER);
+				Packet pkt1 = Packet(PIPE_LOAD_POINTER);
 
-				pkt << int32_t(m_mapAddress.size());
+				pkt1 << int32_t(m_mapAddress.size());
 
 				for (auto& e : m_mapAddress)
 				{
-					pkt << e.first << e.second;
+					pkt1 << e.first << e.second;
 				}
 
-				SendInternalMailslot(pkt);
+				SendInternalMailslot(pkt1);
+
+				if (m_bConnectWithProxy)
+				{
+					Packet pkt2 = Packet(PIPE_PROXY);
+
+					pkt2 << m_szProxyIP << m_iProxyPort << m_szProxyUsername << m_szProxyPassword;
+
+					SendInternalMailslot(pkt2);
+				}
 
 				m_bInternalMailslotWorking = true;
 			}
@@ -617,6 +656,11 @@ void Bot::OnInjection(std::vector<uint8_t> vecBuffer)
 			}
 		}
 	});
+}
+
+void Bot::OnPurchase(std::string szPurchaseUrl)
+{
+	OpenURLInDefaultBrowser(szPurchaseUrl.c_str());
 }
 
 void Bot::OnCaptchaResponse(bool bStatus, std::string szResult)
@@ -1368,4 +1412,25 @@ void Bot::StopStartGameProcess()
 		delete m_pClientHandler;
 		m_pClientHandler = nullptr;
 	}
+}
+
+void Bot::CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword)
+{
+	new std::thread([=]()
+	{
+		m_bCheckingProxy = true;
+
+		m_bCheckingProxyResult = ::CheckProxy(szProxyIP, iProxyPort, szUsername, szPassword);
+
+		if (m_bCheckingProxyResult)
+			m_szCheckingProxyResult = skCryptDec("Proxy test baglantisi basarili");
+		else
+			m_szCheckingProxyResult = skCryptDec("Proxy test baglantisi basarisiz");
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
+		m_szCheckingProxyResult.clear();
+
+		m_bCheckingProxy = false;
+	});
 }

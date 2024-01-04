@@ -46,13 +46,14 @@ public:
 private:
 	void OnConnected();
 	void OnReady();
-	void OnPong(uint32_t iSubscriptionEndAt);
+	void OnPong(uint32_t iSubscriptionEndAt, int32_t iCredit);
 	void OnAuthenticated(uint8_t iStatus);
 	void OnUpdate();
 	void OnUpdateDownloaded(bool bStatus);
 	void OnLoaded(std::string szPointerData);
-	void OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt);
+	void OnSaveToken(std::string szToken, uint32_t iSubscriptionEndAt, int32_t iCredit);
 	void OnInjection(std::vector<uint8_t> vecBuffer);
+	void OnPurchase(std::string szPurchaseUrl);
 	void OnConfigurationLoaded(std::string szConfiguration);
 	void OnCaptchaResponse(bool bStatus, std::string szResult);
 	void OnRouteLoaded(std::vector<uint8_t> vecBuffer);
@@ -172,6 +173,7 @@ public:
 	std::string m_szAnyOTPID;
 	std::string m_szAnyOTPPassword;
 
+	int32_t m_iCredit;
 	uint32_t m_iSubscriptionEndAt;
 	float m_fLastPongTime;
 
@@ -187,5 +189,18 @@ public:
 
 private:
 	HardwareInformation* m_pHardwareInformation;
+
+public:
+	std::string m_szProxyIP;
+	int32_t m_iProxyPort;
+	std::string m_szProxyUsername;
+	std::string m_szProxyPassword;
+	bool m_bConnectWithProxy;
+
+public:
+	bool m_bCheckingProxyResult;
+	std::string m_szCheckingProxyResult;
+	bool m_bCheckingProxy;
+	void CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword);
 };
 

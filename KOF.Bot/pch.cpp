@@ -48,7 +48,7 @@ bool KillProcessesByFileName(const std::vector<const char*>& fileNames)
 	if (hSnapshot == INVALID_HANDLE_VALUE)
 	{
 #ifdef DEBUG_LOG
-		Print("KillProcessesByFileNames: Error creating process snapshot");
+		Print("Error creating process snapshot");
 #endif
 		return false;
 	}
@@ -356,4 +356,167 @@ void DeleteFilesInPrefetchFolder()
 	} while (FindNextFile(hFind, &findFileData) != 0);
 
 	FindClose(hFind);
+}
+
+void OpenURLInDefaultBrowser(const char* url) 
+{
+	HINSTANCE result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+
+	if ((int)result <= 32) 
+	{
+#ifdef DEBUG_LOG
+		Print("URL Not opened: %s", url);
+#endif
+	}
+}
+
+bool CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword)
+{
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) 
+	{
+#ifdef DEBUG_LOG
+		Print("WSAStartup failed");
+#endif
+		return false;
+	}
+
+	SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (clientSocket == INVALID_SOCKET) 
+	{
+#ifdef DEBUG_LOG
+		Print("Socket creation failed");
+#endif
+		WSACleanup();
+		return false;
+	}
+
+	sockaddr_in proxyAddr;
+	proxyAddr.sin_family = AF_INET;
+	proxyAddr.sin_port = htons(iProxyPort);
+	if (inet_pton(AF_INET, szProxyIP.c_str(), &(proxyAddr.sin_addr)) <= 0) 
+	{
+#ifdef DEBUG_LOG
+		Print("Invalid proxy IP address");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+	// Connect to the SOCKS5 proxy
+	if (connect(clientSocket, reinterpret_cast<sockaddr*>(&proxyAddr), sizeof(proxyAddr)) == SOCKET_ERROR) 
+	{
+#ifdef DEBUG_LOG
+		Print("Connection to the proxy failed");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+	if (szUsername.size() > 0 || szPassword.size() > 0)
+	{
+		// Send SOCKS5 authentication request (username and password)
+		char authRequest[] = { 0x05, 0x02, 0x00, 0x02 };
+
+		if (send(clientSocket, authRequest, sizeof(authRequest), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send SOCKS5 authentication request");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		// Send username length and username
+		char usernameLen = static_cast<char>(szUsername.length());
+		if (send(clientSocket, &usernameLen, 1, 0) == SOCKET_ERROR) 
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send username length");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		if (send(clientSocket, szUsername.c_str(), szUsername.length(), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send username");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		// Send password length and password
+		char passwordLen = static_cast<char>(szPassword.length());
+		if (send(clientSocket, &passwordLen, 1, 0) == SOCKET_ERROR) 
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send password length");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		if (send(clientSocket, szPassword.c_str(), szPassword.length(), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send password");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+	}
+	else
+	{
+		// Send SOCKS5 authentication request (no authentication)
+		char authRequest[] = { 0x05, 0x01, 0x00 };
+
+		if (send(clientSocket, authRequest, sizeof(authRequest), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send SOCKS5 authentication request");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+	}
+
+	char authResponse[2];
+	if (recv(clientSocket, authResponse, sizeof(authResponse), 0) == SOCKET_ERROR) 
+	{
+#ifdef DEBUG_LOG
+		Print("Failed to receive SOCKS5 authentication response");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+	if (authResponse[0] != 0x05 || authResponse[1] != 0x00) 
+	{
+#ifdef DEBUG_LOG
+		Print("SOCKS5 authentication failed");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+#ifdef DEBUG_LOG
+	Print("SOCKS5 authentication successful");
+#endif
+
+	// Close the socket
+	closesocket(clientSocket);
+	WSACleanup();
+	return true;
 }

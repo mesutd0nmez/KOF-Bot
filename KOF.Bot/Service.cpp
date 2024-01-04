@@ -111,10 +111,11 @@ void Service::HandlePacket(Packet& pkt)
                         {
                             std::string szToken;
                             uint32_t iSubscriptionEndAt;
+                            int32_t iCredit;
 
-                            pkt >> szToken >> iSubscriptionEndAt;
+                            pkt >> szToken >> iSubscriptionEndAt >> iCredit;
 
-                            OnSaveToken(szToken, iSubscriptionEndAt);
+                            OnSaveToken(szToken, iSubscriptionEndAt, iCredit);
                             OnAuthenticated(iStatus);
                         }
                         break;
@@ -178,9 +179,11 @@ void Service::HandlePacket(Packet& pkt)
             pkt.DByte();
 
             uint32_t iSubscriptionEndAt;
-            pkt >> iSubscriptionEndAt;
+            int32_t iCredit;
 
-            OnPong(iSubscriptionEndAt);
+            pkt >> iSubscriptionEndAt >> iCredit;
+
+            OnPong(iSubscriptionEndAt, iCredit);
         }
         break;
 
@@ -277,6 +280,16 @@ void Service::HandlePacket(Packet& pkt)
 
                 OnRouteLoaded(vecBuffer);
             }
+        }
+        break;
+
+        case PacketHeader::PURCHASE:
+        {
+            std::string szPurchaseUrl;
+
+            pkt >> szPurchaseUrl;
+
+            OnPurchase(szPurchaseUrl);
         }
         break;
     }
@@ -534,6 +547,27 @@ void Service::SendVital(uint32_t iCode, std::string szPayload)
     pkt
         << uint32_t(iCode)
         << szPayload;
+
+    Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
+}
+
+void Service::SendPurchase(uint8_t iType, int32_t iCredit, uint32_t iDay)
+{
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendPurchase");
+#endif
+
+    Packet pkt = Packet(PacketHeader::PURCHASE);
+
+    pkt.DByte();
+    pkt
+        << uint8_t(iType)
+        << int32_t(iCredit)
+        << uint32_t(iDay);
 
     Send(pkt);
 

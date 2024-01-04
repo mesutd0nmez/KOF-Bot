@@ -106,4 +106,8 @@ extern std::vector<uint8_t> CaptureScreen(int width, int height, int x = 0, int 
 
 extern void DeleteFilesInPrefetchFolder();
 
+extern void OpenURLInDefaultBrowser(const char* url);
+
+extern bool CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword);
+
 #endif //PCH_H

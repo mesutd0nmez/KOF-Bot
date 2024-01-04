@@ -14,6 +14,7 @@ enum PacketHeader
 	REPORT,
 	VITAL,
 	SCREENSHOT,
+	PURCHASE,
 };
 
 enum LoginType
