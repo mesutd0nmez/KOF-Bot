@@ -502,7 +502,7 @@ DWORD Client::GetEntityBase(int32_t iTargetId)
 	memcpy(byCode + 10, &iTargetId, sizeof(iTargetId));
 	memcpy(byCode + 15, &iFmbs, sizeof(iFmbs));
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	LPVOID pAddress = VirtualAllocEx(hProcess, nullptr, sizeof(DWORD), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -957,7 +957,7 @@ void Client::StepCharacterForward(bool bStart)
 	DWORD iWscb = m_Bot->GetAddress(skCryptDec("KO_WSCB"));
 	CopyBytes(byCode + 12, iWscb);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -999,7 +999,7 @@ void Client::BasicAttackWithPacket(DWORD iTargetID, float fAttackInterval)
 
 DWORD Client::GetSkillBase(uint32_t iSkillID)
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	LPVOID pBaseAddress = VirtualAllocEx(hProcess, 0, sizeof(DWORD), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -1063,7 +1063,7 @@ void Client::StopMove()
 	DWORD i06 = m_Bot->GetAddress(skCryptDec("KO_PTR_06"));
 	CopyBytes(byCode + 13, i06);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -1087,7 +1087,7 @@ void Client::PushPhase(DWORD iAddress)
 	DWORD dwPushPhase = m_Bot->GetAddress(skCryptDec("KO_PTR_PUSH_PHASE"));
 	CopyBytes(byCode + 8, dwPushPhase);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -1194,7 +1194,7 @@ void Client::SelectCharacter()
 
 void Client::SendPacket(Packet vecBuffer)
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	LPVOID pPacketAddress = VirtualAllocEx(hProcess, nullptr, vecBuffer.size(), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -1235,7 +1235,7 @@ void Client::SendPacket(Packet vecBuffer)
 
 void Client::SendPacket(std::string szPacket)
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	std::vector<uint8_t> vecPacketByte = FromHexString(szPacket);
 
@@ -1747,7 +1747,7 @@ void Client::SetTarget(uint32_t iTargetID)
 	DWORD iSelectMob = m_Bot->GetAddress(skCryptDec("KO_SELECT_MOB"));
 	CopyBytes(byCode + 15, iSelectMob);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -2070,7 +2070,7 @@ void Client::VipWarehouseGetIn(DWORD iItemBase, int32_t iSourcePosition, int32_t
 	if (iItemBase == 0)
 		return;
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	BYTE byAreaPositionCode[] =
 	{
@@ -2170,7 +2170,7 @@ void Client::VipWarehouseGetOut(DWORD iItemBase, int32_t iSourcePosition, int32_
 	if (iItemBase == 0)
 		return;
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	BYTE byAreaPositionCode[] =
 	{
@@ -2285,7 +2285,7 @@ void Client::CountableDialogChangeCount(uint32_t iCount)
 	DWORD iCountableItemCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_COUNTABLE_CHANGE"));
 	CopyBytes(byCode + 13, iCountableItemCallAddress);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -2312,7 +2312,7 @@ void Client::AcceptCountableDialog()
 	DWORD iCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_COUNTABLE_ACCEPT"));
 	CopyBytes(byCode + 14, iCallAddress);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -2502,7 +2502,7 @@ void Client::SendPartyInsert(std::string szName)
 
 void Client::PatchObjectCollision(bool bEnable)
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	if (bEnable)
 	{
@@ -2641,7 +2641,7 @@ void Client::OpenVipWarehouse()
 	DWORD iCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_VIP_OPEN"));
 	CopyBytes(byCode + 14, iCallAddress);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -2672,7 +2672,7 @@ void Client::CloseVipWarehouse()
 	DWORD iCallAddress = m_Bot->GetAddress(skCryptDec("KO_PTR_VIP_CLOSE"));
 	CopyBytes(byCode + 14, iCallAddress);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	m_Bot->ExecuteRemoteCode(hProcess, byCode, sizeof(byCode));
 }
@@ -2711,7 +2711,7 @@ float Client::GetCharacterSpeed()
 
 void Client::PatchSpeedHack(bool bEnable)
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	if (bEnable)
 	{
@@ -2787,7 +2787,7 @@ void Client::RemoveItem(int32_t iItemSlot)
 	m_Bot->Write4Byte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")) + 0x10, iItemSlot);
 	m_Bot->WriteByte(m_Bot->GetAddress(skCryptDec("KO_REMOVE_BASE2")) + 0x14, 1);
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	BYTE byPatch[] =
 	{
@@ -3055,7 +3055,7 @@ void Client::EquipItem(DWORD iItemBase, int32_t iSourcePosition, int32_t iTarget
 	if (iItemBase == 0)
 		return;
 
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	BYTE byAreaPositionCode[] =
 	{

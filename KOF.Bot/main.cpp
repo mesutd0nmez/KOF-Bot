@@ -47,7 +47,7 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType)
         {
             if (m_Bot)
             {
-                TerminateProcess(m_Bot->GetInjectedProcessHandle(), 0);
+                TerminateProcess(m_Bot->GetClientProcessHandle(), 0);
             }
 
             exit(0);

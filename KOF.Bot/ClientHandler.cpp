@@ -368,7 +368,7 @@ void ClientHandler::Process()
 
 	if (m_bWorking)
 	{
-		if (IsDisconnect() || m_Bot->IsInjectedProcessLost())
+		if (IsDisconnect() || m_Bot->IsClientProcessLost())
 		{
 #ifdef DEBUG_LOG
 			Print("Client connection closed");
@@ -456,7 +456,7 @@ void ClientHandler::PatchClient()
 		0x90
 	};
 
-	WriteProcessMemory(m_Bot->GetInjectedProcessHandle(), (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
+	WriteProcessMemory(m_Bot->GetClientProcessHandle(), (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OFF_WIZ_HACKTOOL_NOP1")), byPatch1, sizeof(byPatch1), 0);
 
 	PatchSocket();
 }
@@ -483,7 +483,7 @@ void ClientHandler::PatchSocket()
 
 void ClientHandler::PatchRecvAddress(DWORD iAddress)
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
 
@@ -499,7 +499,7 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\Worker1\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	m_szMailSlotRecvName = skCryptDec("\\\\.\\mailslot\\Worker1\\") + std::to_string(m_Bot->GetClientProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotRecvName.begin(), m_szMailSlotRecvName.end());
 
 	if (m_hMailSlotRecv == nullptr)
@@ -646,7 +646,7 @@ void ClientHandler::PatchRecvAddress(DWORD iAddress)
 
 void ClientHandler::PatchSendAddress()
 {
-	HANDLE hProcess = m_Bot->GetInjectedProcessHandle();
+	HANDLE hProcess = m_Bot->GetClientProcessHandle();
 
 	HMODULE hModuleKernel32 = GetModuleHandle(skCryptDec("kernel32.dll"));
 
@@ -662,7 +662,7 @@ void ClientHandler::PatchSendAddress()
 	LPVOID pWriteFilePtr = GetProcAddress(hModuleKernel32, skCryptDec("WriteFile"));
 	LPVOID pCloseHandlePtr = GetProcAddress(hModuleKernel32, skCryptDec("CloseHandle"));
 
-	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\Worker2\\") + std::to_string(m_Bot->GetInjectedProcessId());
+	m_szMailSlotSendName = skCryptDec("\\\\.\\mailslot\\Worker2\\") + std::to_string(m_Bot->GetClientProcessId());
 	std::vector<BYTE> vecMailSlotName(m_szMailSlotSendName.begin(), m_szMailSlotSendName.end());
 
 	if (m_hMailSlotSend == nullptr)

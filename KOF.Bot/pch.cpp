@@ -243,7 +243,8 @@ std::string RemainingTime(long long int seconds)
 		result += std::to_string(seconds) + skCryptDec(" saniye ");
 	}
 
-	if (remainingDays == 0 && remainingHours == 0 && remainingMinutes == 0 && seconds == 0) {
+	if (remainingDays == 0 && remainingHours == 0 && remainingMinutes == 0 && seconds == 0) 
+	{
 		result += skCryptDec("0 saniye ");
 	}
 

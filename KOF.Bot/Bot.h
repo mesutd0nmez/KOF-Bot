@@ -76,7 +76,6 @@ private:
 	std::string m_szAccountListFilePath;
 
 public:
-	bool IsInjectedProcessLost();
 
 	PlatformType GetPlatformType() { return m_ePlatformType; }
 
@@ -116,11 +115,12 @@ public:
 	void Patch(HANDLE hProcess);
 
 public:
-	DWORD GetInjectedProcessId() { return m_InjectedProcessInfo.dwProcessId; };
-	HANDLE GetInjectedProcessHandle();
+	DWORD GetClientProcessId() { return m_ClientProcessInfo.dwProcessId; };
+	HANDLE GetClientProcessHandle();
+	bool IsClientProcessLost();
 
 private:
-	PROCESS_INFORMATION m_InjectedProcessInfo;
+	PROCESS_INFORMATION m_ClientProcessInfo;
 
 public:
 	std::wstring m_szOTPHardwareID;

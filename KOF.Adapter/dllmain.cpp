@@ -619,7 +619,8 @@ void StartMailslot()
     Print("Internal connection starting");
 #endif
 
-    HANDLE hMailslot = CreateMailslot(skCryptDec("\\\\.\\mailslot\\Internal"), 0, MAILSLOT_WAIT_FOREVER, nullptr);
+    std::string szMailslotName = skCryptDec("\\\\.\\mailslot\\Internal\\") + std::to_string(GetCurrentProcessId());
+    HANDLE hMailslot = CreateMailslot(szMailslotName.c_str(), 0, MAILSLOT_WAIT_FOREVER, nullptr);
 
     if (hMailslot == INVALID_HANDLE_VALUE)
     {

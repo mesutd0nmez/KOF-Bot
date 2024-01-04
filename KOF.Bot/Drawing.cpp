@@ -75,7 +75,7 @@ void Drawing::Draw()
             vWindowSize = { 285, 70 };
             break;
         case Scene::LOADER:
-            vWindowSize = { 285, 325 };
+            vWindowSize = { 285, 335 };
             break;
         case Scene::UI:
             vWindowSize = { 800, 650 };
@@ -169,7 +169,7 @@ void Drawing::Draw()
                     }
                     else
                     {
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
                         ImGui::Text(skCryptDec("Aktivasyon islemi bekleniyor"));
                         ImGui::PopStyleColor();
                     }
@@ -194,7 +194,7 @@ void Drawing::Draw()
 
             case Scene::LOADER:
             {
-                ImGui::BeginChild(skCryptDec("##AutoLoginBoard"), ImVec2(270, 255), true);
+                ImGui::BeginChild(skCryptDec("##AutoLoginBoard"), ImVec2(270, 260), true);
                 {
                     if (bIsGameStarting || bIsGameWaitingReady)
                         ImGui::BeginDisabled();
@@ -381,7 +381,7 @@ void Drawing::Draw()
 
                     if (bIsGameStarting || bIsGameWaitingReady)
                     {
-                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
                         if (ImGui::Button(skCryptDec("Baslatmayi Durdur"), ImVec2(255.0f, 0.0f)))
                         {
                             Drawing::Bot->StopStartGameProcess();
@@ -424,17 +424,17 @@ void Drawing::Draw()
                 {
                     if (bIsGameStarting)
                     {
-                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
                         ImGui::Text(skCryptDec("Oyun baslatiliyor, bekleyin %c"), "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
                         ImGui::PopStyleColor();
                     }
                     else if (bIsGameWaitingReady)
                     {
-                        if (Drawing::Bot->IsInjectedProcessLost())
+                        if (Drawing::Bot->IsClientProcessLost())
                         {
                             if (Drawing::Bot->m_bAutoLogin)
                             {
-                                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
                                 ImGui::Text(skCryptDec("Oto login basliyor, bekleyin (%d)"), (60 - (int)(TimeGet() - m_pClient->m_fLastDisconnectTime)));
                                 ImGui::PopStyleColor();
                             }
@@ -447,7 +447,7 @@ void Drawing::Draw()
                         }
                         else
                         {
-                            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
                             ImGui::Text(skCryptDec("Oyun hazir! Bot yukleniyor %c"), "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
                             ImGui::PopStyleColor();
                         }
@@ -459,7 +459,7 @@ void Drawing::Draw()
 
                         if (iSubscriptionEndAt > iCurrentTime)
                         {
-                            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+                            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
                             ImGui::Text(skCryptDec("%s"), RemainingTime(iSubscriptionEndAt - iCurrentTime).c_str());
                             ImGui::PopStyleColor();
                         }
@@ -639,7 +639,7 @@ void Drawing::DrawMainController()
         if (m_pClient->m_bAttackStatus)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
         else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
 
         if (ImGui::Button(m_pClient->m_bAttackStatus ? skCryptDec("Saldiri Durdur") : skCryptDec("Saldiri Baslat"), ImVec2(132.0f, 0.0f)))
         {
@@ -653,7 +653,7 @@ void Drawing::DrawMainController()
         if (m_pClient->m_bCharacterStatus)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
         else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
 
         if (ImGui::Button(m_pClient->m_bCharacterStatus ? skCryptDec("Bot Durdur") : skCryptDec("Bot Baslat"), ImVec2(132.0f, 0.0f)))
         {
@@ -672,7 +672,7 @@ void Drawing::DrawMainController()
 
         if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(132.0f, 0.0f)))
         {
-            TerminateProcess(Drawing::Bot->GetInjectedProcessHandle(), 0);
+            TerminateProcess(Drawing::Bot->GetClientProcessHandle(), 0);
         }
 
         if (ImGui::Button(skCryptDec("VIP AL"), ImVec2(132.0f, 0.0f)))
@@ -1589,7 +1589,7 @@ void Drawing::DrawSkillController()
         }
 
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
         ImGui::Text(skCryptDec("Sadece Saldiri Skillerini Illegal Vur"));
         ImGui::PopStyleColor();
 
@@ -2161,7 +2161,7 @@ void Drawing::DrawModeController()
         if (!m_pClient->m_bLegalMode)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
         else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
 
         if (ImGui::Button(skCryptDec("Illegal Mod"), ImVec2(132.0f, 0.0f)))
         {
@@ -2176,7 +2176,7 @@ void Drawing::DrawModeController()
         if (m_pClient->m_bLegalMode)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
         else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
 
         if (ImGui::Button(skCryptDec("Legal Mod"), ImVec2(132.0f, 0.0f)))
         {
@@ -2189,7 +2189,7 @@ void Drawing::DrawModeController()
         /*if (m_pClient->m_bSpeedMode)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
         else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
 
         if (ImGui::Button(skCryptDec("Hizli Mod"), ImVec2(132.0f, 0.0f)))
         {
@@ -2203,7 +2203,7 @@ void Drawing::DrawModeController()
         if (!m_pClient->m_bSpeedMode)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
         else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
 
         if (ImGui::Button("Yavas Mod", ImVec2(132.0f, 0.0f)))
         {
@@ -2284,7 +2284,7 @@ void Drawing::DrawRoutePlannerController()
     ImGui::Spacing();
     {
         if (m_pClient->m_bIsRoutePlanning)
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.255f, 0.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
         else
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
 
@@ -2346,7 +2346,7 @@ void Drawing::DrawRoutePlannerController()
             ImGui::EndPopup();
         }
 
-        ImGui::BeginChild(skCryptDec("RoutePlannerChild"), ImVec2(470, 200), true);
+        ImGui::BeginChild(skCryptDec("RoutePlannerChild"), ImVec2(470, 180), true);
         {
             if (ImGui::BeginTable(skCryptDec("RoutePlanner.Table"), 4, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
             {
@@ -2422,7 +2422,7 @@ void Drawing::DrawRoutePlannerController()
             if (!m_pClient->m_bIsRoutePlanning)
                 ImGui::BeginDisabled();
 
-            ImGui::BeginChild(skCryptDec("RoutePlannerStepChild"), ImVec2(470, 60), true);
+            ImGui::BeginChild(skCryptDec("RoutePlannerStepChild"), ImVec2(470, 70), true);
             {
                 if (ImGui::Button(skCryptDec("Potcu Noktasi"), ImVec2(145.0f, 0.0f)))
                 {
@@ -2837,7 +2837,7 @@ void Drawing::DrawMainSettingsArea()
         }
 
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.00f, 1.00f, 0.00f, 1.00f));
         ImGui::Text(skCryptDec("El Dusurmeyi Kaldir"));
         ImGui::PopStyleColor();
 
