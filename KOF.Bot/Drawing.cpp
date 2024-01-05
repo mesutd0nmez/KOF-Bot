@@ -896,29 +896,6 @@ void Drawing::DrawMainController()
         {
             TerminateProcess(Drawing::Bot->GetClientProcessHandle(), 0);
         }
-
-        if (ImGui::Button(skCryptDec("VIP AL"), ImVec2(132.0f, 0.0f)))
-        {
-            m_pClient->VipGetOutTest();
-        }
-
-        if (ImGui::Button(skCryptDec("VIP AT"), ImVec2(132.0f, 0.0f)))
-        {
-            m_pClient->VipGetInTest();
-        }
-
-        if (ImGui::Button(skCryptDec("legalize"), ImVec2(132.0f, 0.0f)))
-        {
-            DWORD iInventoryBase = Drawing::Bot->Read4Byte(Drawing::Bot->Read4Byte(Drawing::Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + Drawing::Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
-            DWORD iItemBase = Drawing::Bot->Read4Byte(iInventoryBase + (Drawing::Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * (0 + 14))));
-
-            m_pClient->Legalize(iItemBase, 0, 8);
-        }
-
-        if (ImGui::Button(skCryptDec("REDIS AT"), ImVec2(132.0f, 0.0f)))
-        {
-            m_pClient->SendPacket("5101");
-        }
     };
 }
 
@@ -2160,10 +2137,92 @@ void Drawing::DrawWeaponListController()
         {
             if (ImGui::BeginTable(skCryptDec("WeaponList.Table"), 3, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
             {
-                ImGui::TableSetupColumn(skCryptDec("Item"), ImGuiTableColumnFlags_WidthFixed, 250);
-                ImGui::TableSetupColumn(skCryptDec("Sol"), ImGuiTableColumnFlags_WidthFixed, 100);
-                ImGui::TableSetupColumn(skCryptDec("Sag"), ImGuiTableColumnFlags_WidthFixed, 100);
+                ImGui::TableSetupColumn(skCryptDec("Item"), ImGuiTableColumnFlags_WidthFixed, 350);
+                ImGui::TableSetupColumn(skCryptDec("Sol"), ImGuiTableColumnFlags_WidthFixed, 30);
+                ImGui::TableSetupColumn(skCryptDec("Sag"), ImGuiTableColumnFlags_WidthFixed, 30);
                 ImGui::TableHeadersRow();
+
+                std::vector<TItemData> vecInventoryItemList;
+                m_pClient->GetInventoryItemList(vecInventoryItemList);
+
+                int i = 0;
+                for (const TItemData& pItem : vecInventoryItemList)
+                {
+                    if (pItem.iItemID == 0)
+                        continue;
+
+                    __TABLE_ITEM* pItemData;
+                    if (!Drawing::Bot->GetItemData(pItem.iItemID, pItemData))
+                        continue;
+
+                    if (pItemData->byKind != ITEM_CLASS_DAGGER
+                        && pItemData->byKind != ITEM_CLASS_SWORD
+                        && pItemData->byKind != ITEM_CLASS_SWORD_2H
+                        && pItemData->byKind != ITEM_CLASS_AXE
+                        && pItemData->byKind != ITEM_CLASS_AXE_2H
+                        && pItemData->byKind != ITEM_CLASS_MACE
+                        && pItemData->byKind != ITEM_CLASS_MACE_2H
+                        && pItemData->byKind != ITEM_CLASS_SPEAR
+                        && pItemData->byKind != ITEM_CLASS_POLEARM
+                        && pItemData->byKind != ITEM_CLASS_SHIELD
+                        && pItemData->byKind != ITEM_CLASS_BOW
+                        && pItemData->byKind != ITEM_CLASS_BOW_CROSS
+                        && pItemData->byKind != ITEM_CLASS_BOW_LONG
+                        && pItemData->byKind != ITEM_CLASS_STAFF
+                        && pItemData->byKind != ITEM_CLASS_ARROW
+                        && pItemData->byKind != ITEM_CLASS_JAVELIN
+                        && pItemData->byKind != ITEM_CLASS_NO_NAME_1)
+                        continue;
+
+                    uint32_t iItemBaseID = pItem.iItemID / 1000 * 1000;
+
+                    ImGui::PushID(i++);
+                    ImGui::TableNextRow();
+
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%s", pItemData->szName.c_str());
+
+                    ImGui::TableNextColumn();
+
+                    bool bSelectedLeft = std::find(m_pClient->m_vecAutoRPRChangeWeaponLeft.begin(), m_pClient->m_vecAutoRPRChangeWeaponLeft.end(), pItem.iPos) != m_pClient->m_vecAutoRPRChangeWeaponLeft.end();
+                    bool bSelectedRight = std::find(m_pClient->m_vecAutoRPRChangeWeaponRight.begin(), m_pClient->m_vecAutoRPRChangeWeaponRight.end(), pItem.iPos) != m_pClient->m_vecAutoRPRChangeWeaponRight.end();
+
+                    if (bSelectedRight)
+                        ImGui::BeginDisabled();
+
+                    if (ImGui::Checkbox(skCryptDec("##RPRChangeWeaponList.Table.Left"), &bSelectedLeft))
+                    {
+                        if (bSelectedLeft)
+                            m_pClient->m_vecAutoRPRChangeWeaponLeft.insert(pItem.iPos);
+                        else
+                            m_pClient->m_vecAutoRPRChangeWeaponLeft.erase(std::find(m_pClient->m_vecAutoRPRChangeWeaponLeft.begin(), m_pClient->m_vecAutoRPRChangeWeaponLeft.end(), pItem.iPos));
+
+                        m_pClient->m_vecAutoRPRChangeWeaponLeft = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRPRChangeWeaponLeft"), m_pClient->m_vecAutoRPRChangeWeaponLeft);
+                    }
+
+                    if (bSelectedRight)
+                        ImGui::EndDisabled();
+
+                    ImGui::TableNextColumn();
+
+                    if (bSelectedLeft)
+                        ImGui::BeginDisabled();
+
+                    if (ImGui::Checkbox(skCryptDec("##RPRChangeWeaponList.Table.Right"), &bSelectedRight))
+                    {
+                        if (bSelectedRight)
+                            m_pClient->m_vecAutoRPRChangeWeaponRight.insert(pItem.iPos);
+                        else
+                            m_pClient->m_vecAutoRPRChangeWeaponRight.erase(std::find(m_pClient->m_vecAutoRPRChangeWeaponRight.begin(), m_pClient->m_vecAutoRPRChangeWeaponRight.end(), pItem.iPos));
+
+                        m_pClient->m_vecAutoRPRChangeWeaponRight = m_pUserConfiguration->SetInt(skCryptDec("Supply"), skCryptDec("AutoRPRChangeWeaponRight"), m_pClient->m_vecAutoRPRChangeWeaponRight);
+                    }
+
+                    if (bSelectedLeft)
+                        ImGui::EndDisabled();
+
+                    ImGui::PopID();
+                }
 
                 ImGui::EndTable();
             }

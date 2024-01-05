@@ -197,6 +197,8 @@ void ClientHandler::ClearUserConfiguration()
 
 	m_bAutoSupply = false;
 	m_bAutoRPRChangeWeapon = false;
+	m_vecAutoRPRChangeWeaponLeft.clear();
+	m_vecAutoRPRChangeWeaponRight.clear();
 
 	m_iSlotExpLimit = 35000;
 	m_bSlotExpLimitEnable = false;
@@ -318,6 +320,9 @@ void ClientHandler::InitializeUserConfiguration()
 	m_bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), m_bAutoRepair);
 	m_vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), m_vecSupplyList);
 	m_bAutoRPRChangeWeapon = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoRPRChangeWeapon"), m_bAutoRPRChangeWeapon);
+	m_vecAutoRPRChangeWeaponLeft = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoRPRChangeWeaponLeft"), m_vecAutoRPRChangeWeaponLeft);
+	m_vecAutoRPRChangeWeaponRight = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("AutoRPRChangeWeaponRight"), m_vecAutoRPRChangeWeaponRight);
+
 	m_bAutoSupply = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoSupply"), m_bAutoSupply);
 	m_iSlotExpLimit = GetUserConfiguration()->GetInt(skCryptDec("Bot"), skCryptDec("SlotExpLimit"), m_iSlotExpLimit);
 	m_bSlotExpLimitEnable = GetUserConfiguration()->GetBool(skCryptDec("Bot"), skCryptDec("SlotExpLimitEnable"), m_bSlotExpLimitEnable);
@@ -7130,7 +7135,7 @@ void ClientHandler::SupplyProcess()
 {
 	try
 	{
-		if (TimeGet() < (m_fLastSupplyProcessTime + (1000.0f / 1000.0f)))
+		if (TimeGet() < (m_fLastSupplyProcessTime + (5000.0f / 1000.0f)))
 			return;
 
 		if (TimeGet() < (m_fLastSupplyTime + ((60000.0f * 5.0f) / 1000.0f)))
@@ -7169,6 +7174,112 @@ void ClientHandler::SupplyProcess()
 			bool bNeedSupply = m_bAutoSupply && IsNeedSupply();
 			bool bNeedRepair = !m_bAutoRepairMagicHammer && m_bAutoRepair && IsNeedRepair();
 			bool bNeedSell = m_bAutoSupply && IsNeedSell();
+
+			if (bNeedRepair 
+				&& (m_bAutoRPRChangeWeapon && (m_vecAutoRPRChangeWeaponLeft.size() > 0 || m_vecAutoRPRChangeWeaponRight.size() > 0)))
+			{
+				TItemData pCurrentItemLeft = GetInventoryItemSlot(6);
+
+				if (pCurrentItemLeft.iItemID == 0 || (pCurrentItemLeft.iItemID != 0 && pCurrentItemLeft.iDurability == 0))
+				{
+					for (auto& pWeaponLeftPosition : m_vecAutoRPRChangeWeaponLeft)
+					{
+						TItemData pNewItem = GetInventoryItemSlot((uint8_t)pWeaponLeftPosition);
+
+						__TABLE_ITEM* pItemNewData;
+						if (!Drawing::Bot->GetItemData(pNewItem.iItemID, pItemNewData))
+							continue;
+
+						if (pItemNewData->byKind != ITEM_CLASS_DAGGER
+							&& pItemNewData->byKind != ITEM_CLASS_SWORD
+							&& pItemNewData->byKind != ITEM_CLASS_SWORD_2H
+							&& pItemNewData->byKind != ITEM_CLASS_AXE
+							&& pItemNewData->byKind != ITEM_CLASS_AXE_2H
+							&& pItemNewData->byKind != ITEM_CLASS_MACE
+							&& pItemNewData->byKind != ITEM_CLASS_MACE_2H
+							&& pItemNewData->byKind != ITEM_CLASS_SPEAR
+							&& pItemNewData->byKind != ITEM_CLASS_POLEARM
+							&& pItemNewData->byKind != ITEM_CLASS_SHIELD
+							&& pItemNewData->byKind != ITEM_CLASS_BOW
+							&& pItemNewData->byKind != ITEM_CLASS_BOW_CROSS
+							&& pItemNewData->byKind != ITEM_CLASS_BOW_LONG
+							&& pItemNewData->byKind != ITEM_CLASS_STAFF
+							&& pItemNewData->byKind != ITEM_CLASS_ARROW
+							&& pItemNewData->byKind != ITEM_CLASS_JAVELIN
+							&& pItemNewData->byKind != ITEM_CLASS_NO_NAME_1)
+							continue;
+
+						if (pNewItem.iItemID == 0)
+							continue;
+
+						if (pNewItem.iDurability == 0)
+							continue;
+
+						new std::thread([=]()
+						{
+							WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 1000);
+
+							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0)
+								EquipItem(pNewItem.iBase, pWeaponLeftPosition, 6);
+						});
+
+						bNeedRepair = false;
+
+						break;
+					}
+				}
+
+				TItemData pCurrentItemRight = GetInventoryItemSlot(8);
+
+				if (pCurrentItemRight.iItemID == 0 || (pCurrentItemRight.iItemID != 0 && pCurrentItemRight.iDurability == 0))
+				{
+					for (auto& pWeaponRightPosition : m_vecAutoRPRChangeWeaponLeft)
+					{
+						TItemData pNewItem = GetInventoryItemSlot((uint8_t)pWeaponRightPosition);
+
+						__TABLE_ITEM* pItemNewData;
+						if (!Drawing::Bot->GetItemData(pNewItem.iItemID, pItemNewData))
+							continue;
+
+						if (pItemNewData->byKind != ITEM_CLASS_DAGGER
+							&& pItemNewData->byKind != ITEM_CLASS_SWORD
+							&& pItemNewData->byKind != ITEM_CLASS_SWORD_2H
+							&& pItemNewData->byKind != ITEM_CLASS_AXE
+							&& pItemNewData->byKind != ITEM_CLASS_AXE_2H
+							&& pItemNewData->byKind != ITEM_CLASS_MACE
+							&& pItemNewData->byKind != ITEM_CLASS_MACE_2H
+							&& pItemNewData->byKind != ITEM_CLASS_SPEAR
+							&& pItemNewData->byKind != ITEM_CLASS_POLEARM
+							&& pItemNewData->byKind != ITEM_CLASS_SHIELD
+							&& pItemNewData->byKind != ITEM_CLASS_BOW
+							&& pItemNewData->byKind != ITEM_CLASS_BOW_CROSS
+							&& pItemNewData->byKind != ITEM_CLASS_BOW_LONG
+							&& pItemNewData->byKind != ITEM_CLASS_STAFF
+							&& pItemNewData->byKind != ITEM_CLASS_ARROW
+							&& pItemNewData->byKind != ITEM_CLASS_JAVELIN
+							&& pItemNewData->byKind != ITEM_CLASS_NO_NAME_1)
+							continue;
+
+						if (pNewItem.iItemID == 0)
+							continue;
+
+						if (pNewItem.iDurability == 0)
+							continue;
+
+						new std::thread([=]()
+						{
+							WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 1000);
+
+							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0)
+								EquipItem(pNewItem.iBase, pWeaponRightPosition, 8);
+						});
+
+						bNeedRepair = false;
+
+						break;
+					}
+				}
+			}
 
 			if (bNeedSupply 
 				|| bNeedRepair 

@@ -2,6 +2,7 @@
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 #define _WINSOCKAPI_
+#define NOMINMAX
 
 // Windows Header Files
 #include <Windows.h>
@@ -40,5 +41,4 @@
 #include <cerrno>
 #include <d3d9.h>
 #include <D3dx9tex.h>
-#include <dbghelp.h>
 #include <direct.h>

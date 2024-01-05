@@ -836,6 +836,7 @@ TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 		if (iItemID != 0)
 		{
 			pInventory.iPos = iSlotPosition;
+			pInventory.iBase = iItemBase;
 			pInventory.iItemID = iItemID;
 			pInventory.iCount = (uint16_t)m_Bot->Read4Byte(iItemBase + 0x68);
 			pInventory.iDurability = (uint16_t)m_Bot->Read4Byte(iItemBase + 0x6C);
@@ -850,6 +851,7 @@ TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 		if (m_Bot->Read4Byte(m_Bot->Read4Byte(iItemBase + 0x68)) + m_Bot->Read4Byte(m_Bot->Read4Byte(iItemBase + 0x6C)) != 0)
 		{
 			pInventory.iPos = iSlotPosition;
+			pInventory.iBase = iItemBase;
 			pInventory.iItemID = iItemID;
 			pInventory.iCount = (uint16_t)m_Bot->Read4Byte(iItemBase + 0x70);
 			pInventory.iDurability = (uint16_t)m_Bot->Read4Byte(iItemBase + 0x74);
@@ -859,6 +861,12 @@ TItemData Client::GetInventoryItemSlot(uint8_t iSlotPosition)
 	}
 
 	return pInventory;
+}
+
+DWORD Client::GetInventoryItemBase(uint8_t iSlotPosition)
+{
+	DWORD iInventoryBase = m_Bot->Read4Byte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_BASE")));
+	return m_Bot->Read4Byte(iInventoryBase + (m_Bot->GetAddress(skCryptDec("KO_OFF_INVENTORY_START")) + (4 * iSlotPosition)));
 }
 
 bool Client::GetInventoryItemList(std::vector<TItemData>& vecItemList)

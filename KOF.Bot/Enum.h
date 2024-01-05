@@ -366,6 +366,8 @@ enum ItemClass
 
 	ITEM_CLASS_ETC = 251,
 
+	ITEM_CLASS_NO_NAME_1 = 181,
+
 	ITEM_CLASS_UNKNOWN = 0xffffffff
 };
 

@@ -9,8 +9,6 @@
 
 #include "Define.h"
 
-#define NOMINMAX
-
 // add headers that you want to pre-compile here
 #include "framework.h"
 #include "SkCrypter.h"
@@ -42,7 +40,6 @@ using JSON = nlohmann::json;
 #pragma comment(lib, "D3d9.lib")
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "wbemuuid.lib")
-#pragma comment(lib, "dbghelp.lib")
 
 #define Print(a, ...) printf("%s: " a "\n", __FUNCTION__, ##__VA_ARGS__)
 

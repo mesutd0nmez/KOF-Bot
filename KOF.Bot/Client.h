@@ -82,6 +82,8 @@ public:
 	TItemData GetInventoryItemSlot(uint8_t iSlotPosition);
 	bool GetInventoryItemList(std::vector<TItemData>& vecItemList);
 
+	DWORD GetInventoryItemBase(uint8_t iSlotPosition);
+
 	int32_t GetInventoryEmptySlot();
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
 

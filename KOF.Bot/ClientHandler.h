@@ -246,6 +246,9 @@ public:
 	bool m_bAutoSupply;
 	bool m_bAutoRPRChangeWeapon;
 
+	std::unordered_set<int> m_vecAutoRPRChangeWeaponLeft;
+	std::unordered_set<int> m_vecAutoRPRChangeWeaponRight;
+
 	int m_iSlotExpLimit;
 	bool m_bSlotExpLimitEnable;
 	bool m_bPartyLeaderSelect;
