@@ -4887,55 +4887,58 @@ void ClientHandler::LoadSkillData()
 	if (!m_Bot->GetSkillTable(&pSkillTable))
 		return;
 
-	for (const auto& [key, value] : *pSkillTable)
+	for (auto it = pSkillTable->begin(); it != pSkillTable->end(); ++it)
 	{
-		if (0 != std::to_string(value.iNeedSkill).substr(0, 3).compare(std::to_string(m_PlayerMySelf.eClass)))
+		const auto& kvPair = *it;
+		const auto& v = kvPair.second;
+
+		if (0 != std::to_string(v.iNeedSkill).substr(0, 3).compare(std::to_string(m_PlayerMySelf.eClass)))
 			continue;
 
-		if (value.iTarget != SkillTargetType::TARGET_SELF
-			&& value.iTarget != SkillTargetType::TARGET_PARTY
-			&& value.iTarget != SkillTargetType::TARGET_PARTY_ALL
-			&& value.iTarget != SkillTargetType::TARGET_FRIEND_WITHME
-			&& value.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
-			&& value.iTarget != SkillTargetType::TARGET_ENEMY_ONLY
-			&& value.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
+		if (v.iTarget != SkillTargetType::TARGET_SELF
+			&& v.iTarget != SkillTargetType::TARGET_PARTY
+			&& v.iTarget != SkillTargetType::TARGET_PARTY_ALL
+			&& v.iTarget != SkillTargetType::TARGET_FRIEND_WITHME
+			&& v.iTarget != SkillTargetType::TARGET_FRIEND_ONLY
+			&& v.iTarget != SkillTargetType::TARGET_ENEMY_ONLY
+			&& v.iTarget != SkillTargetType::TARGET_AREA_ENEMY)
 			continue;
 
-		if ((value.iSelfAnimID1 == 153 || value.iSelfAnimID1 == 154) || (value.iSelfFX1 == 32038 || value.iSelfFX1 == 32039))
+		if ((v.iSelfAnimID1 == 153 || v.iSelfAnimID1 == 154) || (v.iSelfFX1 == 32038 || v.iSelfFX1 == 32039))
 			continue;
 
-		if (value.dwNeedItem == 811071000) //New Emotes
+		if (v.dwNeedItem == 811071000) //New Emotes
 			continue;
 
-		switch (value.iNeedSkill % 10)
+		switch (v.iNeedSkill % 10)
 		{
 		case 0:
-			if (value.iNeedLevel > m_PlayerMySelf.iLevel)
+			if (v.iNeedLevel > m_PlayerMySelf.iLevel)
 				continue;
 			break;
 
 		case 5:
-			if (value.iNeedLevel > GetSkillPoint(0))
+			if (v.iNeedLevel > GetSkillPoint(0))
 				continue;
 			break;
 
 		case 6:
-			if (value.iNeedLevel > GetSkillPoint(1))
+			if (v.iNeedLevel > GetSkillPoint(1))
 				continue;
 			break;
 
 		case 7:
-			if (value.iNeedLevel > GetSkillPoint(2))
+			if (v.iNeedLevel > GetSkillPoint(2))
 				continue;
 			break;
 
 		case 8:
-			if (value.iNeedLevel > GetSkillPoint(3))
+			if (v.iNeedLevel > GetSkillPoint(3))
 				continue;
 			break;
 		}
 
-		m_vecAvailableSkill.push_back(value);
+		m_vecAvailableSkill.push_back(v);
 	}
 }
 

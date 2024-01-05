@@ -200,257 +200,263 @@ void Drawing::Draw()
 
             case Scene::LOADER:
             {
+                auto iSubscriptionEndAt = Drawing::Bot->m_iSubscriptionEndAt;
+                std::time_t iCurrentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
                 if (ImGui::BeginTabBar(skCryptDec("##Loader.TabBar"), ImGuiTabBarFlags_None))
                 {
-                    if (ImGui::BeginTabItem(skCryptDec("Login")))
+                    if (iSubscriptionEndAt > iCurrentTime)
                     {
-                        ImGui::BeginChild(skCryptDec("##AutoLoginBoard"), ImVec2(270, 170), true);
+                        if (ImGui::BeginTabItem(skCryptDec("Login")))
                         {
-                            if (bIsGameStarting || bIsGameWaitingReady)
-                                ImGui::BeginDisabled();
-
-                            ImGui::SetCursorPos(ImVec2(10, 10));
-                            ImGui::Text(skCryptDec("ID"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 7));
-
-                            if (ImGui::InputText(skCryptDec("##ID"), &Drawing::Bot->m_szID[0], 100))
+                            ImGui::BeginChild(skCryptDec("##AutoLoginBoard"), ImVec2(270, 170), true);
                             {
-                                Drawing::Bot->m_szID = m_iniAppConfiguration->SetString(skCryptDec("AutoLogin"), skCryptDec("ID"), Drawing::Bot->m_szID.c_str());
-                            }
+                                if (bIsGameStarting || bIsGameWaitingReady)
+                                    ImGui::BeginDisabled();
 
-                            ImGui::SetCursorPos(ImVec2(10, 36));
-                            ImGui::Text(skCryptDec("Sifre"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 33));
+                                ImGui::SetCursorPos(ImVec2(10, 10));
+                                ImGui::Text(skCryptDec("ID"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 7));
 
-                            if (ImGui::InputText(skCryptDec("##Password"), &Drawing::Bot->m_szPassword[0], 100, ImGuiInputTextFlags_Password))
-                            {
-                                Drawing::Bot->m_szPassword = m_iniAppConfiguration->SetString(skCryptDec("AutoLogin"), skCryptDec("Password"), Drawing::Bot->m_szPassword.c_str());
-                            }
-
-                            std::vector<std::string> vecServerList;
-                            vecServerList.push_back(skCryptDec("OREADS"));
-                            vecServerList.push_back(skCryptDec("MINARK"));
-                            vecServerList.push_back(skCryptDec("DESTAN"));
-                            vecServerList.push_back(skCryptDec("DRYADS"));
-                            vecServerList.push_back(skCryptDec("PANDORA"));
-                            vecServerList.push_back(skCryptDec("FELIS"));
-                            vecServerList.push_back(skCryptDec("AGARTHA"));
-                            vecServerList.push_back(skCryptDec("ZERO"));
-
-                            ImGui::SetCursorPos(ImVec2(10, 62));
-                            ImGui::Text(skCryptDec("Server"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 59));
-
-                            if (ImGui::BeginCombo(skCryptDec("##ServerListCombo"), vecServerList[Drawing::Bot->m_iServerID].c_str()))
-                            {
-                                for (size_t i = 0; i < vecServerList.size(); i++)
+                                if (ImGui::InputText(skCryptDec("##ID"), &Drawing::Bot->m_szID[0], 100))
                                 {
-                                    const bool bIsSelected = Drawing::Bot->m_iServerID == i;
-
-                                    if (ImGui::Selectable(vecServerList[i].c_str(), bIsSelected))
-                                    {
-                                        Drawing::Bot->m_iServerID = m_iniAppConfiguration->SetInt(skCryptDec("AutoLogin"), skCryptDec("Server"), i);
-                                    }
-
-                                    if (bIsSelected)
-                                        ImGui::SetItemDefaultFocus();
+                                    Drawing::Bot->m_szID = m_iniAppConfiguration->SetString(skCryptDec("AutoLogin"), skCryptDec("ID"), Drawing::Bot->m_szID.c_str());
                                 }
 
-                                ImGui::EndCombo();
-                            }
+                                ImGui::SetCursorPos(ImVec2(10, 36));
+                                ImGui::Text(skCryptDec("Sifre"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 33));
 
-                            ImGui::SetCursorPos(ImVec2(10, 88));
-                            ImGui::Text(skCryptDec("Kanal"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 85));
-
-                            std::string szSelectedChannelName = vecServerList[Drawing::Bot->m_iServerID].c_str() + std::to_string(Drawing::Bot->m_iChannelID + 1);
-
-                            if (ImGui::BeginCombo(skCryptDec("##ChannelListCombo"), szSelectedChannelName.c_str()))
-                            {
-                                for (size_t i = 0; i < 6; i++)
+                                if (ImGui::InputText(skCryptDec("##Password"), &Drawing::Bot->m_szPassword[0], 100, ImGuiInputTextFlags_Password))
                                 {
-                                    const bool bIsSelected = Drawing::Bot->m_iChannelID == i;
-
-                                    std::string szChannelName = vecServerList[Drawing::Bot->m_iServerID].c_str() + std::to_string(i + 1);
-                                    if (ImGui::Selectable(szChannelName.c_str(), bIsSelected))
-                                    {
-                                        Drawing::Bot->m_iChannelID = m_iniAppConfiguration->SetInt(skCryptDec("AutoLogin"), skCryptDec("Channel"), i);
-                                    }
-
-                                    if (bIsSelected)
-                                        ImGui::SetItemDefaultFocus();
+                                    Drawing::Bot->m_szPassword = m_iniAppConfiguration->SetString(skCryptDec("AutoLogin"), skCryptDec("Password"), Drawing::Bot->m_szPassword.c_str());
                                 }
 
-                                ImGui::EndCombo();
-                            }
+                                std::vector<std::string> vecServerList;
+                                vecServerList.push_back(skCryptDec("OREADS"));
+                                vecServerList.push_back(skCryptDec("MINARK"));
+                                vecServerList.push_back(skCryptDec("DESTAN"));
+                                vecServerList.push_back(skCryptDec("DRYADS"));
+                                vecServerList.push_back(skCryptDec("PANDORA"));
+                                vecServerList.push_back(skCryptDec("FELIS"));
+                                vecServerList.push_back(skCryptDec("AGARTHA"));
+                                vecServerList.push_back(skCryptDec("ZERO"));
 
-                            ImGui::SetCursorPos(ImVec2(10, 114));
-                            ImGui::Text(skCryptDec("Slot"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 111));
+                                ImGui::SetCursorPos(ImVec2(10, 62));
+                                ImGui::Text(skCryptDec("Server"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 59));
 
-                            if (ImGui::DragInt(skCryptDec("##SlotValue"), &Drawing::Bot->m_iSlotID, 1, 1, 4))
-                                Drawing::Bot->m_iSlotID = m_iniAppConfiguration->SetInt(skCryptDec("AutoLogin"), skCryptDec("Slot"), Drawing::Bot->m_iSlotID);
-
-                            ImGui::Spacing();
-                            if (ImGui::Button(skCryptDec("AnyOTP"), ImVec2(255.0f, 0.0f)))
-                            {
-                                ImGui::OpenPopup(skCryptDec("AnyOTP Ayarlari"));
-                            }
-
-                            if (ImGui::BeginPopupModal(skCryptDec("AnyOTP Ayarlari"), 0, ImGuiWindowFlags_NoResize))
-                            {
-                                if (Drawing::Bot->m_hModuleAnyOTP == NULL)
+                                if (ImGui::BeginCombo(skCryptDec("##ServerListCombo"), vecServerList[Drawing::Bot->m_iServerID].c_str()))
                                 {
-                                    ImGui::Text(skCryptDec("AnyOTP bilgisayarda kurulu degil"));
-
-                                    ImGui::Spacing();
-
-                                    if (ImGui::Button(skCryptDec("Kapat"), ImVec2(230, 0.0f)))
+                                    for (size_t i = 0; i < vecServerList.size(); i++)
                                     {
-                                        ImGui::CloseCurrentPopup();
-                                    }
-                                }
-                                else
-                                {
-                                    ImGui::BeginChild(skCryptDec("##AnyOtpBoard"), ImVec2(270, 100), true);
-                                    {
-                                        ImGui::SetCursorPos(ImVec2(10, 10));
-                                        ImGui::Text(skCryptDec("OTP Sifre"));
-                                        ImGui::SameLine();
-                                        ImGui::SetCursorPos(ImVec2(88, 7));
+                                        const bool bIsSelected = Drawing::Bot->m_iServerID == i;
 
-                                        if (ImGui::InputText(skCryptDec("##AnyOTPPassword"), &Drawing::Bot->m_szAnyOTPPassword[0], 100))
+                                        if (ImGui::Selectable(vecServerList[i].c_str(), bIsSelected))
                                         {
-                                            Drawing::Bot->m_szAnyOTPPassword = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("Password"), Drawing::Bot->m_szAnyOTPPassword.c_str());
+                                            Drawing::Bot->m_iServerID = m_iniAppConfiguration->SetInt(skCryptDec("AutoLogin"), skCryptDec("Server"), i);
                                         }
 
-                                        ImGui::SetCursorPos(ImVec2(10, 36));
-                                        ImGui::Text(skCryptDec("OTP ID"));
-                                        ImGui::SameLine();
-                                        ImGui::SetCursorPos(ImVec2(88, 33));
+                                        if (bIsSelected)
+                                            ImGui::SetItemDefaultFocus();
+                                    }
 
-                                        if (ImGui::InputText(skCryptDec("##AnyOTPID"), &Drawing::Bot->m_szAnyOTPID[0], 100))
+                                    ImGui::EndCombo();
+                                }
+
+                                ImGui::SetCursorPos(ImVec2(10, 88));
+                                ImGui::Text(skCryptDec("Kanal"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 85));
+
+                                std::string szSelectedChannelName = vecServerList[Drawing::Bot->m_iServerID].c_str() + std::to_string(Drawing::Bot->m_iChannelID + 1);
+
+                                if (ImGui::BeginCombo(skCryptDec("##ChannelListCombo"), szSelectedChannelName.c_str()))
+                                {
+                                    for (size_t i = 0; i < 6; i++)
+                                    {
+                                        const bool bIsSelected = Drawing::Bot->m_iChannelID == i;
+
+                                        std::string szChannelName = vecServerList[Drawing::Bot->m_iServerID].c_str() + std::to_string(i + 1);
+                                        if (ImGui::Selectable(szChannelName.c_str(), bIsSelected))
                                         {
-                                            Drawing::Bot->m_szAnyOTPID = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("ID"), Drawing::Bot->m_szAnyOTPID.c_str());
+                                            Drawing::Bot->m_iChannelID = m_iniAppConfiguration->SetInt(skCryptDec("AutoLogin"), skCryptDec("Channel"), i);
                                         }
+
+                                        if (bIsSelected)
+                                            ImGui::SetItemDefaultFocus();
+                                    }
+
+                                    ImGui::EndCombo();
+                                }
+
+                                ImGui::SetCursorPos(ImVec2(10, 114));
+                                ImGui::Text(skCryptDec("Slot"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 111));
+
+                                if (ImGui::DragInt(skCryptDec("##SlotValue"), &Drawing::Bot->m_iSlotID, 1, 1, 4))
+                                    Drawing::Bot->m_iSlotID = m_iniAppConfiguration->SetInt(skCryptDec("AutoLogin"), skCryptDec("Slot"), Drawing::Bot->m_iSlotID);
+
+                                ImGui::Spacing();
+                                if (ImGui::Button(skCryptDec("AnyOTP"), ImVec2(255.0f, 0.0f)))
+                                {
+                                    ImGui::OpenPopup(skCryptDec("AnyOTP Ayarlari"));
+                                }
+
+                                if (ImGui::BeginPopupModal(skCryptDec("AnyOTP Ayarlari"), 0, ImGuiWindowFlags_NoResize))
+                                {
+                                    if (Drawing::Bot->m_hModuleAnyOTP == NULL)
+                                    {
+                                        ImGui::Text(skCryptDec("AnyOTP bilgisayarda kurulu degil"));
 
                                         ImGui::Spacing();
-                                        ImGui::Separator();
 
-                                        ImGui::SetCursorPos(ImVec2(114, 73));
-
-                                        std::string szCode = to_string(Drawing::Bot->ReadAnyOTPCode(Drawing::Bot->m_szAnyOTPPassword, Drawing::Bot->m_szAnyOTPID).c_str());
-
-                                        ImGui::Text(skCryptDec("%s"), szCode.c_str());
+                                        if (ImGui::Button(skCryptDec("Kapat"), ImVec2(230, 0.0f)))
+                                        {
+                                            ImGui::CloseCurrentPopup();
+                                        }
                                     }
-
-                                    ImGui::EndChild();
-
-                                    ImGui::Spacing();
-
-                                    if (ImGui::Button(skCryptDec("Sifirla"), ImVec2(270, 0.0f)))
+                                    else
                                     {
-                                        Drawing::Bot->m_szAnyOTPID = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("ID"), to_string(Drawing::Bot->GetAnyOTPHardwareID().c_str()).c_str());
+                                        ImGui::BeginChild(skCryptDec("##AnyOtpBoard"), ImVec2(270, 100), true);
+                                        {
+                                            ImGui::SetCursorPos(ImVec2(10, 10));
+                                            ImGui::Text(skCryptDec("OTP Sifre"));
+                                            ImGui::SameLine();
+                                            ImGui::SetCursorPos(ImVec2(88, 7));
+
+                                            if (ImGui::InputText(skCryptDec("##AnyOTPPassword"), &Drawing::Bot->m_szAnyOTPPassword[0], 100))
+                                            {
+                                                Drawing::Bot->m_szAnyOTPPassword = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("Password"), Drawing::Bot->m_szAnyOTPPassword.c_str());
+                                            }
+
+                                            ImGui::SetCursorPos(ImVec2(10, 36));
+                                            ImGui::Text(skCryptDec("OTP ID"));
+                                            ImGui::SameLine();
+                                            ImGui::SetCursorPos(ImVec2(88, 33));
+
+                                            if (ImGui::InputText(skCryptDec("##AnyOTPID"), &Drawing::Bot->m_szAnyOTPID[0], 100))
+                                            {
+                                                Drawing::Bot->m_szAnyOTPID = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("ID"), Drawing::Bot->m_szAnyOTPID.c_str());
+                                            }
+
+                                            ImGui::Spacing();
+                                            ImGui::Separator();
+
+                                            ImGui::SetCursorPos(ImVec2(114, 73));
+
+                                            std::string szCode = to_string(Drawing::Bot->ReadAnyOTPCode(Drawing::Bot->m_szAnyOTPPassword, Drawing::Bot->m_szAnyOTPID).c_str());
+
+                                            ImGui::Text(skCryptDec("%s"), szCode.c_str());
+                                        }
+
+                                        ImGui::EndChild();
+
+                                        ImGui::Spacing();
+
+                                        if (ImGui::Button(skCryptDec("Sifirla"), ImVec2(270, 0.0f)))
+                                        {
+                                            Drawing::Bot->m_szAnyOTPID = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("ID"), to_string(Drawing::Bot->GetAnyOTPHardwareID().c_str()).c_str());
+                                        }
+
+                                        if (ImGui::Button(skCryptDec("Kapat"), ImVec2(270, 0.0f)))
+                                        {
+                                            ImGui::CloseCurrentPopup();
+                                        }
                                     }
 
-                                    if (ImGui::Button(skCryptDec("Kapat"), ImVec2(270, 0.0f)))
-                                    {
-                                        ImGui::CloseCurrentPopup();
-                                    }
+                                    ImGui::EndPopup();
                                 }
 
-                                ImGui::EndPopup();
+                                if (bIsGameStarting || bIsGameWaitingReady)
+                                    ImGui::EndDisabled();
+
+                                ImGui::EndChild();
                             }
 
-                            if (bIsGameStarting || bIsGameWaitingReady)
-                                ImGui::EndDisabled();
-
-                            ImGui::EndChild();
+                            ImGui::EndTabItem();
                         }
 
-                        ImGui::EndTabItem();
-                    }
-
-                    if (ImGui::BeginTabItem(skCryptDec("Proxy")))
-                    {
-                        ImGui::BeginChild(skCryptDec("##ProxyConfigurationBoard"), ImVec2(270, 170), true);
+                        if (ImGui::BeginTabItem(skCryptDec("Proxy")))
                         {
-                            ImGui::SetCursorPos(ImVec2(10, 10));
-                            ImGui::Text(skCryptDec("IP"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 7));
-
-                            if (ImGui::InputText(skCryptDec("##ProxyIP"), &Drawing::Bot->m_szProxyIP[0], 100))
+                            ImGui::BeginChild(skCryptDec("##ProxyConfigurationBoard"), ImVec2(270, 170), true);
                             {
-                                Drawing::Bot->m_szProxyIP = m_iniAppConfiguration->SetString(skCryptDec("Proxy"), skCryptDec("IP"), Drawing::Bot->m_szProxyIP.c_str());
-                            }
+                                ImGui::SetCursorPos(ImVec2(10, 10));
+                                ImGui::Text(skCryptDec("IP"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 7));
 
-                            ImGui::SetCursorPos(ImVec2(10, 36));
-                            ImGui::Text(skCryptDec("Port"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 33));
+                                if (ImGui::InputText(skCryptDec("##ProxyIP"), &Drawing::Bot->m_szProxyIP[0], 100))
+                                {
+                                    Drawing::Bot->m_szProxyIP = m_iniAppConfiguration->SetString(skCryptDec("Proxy"), skCryptDec("IP"), Drawing::Bot->m_szProxyIP.c_str());
+                                }
 
-                            if (ImGui::InputInt(skCryptDec("##ProxyPort"), &Drawing::Bot->m_iProxyPort, 0))
-                            {
-                                Drawing::Bot->m_iProxyPort = m_iniAppConfiguration->SetInt(skCryptDec("Proxy"), skCryptDec("Port"), Drawing::Bot->m_iProxyPort);
-                            }
+                                ImGui::SetCursorPos(ImVec2(10, 36));
+                                ImGui::Text(skCryptDec("Port"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 33));
 
-                            ImGui::SetCursorPos(ImVec2(10, 62));
-                            ImGui::Text(skCryptDec("Protokol"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 59));
+                                if (ImGui::InputInt(skCryptDec("##ProxyPort"), &Drawing::Bot->m_iProxyPort, 0))
+                                {
+                                    Drawing::Bot->m_iProxyPort = m_iniAppConfiguration->SetInt(skCryptDec("Proxy"), skCryptDec("Port"), Drawing::Bot->m_iProxyPort);
+                                }
 
-                            ImGui::BeginDisabled();
+                                ImGui::SetCursorPos(ImVec2(10, 62));
+                                ImGui::Text(skCryptDec("Protokol"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 59));
 
-                            ImGui::BeginCombo(skCryptDec("##ProxyTypeCombo"), "SOCKS5");
-
-                            ImGui::EndDisabled();
-
-                            ImGui::SetCursorPos(ImVec2(10, 88));
-                            ImGui::Text(skCryptDec("Username"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 85));
-
-                            if (ImGui::InputText(skCryptDec("##ProxyUsername"), &Drawing::Bot->m_szProxyUsername[0], 100))
-                            {
-                                Drawing::Bot->m_szProxyUsername = m_iniAppConfiguration->SetString(skCryptDec("Proxy"), skCryptDec("Username"), Drawing::Bot->m_szProxyUsername.c_str());
-                            }
-
-                            ImGui::SetCursorPos(ImVec2(10, 114));
-                            ImGui::Text(skCryptDec("Password"));
-                            ImGui::SameLine();
-                            ImGui::SetCursorPos(ImVec2(88, 111));
-
-                            if (ImGui::InputText(skCryptDec("##ProxyPassword"), &Drawing::Bot->m_szProxyPassword[0], 100))
-                            {
-                                Drawing::Bot->m_szProxyPassword = m_iniAppConfiguration->SetString(skCryptDec("Proxy"), skCryptDec("Password"), Drawing::Bot->m_szProxyPassword.c_str());
-                            }
-
-                            ImGui::Spacing();
-
-                            if (Drawing::Bot->m_bCheckingProxy)
                                 ImGui::BeginDisabled();
 
-                            if (ImGui::Button(skCryptDec("Proxy Test"), ImVec2(255.0f, 0.0f)))
-                            {
-                                Drawing::Bot->CheckProxy(
-                                    Drawing::Bot->m_szProxyIP, 
-                                    (uint16_t)Drawing::Bot->m_iProxyPort, 
-                                    Drawing::Bot->m_szProxyUsername.c_str(), 
-                                    Drawing::Bot->m_szProxyPassword.c_str());
-                            }
+                                ImGui::BeginCombo(skCryptDec("##ProxyTypeCombo"), "SOCKS5");
 
-                            if (Drawing::Bot->m_bCheckingProxy)
                                 ImGui::EndDisabled();
 
-                            ImGui::EndChild();
+                                ImGui::SetCursorPos(ImVec2(10, 88));
+                                ImGui::Text(skCryptDec("Username"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 85));
+
+                                if (ImGui::InputText(skCryptDec("##ProxyUsername"), &Drawing::Bot->m_szProxyUsername[0], 100))
+                                {
+                                    Drawing::Bot->m_szProxyUsername = m_iniAppConfiguration->SetString(skCryptDec("Proxy"), skCryptDec("Username"), Drawing::Bot->m_szProxyUsername.c_str());
+                                }
+
+                                ImGui::SetCursorPos(ImVec2(10, 114));
+                                ImGui::Text(skCryptDec("Password"));
+                                ImGui::SameLine();
+                                ImGui::SetCursorPos(ImVec2(88, 111));
+
+                                if (ImGui::InputText(skCryptDec("##ProxyPassword"), &Drawing::Bot->m_szProxyPassword[0], 100))
+                                {
+                                    Drawing::Bot->m_szProxyPassword = m_iniAppConfiguration->SetString(skCryptDec("Proxy"), skCryptDec("Password"), Drawing::Bot->m_szProxyPassword.c_str());
+                                }
+
+                                ImGui::Spacing();
+
+                                if (Drawing::Bot->m_bCheckingProxy)
+                                    ImGui::BeginDisabled();
+
+                                if (ImGui::Button(skCryptDec("Proxy Test"), ImVec2(255.0f, 0.0f)))
+                                {
+                                    Drawing::Bot->CheckProxy(
+                                        Drawing::Bot->m_szProxyIP,
+                                        (uint16_t)Drawing::Bot->m_iProxyPort,
+                                        Drawing::Bot->m_szProxyUsername.c_str(),
+                                        Drawing::Bot->m_szProxyPassword.c_str());
+                                }
+
+                                if (Drawing::Bot->m_bCheckingProxy)
+                                    ImGui::EndDisabled();
+
+                                ImGui::EndChild();
+                            }
+                            ImGui::EndTabItem();
                         }
-                        ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(skCryptDec("Magaza")))
@@ -556,6 +562,8 @@ void Drawing::Draw()
                     ImGui::EndTabBar();
                 }
 
+                if (iSubscriptionEndAt < iCurrentTime)
+                    ImGui::BeginDisabled();
 
                 ImGui::BeginChild(skCryptDec("##LoaderButtonBoard"), ImVec2(270, 120), true);
                 {
@@ -606,7 +614,7 @@ void Drawing::Draw()
 
                         if (ImGui::Button(skCryptDec("Oyunu Baslat"), ImVec2(255.0f, 0.0f)))
                         {
-                            if (!std::filesystem::exists(skCryptDec("C:\\NTTGame\\KnightOnlineEn\\KnightOnLine.exe")))
+                            if (!FileExists(skCryptDec("C:\\NTTGame\\KnightOnlineEn\\KnightOnLine.exe")))
                             {
                                 ImGui::OpenPopup(skCryptDec("Baslatma Hatasi"));
                             }
@@ -619,6 +627,9 @@ void Drawing::Draw()
 
                     ImGui::EndChild();
                 }
+
+                if (iSubscriptionEndAt < iCurrentTime)
+                    ImGui::EndDisabled();
 
                 ImGui::BeginChild(skCryptDec("##LoaderFooter"), ImVec2(270, 33), true);
                 {
@@ -678,7 +689,7 @@ void Drawing::Draw()
                             else
                             {
                                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
-                                ImGui::Text(skCryptDec("Abonelik suresi doldu"));
+                                ImGui::Text(skCryptDec("Abonelik suresi doldu, Magazadan uzatabilirsin"));
                                 ImGui::PopStyleColor();
                             }
                         }                
@@ -694,13 +705,11 @@ void Drawing::Draw()
                 ImGui::BeginChild(skCryptDec("##Main.Child1"), ImVec2(288, 610), true);
                 {
                     DrawMainController();
-                    //ImGui::Separator();
-                    //DrawStatisticsController();
-
                     ImGui::Separator();
+
                     DrawModeController();
-
                     ImGui::Separator();
+
                     ImGui::Text("Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
                 }
                 ImGui::EndChild();
@@ -998,8 +1007,11 @@ void Drawing::DrawTransformationController()
         std::map<uint32_t, __TABLE_DISGUISE_RING>* mapDisguiseTable;
         if (Drawing::Bot->GetDisguiseRingTable(&mapDisguiseTable))
         {
-            for (auto& [k, v] : *mapDisguiseTable)
+            for (auto it = mapDisguiseTable->begin(); it != mapDisguiseTable->end(); ++it)
             {
+                const auto& kvPair = *it;
+                const auto& v = kvPair.second;
+
                 if (m_pClient->m_PlayerMySelf.iLevel < v.iRequiredLevel)
                     continue;
 

@@ -459,7 +459,7 @@ void Client::SetSkillNextUseTime(int32_t iSkillID, float fSkillUseTime)
 	auto it = m_mapSkillUseTime.find(iSkillID);
 
 	if (it == m_mapSkillUseTime.end())
-		m_mapSkillUseTime.insert(std::pair(iSkillID, fSkillUseTime));
+		m_mapSkillUseTime.insert(std::make_pair(iSkillID, fSkillUseTime));
 	else
 		it->second = fSkillUseTime;
 }
@@ -1988,10 +1988,15 @@ bool Client::IsTransformationAvailable()
 	if (!m_Bot->GetDisguiseRingTable(&mapDisguiseTable))
 		return false;
 
-	for (auto& [k, v] : *mapDisguiseTable)
+	for (auto it = mapDisguiseTable->begin(); it != mapDisguiseTable->end(); ++it) 
 	{
-		if (IsSkillActive(v.iSkillID))
+		const auto& kvPair = *it;
+		const auto& v = kvPair.second;
+
+		if (IsSkillActive(v.iSkillID)) 
+		{
 			return false;
+		}
 	}
 	
 	return true;

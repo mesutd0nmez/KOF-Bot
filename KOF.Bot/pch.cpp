@@ -520,3 +520,24 @@ bool CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::st
 	WSACleanup();
 	return true;
 }
+
+std::string GetFileName(const std::string& filePath) 
+{
+	std::string correctedPath = filePath;
+	std::replace(correctedPath.begin(), correctedPath.end(), '\\', '/');
+
+	size_t lastSlashPos = correctedPath.find_last_of('/');
+
+	if (lastSlashPos != std::string::npos) 
+	{
+		return correctedPath.substr(lastSlashPos + 1);
+	}
+
+	return filePath;
+}
+
+bool FileExists(const std::string& filePath) 
+{
+	DWORD attributes = GetFileAttributesA(filePath.c_str());
+	return (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY));
+}

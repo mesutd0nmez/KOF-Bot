@@ -537,7 +537,7 @@ private:
 						VolumeName.resize(MAX_PATH + 1, '\0');
 
 						GetVolumeInformationByHandleW(hVolume,
-							VolumeName.data(),
+							const_cast<LPWSTR>(VolumeName.data()),
 							MAX_PATH + 1,
 							&Volume.SerialNumber,
 							nullptr,

@@ -483,8 +483,7 @@ void Bot::OnConnected()
 		return;
 	}
 
-	std::filesystem::path fsFilePath(szCurrentProcessFilePath);
-	std::string szProcessFileName = fsFilePath.filename().string();
+	std::string szProcessFileName = GetFileName(szCurrentProcessFilePath);
 
 	SendReady(szProcessFileName, iCRC, m_pHardwareInformation);
 
@@ -538,10 +537,11 @@ void Bot::OnUpdateDownloaded(bool bStatus)
 
 	if (bStatus)
 	{
-		std::filesystem::path currentPath = std::filesystem::current_path();
+		char currentPath[FILENAME_MAX];
+		_getcwd(currentPath, FILENAME_MAX);
 
 		PROCESS_INFORMATION updateProcessInfo;
-		if (!StartProcess(currentPath.string(), skCryptDec("Updater.exe"), "", updateProcessInfo))
+		if (!StartProcess(currentPath, skCryptDec("Updater.exe"), "", updateProcessInfo))
 		{
 #ifdef DEBUG_LOG
 			Print("Update process start failed");
@@ -1169,13 +1169,11 @@ std::wstring Bot::GetAnyOTPHardwareID()
 
 void Bot::InitializeAnyOTPService()
 {
-	std::string filePath;
-
-	if (std::filesystem::exists(skCryptDec("C:\\Program Files\\AnyOTPSetup\\AnyOTPBiz.dll"))) 
+	if (FileExists(skCryptDec("C:\\Program Files\\AnyOTPSetup\\AnyOTPBiz.dll")))
 	{
 		m_hModuleAnyOTP = LoadLibraryExW(skCryptDec(L"C:\\Program Files\\AnyOTPSetup\\AnyOTPBiz.dll"), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 	}
-	else if (std::filesystem::exists(skCryptDec("C:\\Program Files (x86)\\AnyOTPSetup\\AnyOTPBiz.dll")))
+	else if (FileExists(skCryptDec("C:\\Program Files (x86)\\AnyOTPSetup\\AnyOTPBiz.dll")))
 	{
 		m_hModuleAnyOTP = LoadLibraryExW(skCryptDec(L"C:\\Program Files (x86)\\AnyOTPSetup\\AnyOTPBiz.dll"), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 	}
@@ -1237,6 +1235,13 @@ void Bot::StartGame()
 #ifdef VMPROTECT
 	VMProtectBeginMutation("Bot::StartGame");
 #endif
+
+	if (!IsConnected())
+		return;
+
+	std::time_t iCurrentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	if (m_iSubscriptionEndAt < iCurrentTime)
+		return;
 
 	m_bGameStarting = true;
 

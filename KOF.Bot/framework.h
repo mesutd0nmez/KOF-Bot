@@ -11,7 +11,6 @@
 #include <fstream>
 #include <string>
 #include <iostream>
-#include <filesystem>
 #include <sstream>
 #include <ShlObj_core.h>
 #include <vector>
@@ -42,3 +41,4 @@
 #include <d3d9.h>
 #include <D3dx9tex.h>
 #include <dbghelp.h>
+#include <direct.h>

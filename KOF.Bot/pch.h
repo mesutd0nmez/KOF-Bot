@@ -9,6 +9,8 @@
 
 #include "Define.h"
 
+#define NOMINMAX
+
 // add headers that you want to pre-compile here
 #include "framework.h"
 #include "SkCrypter.h"
@@ -109,5 +111,8 @@ extern void DeleteFilesInPrefetchFolder();
 extern void OpenURLInDefaultBrowser(const char* url);
 
 extern bool CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword);
+
+extern std::string GetFileName(const std::string& filePath);
+extern bool FileExists(const std::string& filePath);
 
 #endif //PCH_H

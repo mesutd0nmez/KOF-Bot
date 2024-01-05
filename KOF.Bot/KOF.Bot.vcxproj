@@ -196,7 +196,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>Default</LanguageStandard>
       <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10;..\KOF.Dependencies\nlohmann-3.11.3</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -228,7 +228,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>Default</LanguageStandard>
       <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10;..\KOF.Dependencies\nlohmann-3.11.3</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
@@ -264,7 +264,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>Default</LanguageStandard>
       <AdditionalIncludeDirectories>..\KOF.Dependencies\ImGui-1.90\ImGui;..\KOF.Dependencies\cryptopp-8.7.0;..\KOF.Dependencies\snappy-1.1.10;..\KOF.Dependencies\nlohmann-3.11.3</AdditionalIncludeDirectories>
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
