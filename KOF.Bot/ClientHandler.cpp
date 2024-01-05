@@ -1048,6 +1048,7 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 						new std::thread([this]()
 						{
 							std::this_thread::sleep_for(std::chrono::milliseconds(60000));
+
 							std::string szHashedPassword = Password::PasswordHash(m_szPassword);
 							std::string szCode = to_string(m_Bot->ReadAnyOTPCode(m_Bot->m_szAnyOTPPassword, m_Bot->m_szAnyOTPID).c_str());
 

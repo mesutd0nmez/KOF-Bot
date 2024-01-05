@@ -419,9 +419,6 @@ void Bot::InitializeStaticData()
 
 void Bot::OnReady()
 {
-	m_pHardwareInformation->ClearHardwareInformation();
-	delete m_pHardwareInformation;
-
 	if (m_szToken.size() > 0)
 	{
 		SendLogin(m_szToken);
@@ -1156,7 +1153,6 @@ std::wstring Bot::GetAnyOTPHardwareID()
 		else
 		{
 			std::wstringstream sstream;
-			sstream << std::hex << Disk.Signature;
 			sstream << std::hex << std::uppercase << Disk.Signature;
 			std::wstring szSignature = sstream.str();
 
@@ -1190,8 +1186,10 @@ void Bot::InitializeAnyOTPService()
 	Print("AnyOTP Library Loaded");
 #endif
 
-	m_szOTPHardwareID = GetAnyOTPHardwareID();
-	m_szAnyOTPID = to_string(m_szOTPHardwareID.c_str()); //?????
+	if (m_szOTPHardwareID.size() == 0)
+	{
+		m_szOTPHardwareID = GetAnyOTPHardwareID();
+	}
 }
 
 std::wstring Bot::ReadAnyOTPCode(std::string szPassword, std::string szHardwareID)

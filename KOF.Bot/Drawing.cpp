@@ -363,7 +363,8 @@ void Drawing::Draw()
 
                                         if (ImGui::Button(skCryptDec("Sifirla"), ImVec2(270, 0.0f)))
                                         {
-                                            Drawing::Bot->m_szAnyOTPID = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("ID"), to_string(Drawing::Bot->GetAnyOTPHardwareID().c_str()).c_str());
+                                            Drawing::Bot->m_szOTPHardwareID = Drawing::Bot->GetAnyOTPHardwareID();
+                                            Drawing::Bot->m_szAnyOTPID = m_iniAppConfiguration->SetString(skCryptDec("AnyOTP"), skCryptDec("ID"), to_string(Drawing::Bot->m_szOTPHardwareID.c_str()).c_str());
                                         }
 
                                         if (ImGui::Button(skCryptDec("Kapat"), ImVec2(270, 0.0f)))
