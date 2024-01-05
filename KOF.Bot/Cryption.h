@@ -1,11 +1,4 @@
 #pragma once
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-
-#include <cryptlib.h>
-#include <sha.h>
-#include <md5.h>
-#include <modes.h>
-#include <osrng.h>
 
 class Cryption
 {
@@ -17,16 +10,26 @@ public:
 
 	void SetInitialVector(std::string szInitialVector)
 	{
+#ifdef VMPROTECT
+		VMProtectBeginUltra("Cryption::SetInitialVector");
+#endif
 		std::string szTmpInitialVector(szInitialVector
 			+ skCryptDec(".")
-			+ skCryptDec("xRMnlYJ8Zyll4dpwYXBEtroo3kZ7AtCie64oaEsOcIvZjFtUQbWZTr3Xla9blbrk"));
+			+ skCryptDec("MzHSPsjqY69QBdFGYBgrzhRMZmS6C79XGaVcVwgpNYCynaAmAZSS7rNTGdAE4d84"));
 		uint8_t byTmpInitialVector[CryptoPP::SHA256::DIGESTSIZE];
 		CryptoPP::SHA256().CalculateDigest(byTmpInitialVector, (uint8_t*)szTmpInitialVector.data(), szTmpInitialVector.size());
 		CryptoPP::Weak::MD5().CalculateDigest(m_initialVector, byTmpInitialVector, CryptoPP::SHA256::DIGESTSIZE);
+
+#ifdef VMPROTECT
+		VMProtectEnd();
+#endif
 	}
 
 	int Encryption(uint8_t* datain, size_t length, std::vector<uint8_t>& dataout)
 	{
+#ifdef VMPROTECT
+		VMProtectBeginMutation("Cryption::Encryption");
+#endif
 		try
 		{
 			std::string szOutput = "";
@@ -42,18 +45,25 @@ public:
 		}
 		catch (const CryptoPP::Exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
 
 		return 0;
+
+#ifdef VMPROTECT
+		VMProtectEnd();
+#endif
 	}
 
 	int Decryption(uint8_t* datain, size_t length, std::vector<uint8_t>& dataout)
 	{
+#ifdef VMPROTECT
+		VMProtectBeginMutation("Cryption::Decryption");
+#endif
 		try
 		{
 			std::string szOutput = "";
@@ -69,14 +79,18 @@ public:
 		}
 		catch (const CryptoPP::Exception& e)
 		{
-#ifdef DEBUG
-			printf("%s\n", e.what());
+#ifdef DEBUG_LOG
+			Print("%s", e.what());
 #else
 			DBG_UNREFERENCED_PARAMETER(e);
 #endif
 		}
 
 		return 0;
+
+#ifdef VMPROTECT
+		VMProtectEnd();
+#endif
 	}
 
 private:

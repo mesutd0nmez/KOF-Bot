@@ -1,17 +1,17 @@
-#include <iostream>
-#include <vector>
-#include <string>
-#include <cstring>
+#pragma once
 
-class Password {
+class Password 
+{
 private:
     static const std::vector<unsigned char> _encodingArray;
     static const std::vector<unsigned char> _alphabetArray;
 
-    static unsigned int StepA(unsigned int ins) {
+    static unsigned int StepA(unsigned int ins) 
+    {
         unsigned int res = 0;
         unsigned int dat;
-        for (int i = 0; i < 64; i++) {
+        for (int i = 0; i < 64; i++) 
+        {
             dat = ins - (ins & 0xFFFFFFFE);
             ins >>= 1;
 
@@ -25,10 +25,12 @@ private:
         return res;
     }
 
-    static void StepB(unsigned int ins, std::string& encoded) {
+    static void StepB(unsigned int ins, std::string& encoded) 
+    {
         std::vector<unsigned char> outChar;
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 7; i++) 
+        {
             unsigned int dat = (unsigned int)(((unsigned long long)ins * 0x38e38e39) >> 35);
             ins -= dat * 9 << 2;
 
@@ -41,7 +43,8 @@ private:
         encoded = std::string(outChar.begin(), outChar.end());
     }
 
-    static std::vector<unsigned int> ByteArrayToUintArray(const std::vector<unsigned char>& data) {
+    static std::vector<unsigned int> ByteArrayToUintArray(const std::vector<unsigned char>& data) 
+    {
         int length = (data.size() + 3) / 4;
         std::vector<unsigned int> data2(length);
         memcpy(data2.data(), data.data(), data.size());
@@ -49,13 +52,15 @@ private:
     }
 
 public:
-    static std::string PasswordHash(const std::string& inputPassword) {
+    static std::string PasswordHash(const std::string& inputPassword) 
+    {
         std::vector<unsigned char> inputData(inputPassword.begin(), inputPassword.end());
         std::vector<unsigned int> dat = ByteArrayToUintArray(inputData);
 
         std::string tmpEncodedString;
 
-        for (size_t i = 0; i < dat.size(); i++) {
+        for (size_t i = 0; i < dat.size(); i++) 
+        {
             std::string tmpValue;
             StepB(StepA(dat[i] + 0x3E8), tmpValue);
 

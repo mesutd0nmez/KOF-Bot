@@ -2,7 +2,6 @@
 
 #include "Client.h"
 #include "Packet.h"
-#include "RouteManager.h"
 #include "Struct.h"
 
 class Bot;
@@ -24,15 +23,15 @@ public:
 	void StartHandler();
 	void StopHandler();
 	void Process();
+	void PatchClient();
 	void PatchSocket();
+	void OnReady();
 
 private:
 	TNpc InitializeNpc(Packet& pkt);
 	TPlayer InitializePlayer(Packet& pkt);
 
 private:
-	virtual void OnReady();
-
 	void PatchRecvAddress(DWORD dwAddress);
 	void PatchSendAddress();
 
@@ -74,15 +73,15 @@ private:
 	void PotionProcess();
 	void CharacterProcess();
 
-	void PartySwiftProcess();
-	void PriestCharacterProcess(int32_t iTargetID = -1, bool bIsPartyRequest = false, uint16_t iMaxHp = 0, uint16_t iHp = 0);
-
 	bool HealthPotionProcess();
 	bool ManaPotionProcess();
 
 	void RouteProcess();
-
 	void SupplyProcess();
+	void StatisticsProcess();
+	void RemoveItemProcess();
+
+	void VIPStorageSupplyProcess();
 
 	void LevelDownerProcess();
 
@@ -91,48 +90,31 @@ private:
 
 	void TransformationProcess();
 	void FlashProcess();
-	void PartyProcess();
-
-	void VipWarehouseProcess();
 
 	void RegionProcess();
 
+	void RouteRecorderProcess();
+
 private:
+	bool m_bReady;
 	bool m_bWorking;
 	bool m_bMailSlotWorking;
+
+public:
+	bool IsReady() { return m_bReady; }
 
 private:
 	std::string m_szAccountId;
 	std::string m_szPassword;
 
-public:
-	void SetRoute(std::vector<Route> vecRoute);
-	bool IsRouting() { return m_vecRoute.size() > 0; };
-	RouteStepType GetRouteStep() { return m_iRouteStep; };
-	void ClearRoute();
-
-protected:
-	RouteStepType m_iRouteStep;
+private:
+	float m_fLastSupplyTime;
 
 private:
-	std::vector<Route> m_vecRoute;
-
-private:
-	std::chrono::milliseconds m_msLastSupplyTime;
-
-private:
-	bool SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
-
-protected:
-	std::chrono::milliseconds m_msLastSelectedTargetTime;
+	void SolveCaptcha(std::vector<uint8_t> vecImageBuffer);
 
 public:
-	void Test1();
-	void Test2();
-	void Test3();
-
-public:
-	int GetRegionUserCount(bool bExceptPartyMember = false);
+	int GetRegionUserCount(bool bExceptPartyMember = false, float fRangeLimit = 0.0f);
 
 protected:
 	uint8_t m_iOTPRetryCount;
@@ -152,20 +134,23 @@ protected:
 	float m_fLastMoveToTargetProcessTime;
 	float m_fLastLootRequestTime;
 	float m_fLastPotionProcessTime;
+	float m_fLastStatisticsProcessTime;
+	float m_fLastRemoveItemProcessTime;
+	float m_fLastLevelDownerProcessTime;
+	float m_fLastSupplyProcessTime;
+	float m_fLastRouteProcessTime;
+	float m_fLastVIPStorageSupplyProcessTime;
 
 protected:
 	int32_t PartyMemberNeedSwift();
 	int32_t PartyMemberNeedHeal(uint32_t iSkillBaseID);
 	int32_t PartyMemberNeedBuff(uint32_t iSkillBaseID);
 
-protected:
-	bool IsSkillHasZoneLimit(uint32_t iSkillBaseID);
-
 public:
 	bool m_bAttackSpeed;
 	int m_iAttackSpeedValue;
 	bool m_bAttackStatus;
-	std::vector<int> m_vecAttackSkillList;
+	std::unordered_set<int> m_vecAttackSkillList;
 	bool m_bCharacterStatus;
 	bool m_bSearchTargetSpeed;
 	int m_iSearchTargetSpeedValue;
@@ -173,13 +158,14 @@ public:
 	bool m_bAutoTarget;
 	bool m_bRangeLimit;
 	int m_iRangeLimitValue;
-	std::vector<int> m_vecSelectedNpcList;
-	std::vector<int> m_vecSelectedNpcIDList;
+	std::unordered_set<int> m_vecSelectedNpcList;
+	std::unordered_set<int> m_vecSelectedNpcIDList;
 	bool m_bMoveToTarget;
 	bool m_bDisableStun;
 	bool m_bStartGenieIfUserInRegion;
+	int m_iStartGenieIfUserInRegionMeter;
 
-	std::vector<int> m_vecCharacterSkillList;
+	std::unordered_set<int> m_vecCharacterSkillList;
 	bool m_bPartySwift;
 	bool m_bPriestPartyHeal;
 	bool m_bHealProtection;
@@ -192,6 +178,8 @@ public:
 	int m_iAttackRangeLimitValue;
 	bool m_bBasicAttack;
 	bool m_bBasicAttackWithPacket;
+
+	bool m_bVIPSellSupply;
 
 	bool m_bAutoLoot;
 	bool m_bMoveToLoot;
@@ -230,9 +218,9 @@ public:
 	bool m_bTeleportRequest;
 	std::string m_szTeleportRequestMessage;
 
-	bool m_bTownStopBot = true;
-	bool m_bTownOrTeleportStopBot = false;
-	bool m_bSyncWithGenie = false;
+	bool m_bTownStopBot;
+	bool m_bTownOrTeleportStopBot;
+	bool m_bSyncWithGenie;
 
 	bool m_bLegalMode;
 	bool m_bSpeedMode;
@@ -242,11 +230,53 @@ public:
 	bool m_bSendTownIfBanNotice;
 	bool m_bPlayBeepfIfBanNotice;
 
-
 	bool m_bWallHack;
 	bool m_bLegalWallHack;
 
 	bool m_bArcherCombo;
+
+	std::unordered_set<std::string> m_setSelectedSupplyRouteList;
+	std::unordered_set<std::string> m_setSelectedDeathRouteList;
+	std::unordered_set<std::string> m_setSelectedLoginRouteList;
+
+	bool m_bAutoRepair;
+
+	std::unordered_set<int> m_vecSupplyList;
+
+	bool m_bAutoSupply;
+	bool m_bAutoRPRChangeWeapon;
+
+	std::unordered_set<int> m_vecAutoRPRChangeWeaponLeft;
+	std::unordered_set<int> m_vecAutoRPRChangeWeaponRight;
+
+	int m_iSlotExpLimit;
+	bool m_bSlotExpLimitEnable;
+	bool m_bPartyLeaderSelect;
+
+	std::unordered_set<int> m_vecLootItemList;
+	std::unordered_set<int> m_vecSellItemList;
+	std::unordered_set<int> m_vecInnItemList;
+	std::unordered_set<int> m_vecDeleteItemList;
+
+	int m_iLootType;
+	bool m_bMinPriceLootEnable;
+
+	uint32_t m_iStartCoin;
+	uint64_t m_iCoinCounter;
+	uint64_t m_iExpCounter;
+
+	uint64_t m_iEveryMinuteCoinPrevCounter;
+	uint64_t m_iEveryMinuteCoinCounter;
+	uint64_t m_iEveryMinuteExpPrevCounter;
+	uint64_t m_iEveryMinuteExpCounter;
+
+	bool m_bHidePlayer;
+
+	bool m_bLevelDownerEnable;
+	int m_iLevelDownerNpcId;
+	bool m_bLevelDownerLevelLimitEnable;
+	int m_iLevelDownerLevelLimit;
+	bool m_bLevelDownerStopNearbyPlayer;
 
 public:
 	void InitializeUserConfiguration();
@@ -262,6 +292,35 @@ protected:
 
 protected:
 	std::queue<TABLE_UPC_SKILL> m_qAttackSkillQueue;
+
+public:
+	void SetRoute(std::vector<Route> vecRoute);
+	bool IsRouting() { return m_vecRouteActive.size() > 0; };
+	void ClearRoute();
+	bool m_bIsRoutePlanning;
+
+public:
+	std::vector<Route> m_vecRouteActive;
+	std::vector<Route> m_vecRoutePlan;
+	Route* m_pCurrentRunningRoute;
+
+protected:
+	bool m_bRouteWarpListLoaded;
+
+public:
+	Ini* GetUserConfiguration();
+	Ini* m_iniUserConfiguration;
+
+public:
+	typedef std::map<std::string, std::vector<Route>> RouteList;
+	typedef std::map<uint8_t, RouteList> RouteData;
+
+	RouteData m_mapRouteList;
+
+public:
+	bool GetRouteList(uint8_t iMapIndex, RouteList& pRouteList);
+	void SaveRoute(std::string szRouteName, uint8_t iMapIndex, std::vector<Route> vecRoute);
+	void DeleteRoute(std::string szRouteName, uint8_t iMapIndex);
 };
 
 

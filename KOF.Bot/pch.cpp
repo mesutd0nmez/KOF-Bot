@@ -1,61 +1,6 @@
 // pch.cpp: source file corresponding to the pre-compiled header
 
 #include "pch.h"
-#include "Injection.h"
-
-void SuspendProcess(HANDLE hProcess)
-{
-	HMODULE hModuleNtdll = GetModuleHandle(skCryptDec("ntdll"));
-
-	if (hModuleNtdll != 0)
-	{
-		NtSuspendProcess pNtSuspendProcess = (NtSuspendProcess)GetProcAddress(
-			hModuleNtdll, skCryptDec("NtSuspendProcess"));
-
-		if (!pNtSuspendProcess)
-			return;
-
-		pNtSuspendProcess(hProcess);
-	}
-}
-
-void SuspendProcess(DWORD dwProcessId)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-	if (hProcess != nullptr)
-	{
-		SuspendProcess(hProcess);
-		CloseHandle(hProcess);
-	}
-}
-
-void ResumeProcess(HANDLE hProcess)
-{
-	HMODULE hModuleNtdll = GetModuleHandle(skCryptDec("ntdll"));
-
-	if (hModuleNtdll != 0)
-	{
-		NtResumeProcess pResumeProcess = (NtResumeProcess)GetProcAddress(
-			hModuleNtdll, skCryptDec("NtResumeProcess"));
-
-		if (!pResumeProcess)
-			return;
-
-		pResumeProcess(hProcess);
-	}
-}
-
-void ResumeProcess(DWORD dwProcessId)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
-
-	if (hProcess != nullptr)
-	{
-		ResumeProcess(hProcess);
-		CloseHandle(hProcess);
-	}
-}
 
 BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szCommandLine, PROCESS_INFORMATION& processInfo)
 {
@@ -88,6 +33,164 @@ BOOL StartProcess(std::string szFilePath, std::string szFile, std::string szComm
 	return TRUE;
 }
 
+bool KillProcessesByFileName(const char* fileName) 
+{
+	std::vector<const char*> vecFileName { fileName };
+	return KillProcessesByFileName(vecFileName);
+}
+
+bool KillProcessesByFileName(const std::vector<const char*>& fileNames)
+{
+	DWORD dwCurrentProcessId = GetCurrentProcessId();
+
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+	if (hSnapshot == INVALID_HANDLE_VALUE)
+	{
+#ifdef DEBUG_LOG
+		Print("Error creating process snapshot");
+#endif
+		return false;
+	}
+
+	PROCESSENTRY32 pe;
+	pe.dwSize = sizeof(PROCESSENTRY32);
+
+	if (Process32First(hSnapshot, &pe))
+	{
+		do
+		{
+			if (pe.th32ProcessID == dwCurrentProcessId)
+				continue;
+
+			for (const char* fileName : fileNames)
+			{
+				if (_stricmp(pe.szExeFile, fileName) != 0)
+					continue;
+
+				HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+
+				if (!hProcess)
+					continue;
+
+				if (!TerminateProcess(hProcess, 1))
+				{
+					CloseHandle(hProcess);
+					continue;
+				}
+
+				CloseHandle(hProcess);
+			}
+		} while (Process32Next(hSnapshot, &pe));
+	}
+
+	CloseHandle(hSnapshot);
+
+	return true;
+}
+
+uint8_t HexCharToUint8(char c) 
+{
+	if (c >= '0' && c <= '9') return static_cast<uint8_t>(c - '0');
+	if (c >= 'A' && c <= 'F') return static_cast<uint8_t>(c - 'A' + 10);
+	if (c >= 'a' && c <= 'f') return static_cast<uint8_t>(c - 'a' + 10);
+	throw std::invalid_argument(skCryptDec("Invalid hex character"));
+}
+
+std::vector<uint8_t> FromHexString(const std::string& hexString) 
+{
+	if (hexString.empty())
+		return {};
+
+	if (hexString.size() % 2 != 0)
+		throw std::invalid_argument(skCryptDec("Bad hex length"));
+
+	std::vector<uint8_t> result(hexString.size() / 2);
+
+	for (size_t i = 0; i < hexString.size(); i += 2) 
+	{
+		result[i / 2] = (HexCharToUint8(hexString[i]) << 4) | HexCharToUint8(hexString[i + 1]);
+	}
+
+	return result;
+}
+
+std::string ToHexString(const std::vector<uint8_t>& bytes) 
+{
+	if (bytes.size() == 0)
+		return "";
+
+	std::stringstream ss;
+	for (auto c : bytes)
+		ss << std::setw(2) << std::setfill('0') << std::hex << (int)c;
+
+	return ss.str();
+}
+
+DWORD CalculateCRC32(const std::string& filePath)
+{
+	std::ifstream fileStream(filePath, std::ios::binary);
+
+	if (!fileStream.is_open())
+	{
+#ifdef DEBUG_LOG
+		Print("File not opened: %s\n", filePath.c_str());
+#endif
+		return 0xFFFFFFFF;
+	}
+
+	fileStream.seekg(0, std::ios::end);
+	uint32_t iFileSize = (uint32_t)fileStream.tellg();
+	fileStream.seekg(0, std::ios::beg);
+
+	std::vector<char> buffer(iFileSize);
+
+	fileStream.read(buffer.data(), iFileSize);
+	fileStream.close();
+
+	return crc32((uint8_t*)buffer.data(), iFileSize);
+}
+
+bool IsProcessRunning(const char* fileName)
+{
+	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	PROCESSENTRY32 pe32;
+	pe32.dwSize = sizeof(PROCESSENTRY32);
+
+	if (Process32First(hSnap, &pe32))
+	{
+		do
+		{
+			if (_stricmp(pe32.szExeFile, fileName) == 0)
+			{
+				CloseHandle(hSnap);
+				return true;
+			}
+		} while (Process32Next(hSnap, &pe32));
+	}
+
+	CloseHandle(hSnap);
+	return false;
+}
+
+std::string GenerateAlphanumericString(int length) 
+{
+	const std::string characters = skCryptDec("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+
+	std::string alphanumericString = "";
+	int charactersLength = characters.length();
+
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
+	for (int i = 0; i < length; ++i) 
+	{
+		int randomIndex = std::rand() % charactersLength;
+		alphanumericString += characters[randomIndex];
+	}
+
+	return alphanumericString;
+}
+
 std::string to_string(wchar_t const* wcstr)
 {
 	auto s = std::mbstate_t();
@@ -103,213 +206,338 @@ std::string to_string(wchar_t const* wcstr)
 	return str;
 }
 
-std::string to_string(std::wstring const& wstr)
+std::string RemainingTime(long long int seconds) 
 {
-	return to_string(wstr.c_str());
-}
+	const int secondsPerMinute = 60;
+	const int minutesPerHour = 60;
+	const int hoursPerDay = 24;
 
-BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode)
-{
-	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwProcessId);
+	long long int remainingDays = seconds / (secondsPerMinute * minutesPerHour * hoursPerDay);
+	seconds %= secondsPerMinute * minutesPerHour * hoursPerDay;
 
-	if (hProcess == nullptr)
-		return false;
+	long long int remainingHours = seconds / (secondsPerMinute * minutesPerHour);
+	seconds %= secondsPerMinute * minutesPerHour;
 
-	BOOL bStatus = TerminateProcess(hProcess, uExitCode);
+	long long int remainingMinutes = seconds / secondsPerMinute;
+	seconds %= secondsPerMinute;
 
-	CloseHandle(hProcess);
+	std::string result;
 
-	return bStatus;
-}
-
-size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp)
-{
-	((std::string*)userp)->append((char*)contents, size * nmemb);
-	return size * nmemb;
-}
-
-std::string CurlPost(std::string szUrl, JSON jData)
-{
-	CURL* curl;
-	CURLcode res;
-	std::string szReadBuffer;
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-
-	curl = curl_easy_init();
-
-	if (curl)
+	if (remainingDays > 0) 
 	{
-		std::string szJson = jData.dump();
+		result += std::to_string(remainingDays) + skCryptDec(" gun ");
+	}
 
-		curl_easy_setopt(curl, CURLOPT_URL, szUrl.c_str());
-		curl_easy_setopt(curl, CURLOPT_POST, 1L);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, szJson.c_str());
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &szReadBuffer);
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, FALSE);
-		curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, FALSE);
+	if (remainingHours > 0) 
+	{
+		result += std::to_string(remainingHours) + skCryptDec(" saat ");
+	}
 
-		struct curl_slist* headers = NULL;
-		headers = curl_slist_append(headers, skCryptDec("Content-Type: application/json"));
-		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	if (remainingMinutes > 0) 
+	{
+		result += std::to_string(remainingMinutes) + skCryptDec(" dakika ");
+	}
 
-		res = curl_easy_perform(curl);
+	if (seconds > 0 || result.empty()) 
+	{
+		result += std::to_string(seconds) + skCryptDec(" saniye ");
+	}
 
-		if (res != CURLE_OK)
-		{
-#ifdef DEBUG
-			printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+	if (remainingDays == 0 && remainingHours == 0 && remainingMinutes == 0 && seconds == 0) 
+	{
+		result += skCryptDec("0 saniye ");
+	}
+
+	return result;
+}
+
+float TimeGet()
+{
+#ifdef VMPROTECT
+	VMProtectBeginMutation("TimeGet");
 #endif
+
+	static BOOL bInit = FALSE;
+	static BOOL bUseHWTimer = FALSE;
+	static LARGE_INTEGER nTime, nFrequency;
+
+	if (bInit == FALSE)
+	{
+		if (TRUE == ::QueryPerformanceCounter(&nTime))
+		{
+			::QueryPerformanceFrequency(&nFrequency);
+			bUseHWTimer = TRUE;
+		}
+		else
+		{
+			bUseHWTimer = FALSE;
 		}
 
-		curl_easy_cleanup(curl);
-		curl_slist_free_all(headers);
+		bInit = TRUE;
 	}
 
-	curl_global_cleanup();
-
-	return szReadBuffer;
-}
-
-bool Injection(DWORD iTargetProcess, std::string szPath)
-{
-	HINSTANCE hInjectionModule = LoadLibrary(skCryptDec("Connector.dll"));
-
-	if (!hInjectionModule)
+	if (bUseHWTimer)
 	{
-		return false;
+		::QueryPerformanceCounter(&nTime);
+		return (float)((double)(nTime.QuadPart) / (double)nFrequency.QuadPart);
 	}
 
-	auto InjectA = (f_InjectA)GetProcAddress(hInjectionModule, skCryptDec("InjectA"));
+	return (float)timeGetTime() / 1000.0f;
 
-	INJECTIONDATAA data =
-	{
-		0,
-		"",
-		iTargetProcess,
-		INJECTION_MODE::IM_ManualMap,
-		LAUNCH_METHOD::LM_HijackThread,
-		INJ_ERASE_HEADER,
-		0,
-		NULL
-	};
-
-	strcpy(data.szDllPath, szPath.c_str());
-
-	InjectA(&data);
-
-	return true;
-}
-
-bool ConsoleCommand(const std::string& input, std::string& out)
-{
-	auto* shell_cmd = _popen(input.c_str(), "r");
-
-	if (!shell_cmd)
-	{
-		return false;
-	}
-
-	static char buffer[1024] = {};
-	while (fgets(buffer, 1024, shell_cmd))
-	{
-		out.append(buffer);
-	}
-	_pclose(shell_cmd);
-
-	while (out.back() == '\n' ||
-		out.back() == '\0' ||
-		out.back() == ' ' ||
-		out.back() == '\r' ||
-		out.back() == '\t') {
-		out.pop_back();
-	}
-
-	out.erase(std::remove(out.begin(), out.end(), '\n'), out.cend());
-
-	return !out.empty();
-}
-
-bool KillProcessesByFileName(const char* fileName) 
-{
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-	if (hSnapshot == INVALID_HANDLE_VALUE) 
-	{
-#ifdef DEBUG
-		std::cerr << "Bot: Error creating process snapshot" << std::endl;
+#ifdef VMPROTECT
+	VMProtectEnd();
 #endif
-		return false;
-	}
+}
 
-	PROCESSENTRY32 pe;
-	pe.dwSize = sizeof(PROCESSENTRY32);
+std::vector<uint8_t> CaptureScreen(int width, int height, int x, int y)
+{
+#ifdef VMPROTECT
+	VMProtectBeginMutation("CaptureScreen");
+#endif
 
-	if (Process32First(hSnapshot, &pe)) 
-	{
-		do 
+	HDC hdcScreen = GetDC(NULL);
+	HDC hdcMem = CreateCompatibleDC(hdcScreen);
+	HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
+	SelectObject(hdcMem, hBitmap);
+
+	BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY);
+
+	BITMAPFILEHEADER bmpFileHeader;
+	bmpFileHeader.bfType = 0x4D42; // "BM"
+	bmpFileHeader.bfSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + width * height * 4;
+	bmpFileHeader.bfReserved1 = 0;
+	bmpFileHeader.bfReserved2 = 0;
+	bmpFileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+
+	BITMAPINFOHEADER bmpInfoHeader;
+	bmpInfoHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmpInfoHeader.biWidth = width;
+	bmpInfoHeader.biHeight = -height;
+	bmpInfoHeader.biPlanes = 1;
+	bmpInfoHeader.biBitCount = 32;
+	bmpInfoHeader.biCompression = BI_RGB;
+	bmpInfoHeader.biSizeImage = 0;
+	bmpInfoHeader.biXPelsPerMeter = 0;
+	bmpInfoHeader.biYPelsPerMeter = 0;
+	bmpInfoHeader.biClrUsed = 0;
+	bmpInfoHeader.biClrImportant = 0;
+
+	std::vector<uint8_t> vecImageData(sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + width * height * 4);
+	memcpy(vecImageData.data(), &bmpFileHeader, sizeof(BITMAPFILEHEADER));
+	memcpy(vecImageData.data() + sizeof(BITMAPFILEHEADER), &bmpInfoHeader, sizeof(BITMAPINFOHEADER));
+	GetDIBits(hdcScreen, hBitmap, 0, height, vecImageData.data() + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER), (BITMAPINFO*)&bmpInfoHeader, DIB_RGB_COLORS);
+
+	DeleteObject(hBitmap);
+	DeleteDC(hdcMem);
+	ReleaseDC(NULL, hdcScreen);
+
+	return vecImageData;
+
+#ifdef VMPROTECT
+	VMProtectEnd();
+#endif
+}
+
+void DeleteFilesInPrefetchFolder() 
+{
+	WIN32_FIND_DATA findFileData;
+	HANDLE hFind = FindFirstFile(_T(skCryptDec("C:\\Windows\\Prefetch\\*")), &findFileData);
+
+	if (hFind == INVALID_HANDLE_VALUE) 
+		return;
+
+	do {
+		if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) 
 		{
-			if (_stricmp(pe.szExeFile, fileName) == 0) 
-			{
-				HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pe.th32ProcessID);
+			TCHAR filePath[MAX_PATH];
+			_stprintf_s(filePath, _T(skCryptDec("C:\\Windows\\Prefetch\\%s")), findFileData.cFileName);
+			DeleteFile(filePath);
+		}
+	} while (FindNextFile(hFind, &findFileData) != 0);
 
-				if (hProcess) 
-				{
-					if (TerminateProcess(hProcess, 0)) 
-					{
-#ifdef DEBUG
-						std::cout << "Bot: Terminated process ID: " << pe.th32ProcessID << std::endl;
-#endif
-					}
-					else 
-					{
-#ifdef DEBUG
-						std::cerr << "Bot: Failed to terminate process ID: " << pe.th32ProcessID << std::endl;
-#endif
-					}
+	FindClose(hFind);
+}
 
-					CloseHandle(hProcess);
-				}
-				else 
-				{
-#ifdef DEBUG
-					std::cerr << "Bot: Failed to open process for termination" << std::endl;
+void OpenURLInDefaultBrowser(const char* url) 
+{
+	HINSTANCE result = ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+
+	if ((int)result <= 32) 
+	{
+#ifdef DEBUG_LOG
+		Print("URL Not opened: %s", url);
 #endif
-				}
-			}
-		} 
-		while (Process32Next(hSnapshot, &pe));
+	}
+}
+
+bool CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword)
+{
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) 
+	{
+#ifdef DEBUG_LOG
+		Print("WSAStartup failed");
+#endif
+		return false;
 	}
 
-	CloseHandle(hSnapshot);
+	SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (clientSocket == INVALID_SOCKET) 
+	{
+#ifdef DEBUG_LOG
+		Print("Socket creation failed");
+#endif
+		WSACleanup();
+		return false;
+	}
 
+	sockaddr_in proxyAddr;
+	proxyAddr.sin_family = AF_INET;
+	proxyAddr.sin_port = htons(iProxyPort);
+	if (inet_pton(AF_INET, szProxyIP.c_str(), &(proxyAddr.sin_addr)) <= 0) 
+	{
+#ifdef DEBUG_LOG
+		Print("Invalid proxy IP address");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+	// Connect to the SOCKS5 proxy
+	if (connect(clientSocket, reinterpret_cast<sockaddr*>(&proxyAddr), sizeof(proxyAddr)) == SOCKET_ERROR) 
+	{
+#ifdef DEBUG_LOG
+		Print("Connection to the proxy failed");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+	if (szUsername.size() > 0 || szPassword.size() > 0)
+	{
+		// Send SOCKS5 authentication request (username and password)
+		char authRequest[] = { 0x05, 0x02, 0x00, 0x02 };
+
+		if (send(clientSocket, authRequest, sizeof(authRequest), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send SOCKS5 authentication request");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		// Send username length and username
+		char usernameLen = static_cast<char>(szUsername.length());
+		if (send(clientSocket, &usernameLen, 1, 0) == SOCKET_ERROR) 
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send username length");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		if (send(clientSocket, szUsername.c_str(), szUsername.length(), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send username");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		// Send password length and password
+		char passwordLen = static_cast<char>(szPassword.length());
+		if (send(clientSocket, &passwordLen, 1, 0) == SOCKET_ERROR) 
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send password length");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+
+		if (send(clientSocket, szPassword.c_str(), szPassword.length(), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send password");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+	}
+	else
+	{
+		// Send SOCKS5 authentication request (no authentication)
+		char authRequest[] = { 0x05, 0x01, 0x00 };
+
+		if (send(clientSocket, authRequest, sizeof(authRequest), 0) == SOCKET_ERROR)
+		{
+#ifdef DEBUG_LOG
+			Print("Failed to send SOCKS5 authentication request");
+#endif
+			closesocket(clientSocket);
+			WSACleanup();
+			return false;
+		}
+	}
+
+	char authResponse[2];
+	if (recv(clientSocket, authResponse, sizeof(authResponse), 0) == SOCKET_ERROR) 
+	{
+#ifdef DEBUG_LOG
+		Print("Failed to receive SOCKS5 authentication response");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+	if (authResponse[0] != 0x05 || authResponse[1] != 0x00) 
+	{
+#ifdef DEBUG_LOG
+		Print("SOCKS5 authentication failed");
+#endif
+		closesocket(clientSocket);
+		WSACleanup();
+		return false;
+	}
+
+#ifdef DEBUG_LOG
+	Print("SOCKS5 authentication successful");
+#endif
+
+	// Close the socket
+	closesocket(clientSocket);
+	WSACleanup();
 	return true;
 }
 
-std::string GenerateUniqueString(size_t iLength) 
+std::string GetFileName(const std::string& filePath) 
 {
-	const std::string alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	std::string correctedPath = filePath;
+	std::replace(correctedPath.begin(), correctedPath.end(), '\\', '/');
 
-	auto now = std::chrono::system_clock::now();
-	auto time = std::chrono::system_clock::to_time_t(now);
+	size_t lastSlashPos = correctedPath.find_last_of('/');
 
-	std::stringstream ss;
-	ss << std::put_time(std::localtime(&time), "%Y%m%d%H%M%S");
-
-	std::random_device rd;
-	std::mt19937 generator(rd());
-	std::uniform_int_distribution<int> distribution(0, alphabet.length() - 1);
-
-	std::string uniqueString = ss.str();
-
-	while (uniqueString.length() < iLength)
+	if (lastSlashPos != std::string::npos) 
 	{
-		uniqueString += alphabet[distribution(generator)];
+		return correctedPath.substr(lastSlashPos + 1);
 	}
 
-	uniqueString = uniqueString.substr(0, iLength);
+	return filePath;
+}
 
-	return uniqueString;
+bool FileExists(const std::string& filePath) 
+{
+	DWORD attributes = GetFileAttributesA(filePath.c_str());
+	return (attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY));
 }

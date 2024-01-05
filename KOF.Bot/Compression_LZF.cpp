@@ -1,40 +1,46 @@
 #include "pch.h"
 #include "Compression.h"
 #include "lzf.h"
-#include "crc32.h"
 
 namespace Compression
 {
 	namespace LZF
 	{
-		uint8_t * CompressWithCRC32(const uint8_t * in_data, uint32_t in_len, uint32_t * out_len, uint32_t * checksum)
+		std::vector<uint8_t> Compression(const std::vector<uint8_t>& in_data)
 		{
-			uint32_t max_out_len = in_len + LZF_MARGIN;
-			uint8_t * out_data = new uint8_t[max_out_len];
+			uint32_t max_out_len = in_data.size() + LZF_MARGIN;
+			std::vector<uint8_t> out_data(max_out_len);
 
-			*out_len = lzf_compress(in_data, in_len, out_data, max_out_len);
+			uint32_t out_len = lzf_compress(in_data.data(), in_data.size(), out_data.data(), max_out_len);
+			out_data.resize(out_len);
 
 			return out_data;
 		}
 
-		uint8_t * DecompressWithCRC32(const uint8_t * in_data, uint32_t in_len, uint32_t original_len, uint32_t checksum)
+		std::vector<uint8_t> Decompression(const std::vector<uint8_t>& in_data, uint32_t original_len)
 		{
-			uint8_t * out_data = new uint8_t[original_len];
-			uint32_t out_len = lzf_decompress(in_data, in_len, out_data, original_len);
-			if (out_len != original_len)
-			{
-				delete[] out_data;
-				return nullptr;
-			}
+#ifdef VMPROTECT
+			VMProtectBeginMutation("LZF::Decompression");
+#endif
 
-			if (checksum != 0
-				&& crc32(out_data, out_len) != checksum)
+			std::vector<uint8_t> out_data(original_len);
+
+			uint32_t out_len = lzf_decompress(in_data.data(), in_data.size(), out_data.data(), original_len);
+
+			if (original_len == out_len)
+				out_data.resize(out_len);
+			else
 			{
-				delete[] out_data;
-				return nullptr;
+#ifdef DEBUG_LOG
+				Print("Decompression original_len(%d) - out_len(%d)", original_len, out_len);
+#endif
+				out_data.resize(0);
 			}
 
 			return out_data;
+#ifdef VMPROTECT
+			VMProtectEnd();
+#endif
 		}
 	}
 }

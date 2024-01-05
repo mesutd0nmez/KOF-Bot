@@ -1,7 +1,4 @@
 #pragma once
-#include <map>
-#include <string>
-#include <vector>
 
 #define	INI_SECTION_START	'['
 #define	INI_SECTION_END		']'
@@ -26,6 +23,7 @@ private:
 
 public:
 	Ini();
+	~Ini();
 	Ini(const char* lpFilename);
 
 	bool Load(const char* lpFileName = nullptr);
@@ -36,16 +34,19 @@ public:
 	std::string Dump();
 
 	int GetInt(const char* lpAppName, const char* lpKeyName, const int nDefault);
-	std::vector<int> GetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault);
+	std::unordered_set<int> GetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault);
 
 	int SetInt(const char* lpAppName, const char* lpKeyName, const int nDefault);
-	std::vector<int> SetInt(const char* lpAppName, const char* lpKeyName, const std::vector<int> nDefault);
+	std::unordered_set<int> SetInt(const char* lpAppName, const char* lpKeyName, const std::unordered_set<int> nDefault);
 
 	bool GetBool(const char* lpAppName, const char* lpKeyName, const bool bDefault);
 	void GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, std::string& lpOutString, bool bAllowEmptyStrings = true);
+
 	std::string GetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault, bool bAllowEmptyStrings = true);
+	std::unordered_set<std::string> GetString(const char* lpAppName, const char* lpKeyName, const std::unordered_set<std::string> nDefault);
 
 	const char* SetString(const char* lpAppName, const char* lpKeyName, const char* lpDefault);
+	std::unordered_set<std::string> SetString(const char* lpAppName, const char* lpKeyName, const std::unordered_set<std::string> nDefault);
 
 	ConfigMap* GetConfigMap() { return &m_configMap; };
 };

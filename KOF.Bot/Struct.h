@@ -695,3 +695,16 @@ typedef struct __PartyMember
 	float fMindBuffTime;
 	uint8_t iMindBuffAttemptCount;
 } PartyMember;
+
+struct Route
+{
+	float fX;
+	float fY;
+	RouteStepType eStepType;
+	std::string szPacket;
+	bool bReRouted;
+	uint32_t pNpcID;
+	bool bSubProcessRequested;
+	bool bSubProcessFinished;
+	std::vector<TItemData> vecInventoryItemList;
+};

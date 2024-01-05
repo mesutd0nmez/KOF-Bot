@@ -5,95 +5,97 @@
 
 Bot* m_Bot = nullptr;
 
-BOOL WINAPI MyConsoleCtrlHandler(DWORD dwCtrlType)
+BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType)
 {
-    if (dwCtrlType == CTRL_CLOSE_EVENT)
+#ifdef VMPROTECT
+    VMProtectBeginMutation("ConsoleCtrlHandler");
+#endif
+
+    switch (dwCtrlType)
     {
-        if (m_Bot)
+#ifndef DEBUG_LOG
+        case CTRL_C_EVENT:
+        case CTRL_BREAK_EVENT:
         {
-            TerminateMyProcess(m_Bot->GetInjectedProcessId(), -1);
+            if (m_Bot)
+            {
+                m_Bot->SendReport(
+                    dwCtrlType == CTRL_C_EVENT 
+                    ? REPORT_CODE_DETECT_CONSOLE_CTRL_C_EVENT 
+                    : REPORT_CODE_DETECT_CONSOLE_BREAK_EVENT);
+
+#ifdef ENABLE_REPORT_WITH_SCREENSHOT
+                std::vector<uint8_t> vecImageBuffer = CaptureScreen(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+                m_Bot->SendScreenshot(vecImageBuffer);
+
+#endif
+            }
+
+#ifdef ENABLE_TRIGGER_BSOD
+            BOOLEAN bEnabled;
+            ULONG uResponse;
+            RtlAdjustPrivilege(19, TRUE, FALSE, &bEnabled);
+            NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
+#endif
+            exit(0);
         }
+        break;
+#endif
+        case CTRL_CLOSE_EVENT:
+        {
+            if (m_Bot)
+            {
+                TerminateProcess(m_Bot->GetClientProcessHandle(), 0);
+            }
+
+            exit(0);
+        }
+        break;
     }
 
     return TRUE;
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
-#ifdef DEBUG
+#ifdef VMPROTECT
+    VMProtectBeginUltra("wWinMain");
+#endif
+
+#if defined(DEBUG_LOG)
     AllocConsole();
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
-
-    SetConsoleCtrlHandler(MyConsoleCtrlHandler, TRUE);
 #endif
 
-    std::string szClientPath = DEVELOPMENT_PATH;
-    std::string szClientExe = DEVELOPMENT_EXE;
-    PlatformType iPlatformType = (PlatformType)DEVELOPMENT_PLATFORM;
-    int iAccountIndex = DEVELOPMENT_ACCOUNT_INDEX;
+    SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
-    int argc;
-
-    LPWSTR* szArglist = CommandLineToArgvW(GetCommandLineW(), &argc);
-
-    char** argv = new char* [argc];
-
-    for (int i = 0; i < argc; i++)
+    if (!IsUserAnAdmin()) 
     {
-        int lgth = wcslen(szArglist[i]);
-
-        argv[i] = new char[lgth + 1];
-
-        for (int j = 0; j <= lgth; j++)
-            argv[i][j] = char(szArglist[i][j]);
-    }
-
-    if (argc == 5)
-    {
-        szClientPath = to_string(szArglist[1]);
-        szClientExe = to_string(szArglist[2]);
-        iPlatformType = (PlatformType)std::stoi(szArglist[3]);
-        iAccountIndex = std::stoi(szArglist[4]);
-    }
-
-#ifdef DEBUG
-        printf("Bot: All client process forcing close\n");
+#ifdef DEBUG_LOG
+        Print("Application is not running on Administrator privileges");
 #endif
+        return 0;
+    }
 
-        KillProcessesByFileName(skCryptDec("KnightOnLine.exe"));
+    HardwareInformation* pHardwareInfo = new HardwareInformation();
+    pHardwareInfo->LoadHardwareInformation();
 
-        if (iPlatformType == PlatformType::USKO) 
-        {
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_NA.exe"));
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_NA_loader_win32.exe"));
-        }
-        
-        if (iPlatformType == PlatformType::STKO)
-        {
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_GB.exe"));
-            KillProcessesByFileName(skCryptDec("xldr_KnightOnline_GB_loader_win32.exe"));
-        }
+    DeleteFilesInPrefetchFolder();
 
-        if (iPlatformType == PlatformType::USKO
-            || iPlatformType == PlatformType::STKO
-            || iPlatformType == PlatformType::KOKO)
-        {
-            KillProcessesByFileName(skCryptDec("xxd-0.xem"));
-        }
+    m_Bot = new Bot(pHardwareInfo);
 
-    m_Bot = new Bot();
-    m_Bot->Initialize(szClientPath, szClientExe, iPlatformType, iAccountIndex);
-
-    UI::Render(m_Bot);
-
-    TerminateMyProcess(m_Bot->GetInjectedProcessId(), -1);
-
-#ifdef DEBUG
+#if defined(DEBUG_LOG)
     fclose(stdout);
     FreeConsole();
 #endif
 
-    LocalFree(szArglist);
-
     return 0;
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }

@@ -62,11 +62,6 @@ public:
 	bool IsWarrior(int32_t eClass = CLASS_UNKNOWN);
 	bool IsPriest(int32_t eClass = CLASS_UNKNOWN);
 
-	uint32_t GetProperHealthBuff(int MaxHp);
-	uint32_t GetProperDefenceBuff();
-	uint32_t GetProperMindBuff();
-	uint32_t GetProperHeal();
-
 	float GetSkillNextUseTime(int32_t iSkillID);
 	void SetSkillNextUseTime(int32_t iSkillID, float fSkillNextUseTime);
 
@@ -82,22 +77,15 @@ public:
 
 	uint8_t GetSkillPoint(int32_t Slot);
 
-	bool GetAvailableSkill(std::vector<__TABLE_UPC_SKILL>** vecAvailableSkills);
-
 	int32_t GetInventoryItemCount(uint32_t iItemID);
 	TItemData GetInventoryItem(uint32_t iItemID);
 	TItemData GetInventoryItemSlot(uint8_t iSlotPosition);
 	bool GetInventoryItemList(std::vector<TItemData>& vecItemList);
 
+	DWORD GetInventoryItemBase(uint8_t iSlotPosition);
+
 	int32_t GetInventoryEmptySlot();
 	int32_t GetInventoryEmptySlot(std::vector<int32_t> vecExcept);
-
-	int SearchMob(std::vector<EntityInfo>& vecOutMobList);
-	int SearchPlayer(std::vector<EntityInfo>& vecOutPlayerList);
-
-protected:
-	Ini* GetUserConfiguration();
-	Ini* GetAppConfiguration();
 
 protected:
 	Bot* m_Bot;
@@ -105,9 +93,10 @@ protected:
 public:
 	TPlayer m_PlayerMySelf;
 
+	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
+
 protected:
 	std::map<int32_t, float> m_mapSkillUseTime;
-	std::vector<__TABLE_UPC_SKILL> m_vecAvailableSkill;
 
 public:
 	std::vector<TNpc> m_vecNpc;
@@ -130,7 +119,6 @@ public:
 	void UseSkillWithPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, bool bWaitCastTime = true);
 
 protected:
-	bool IsEnemy(DWORD iBase);
 	void StepCharacterForward(bool bStart);
 	void BasicAttack();
 	void BasicAttackWithPacket(DWORD iTargetBase, float fBasicAttackInterval);
@@ -142,7 +130,6 @@ protected:
 	void SelectServer(uint8_t iIndex);
 	void ShowChannel();
 	void SelectChannel(uint8_t iIndex);
-	void ConnectGameServer(BYTE byServerId);
 	void ConnectServer();
 
 	void SelectCharacterSkip();
@@ -152,14 +139,14 @@ protected:
 
 	void SendPacket(Packet byBuffer);
 
+
 	DWORD GetSkillBase(uint32_t iSkillID);
 
 public:
 	void SetSaveCPUSleepTime(int32_t iValue);
+	void SendPacket(std::string szPacket);
 
 protected:
-	
-
 	void SendStartSkillCastingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID);
 	void SendStartSkillCastingAtPosPacket(TABLE_UPC_SKILL pSkillData, Vector3 v3TargetPosition);
 	void SendStartFlyingAtTargetPacket(TABLE_UPC_SKILL pSkillData, int32_t iTargetID, Vector3 v3TargetPosition, uint16_t arrowIndex = 0);
@@ -191,8 +178,11 @@ protected:
 private:
 	std::vector<uint8_t> m_vecOrigDeathEffectFunction;
 
-protected:
+public:
 	void SendNpcEvent(int32_t iTargetID);
+
+protected:
+
 	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount, uint8_t iShopPage, uint8_t iShopPosition);
 	void SendItemTradeBuy(uint32_t iSellingGroup, int32_t iNpcId, std::vector<SSItemBuy> vecItemList);
 	void SendItemTradeSell(uint32_t iSellingGroup, int32_t iNpcId, int32_t iItemId, uint8_t iInventoryPosition, int16_t iCount);
@@ -204,15 +194,9 @@ public:
 	void SendCaptcha(std::string szCode);
 
 public:
-	int32_t GetPartyMemberCount();
-	bool GetPartyList(std::vector<Party>& vecParty);
-	bool GetPartyMember(int32_t iID, Party& pPartyMember);
-
-public:
 	void SendWarehouseOpen(uint32_t iNpcID);
 	void SendWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
 	void SendWarehouseGetOut(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint32_t iCount);
-	int32_t GetWarehouseItemCount(uint32_t iItemID);
 	int32_t GetWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
 
 public:
@@ -240,7 +224,7 @@ protected:
 	bool m_bLunarWarDressUp;
 
 protected:
-	std::vector<int32_t> m_vecRegionUserList;
+	std::unordered_set<int32_t> m_vecRegionUserList;
 
 protected:
 	float m_fAttackDelta;
@@ -254,7 +238,7 @@ public:
 	void PatchObjectCollision(bool bEnable);
 
 protected:
-	std::chrono::milliseconds m_msLastGenieStartTime;
+	float m_fLastGenieStartTime;
 
 public:
 	void SendRearrangeInventory();
@@ -262,14 +246,12 @@ public:
 public:
 	void SendOpenVipWarehouse(uint32_t iItemID = 0);
 	void SendVipWarehouseGetIn(int32_t iNpcID, uint32_t iItemID, uint8_t iPage, uint8_t iCurrentPosition, uint8_t iTargetPosition, uint16_t iCount);
-	int32_t GetVipWarehouseAvailableSlot(uint32_t iItemID, uint8_t iContable);
-	int32_t GetVipWarehouseItemCount(uint32_t iItemID);
 
 	bool GetVipWarehouseItemList(std::vector<TItemData>& vecItemList);
 	bool GetVipWarehouseInventoryItemList(std::vector<TItemData>& vecItemList);
 
-	void VipWarehouseGetIn(int32_t iTargetPosition);
-	void VipWarehouseGetOut(int32_t iTargetPosition);
+	void VipWarehouseGetIn(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
+	void VipWarehouseGetOut(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
 
 	void CountableDialogChangeCount(uint32_t iCount);
 	void AcceptCountableDialog();
@@ -304,21 +286,34 @@ protected:
 	bool m_bVipWarehouseInitialized;
 	bool m_bVipWarehouseEnabled;
 	bool m_bVipWarehouseLoaded;
+	bool m_bVipWarehouseFull;
 
 public:
-	bool IsInventoryFull();
 	bool IsVipWarehouseFull();
 
 public:
 	void SendSelectMessage(uint8_t iMenuIndex, std::string szLuaName, bool bAccept = false);
 
-
 public:
-	std::chrono::milliseconds m_msLastDisconnectTime;
-
-protected:
-	std::vector<std::thread> m_vecThreadSkillPacket;
+	float m_fLastDisconnectTime;
 
 protected:
 	bool m_bSkillCasting;
+
+public:
+	void RemoveItem(int32_t iItemSlot);
+	void HidePlayer(bool bHide);
+
+	void VipGetInTest();
+	void VipGetOutTest();
+	void Legalize(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
+
+	void EquipItem(DWORD iItemBase, int32_t iSourcePosition, int32_t iTargetPosition);
+
+public:
+	bool IsInventoryFull() { return GetInventoryEmptySlotCount() == 0; };
+	int GetInventoryEmptySlotCount();
+
+protected:
+	bool IsSkillHasZoneLimit(uint32_t iSkillBaseID);
 };

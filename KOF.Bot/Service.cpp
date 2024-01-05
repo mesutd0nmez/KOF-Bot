@@ -1,78 +1,67 @@
 #include "pch.h"
 #include "Service.h"
-#include "HardwareInformation.h"
+#include "Bot.h"
 
 Service::Service()
 {
-    Clear();
 }
 
 Service::~Service()
 {
-    Clear();
     CloseSocket();
-}
-
-void Service::Clear()
-{
-    m_szToken.clear();
-
-    m_iniPointer = nullptr;
-    m_iniUserConfiguration = nullptr;
-    m_iniAppConfiguration = nullptr;
-
-    m_ePlatformType = PlatformType::USKO;
-    m_iSelectedAccount = 0;
-
-    m_iAccountTypeFlag = AccountTypeFlag::ACCOUNT_TYPE_FLAG_FREE;
-
-    m_isServiceClosed = false;
 }
 
 void Service::Initialize()
 {
-    std::string szIniPath = skCryptDec(".\\Config.ini");
+#ifdef VMPROTECT
+    VMProtectBeginUltra("Service::Initialize");
+#endif
 
-    m_iniAppConfiguration = new Ini();
-    m_iniAppConfiguration->Load(szIniPath.c_str());
+    m_Cryption->SetEncryptionKey(skCryptDec("fm3eJbEWuc556JcPQF6eDtabdm38KuRMEjyPwfEazsAcJwjYhwznShMEtPa4DH4f"));
 
-    m_szToken = m_iniAppConfiguration->GetString(skCryptDec("Internal"), skCryptDec("Token"), m_szToken.c_str());
+    GenerateSeed((1881 * 2023) / 2009 << 16);
+    m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
-#ifdef DEBUG
-    Connect(skCryptDec("watchdog.kofbot.com"), 8888);
+#ifdef _DEBUG
+    Connect(skCryptDec("127.0.0.1"), 15000);
 #else
-    Connect(skCryptDec("watchdog.kofbot.com"), 8888);
+    Connect(skCryptDec("54.37.199.67"), 15000);
 #endif 
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Service::OnConnect()
 {
-#ifdef DEBUG
-    printf("Connected to socket successfully\n");
-#endif
-    SendReady();
+    OnConnected();
 }
 
 void Service::OnError(int32_t iErrorCode)
 {
-#ifdef DEBUG
-    printf("Connection error: %d\n", iErrorCode);
+#ifdef DEBUG_LOG
+    Print("Connection error: %d", iErrorCode);
 #endif
 
-    m_isServiceClosed = true;
+#ifdef ENABLE_SERVER_CONNECTION_LOST_CHECK
+    exit(0);
+#endif
 }
 
-void Service::OnClose(int32_t iErrorCode)
+void Service::OnClose()
 {
-#ifdef DEBUG
-    printf("Connection closed: %d\n", iErrorCode);
+#ifdef ENABLE_SERVER_CONNECTION_LOST_CHECK
+    exit(0);
 #endif
-
-    m_isServiceClosed = true;
 }
 
 void Service::HandlePacket(Packet& pkt)
 {
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::HandlePacket");
+#endif
+
     uint8_t iHeader;
 
     pkt >> iHeader;
@@ -83,69 +72,62 @@ void Service::HandlePacket(Packet& pkt)
         {
             pkt >> m_iId;
 
-#ifdef DEBUG
-            printf("Socket ready\n");
-#endif
-
             GenerateSeed(m_iId + GetCurrentProcessId());
             m_Cryption->SetInitialVector(std::to_string(GetSeed()));
 
             OnReady();
+
         }
         break;
 
         case PacketHeader::LOGIN:
         {
-            if (m_iId == -1) return;
-
             pkt.DByte();
 
             uint8_t iType, iStatus;
             pkt >> iType >> iStatus;
 
-            if (iStatus == 1)
+            switch (iStatus)
             {
-                pkt >> m_iAccountTypeFlag;
-            }
-
-            switch (iType)
-            {
-            case LoginType::GENERIC:
-            {
-                if (iStatus == 1)
+                case 0: //Error - Authentication Failed
                 {
-                    std::string szToken;
+                    std::string szAuthenticationMessage;
 
-                    pkt >> szToken;
+                    pkt >> szAuthenticationMessage;
 
-                    m_szToken = m_iniAppConfiguration->SetString(skCryptDec("Internal"), skCryptDec("Token"), szToken.c_str());
+                    OnAuthenticationMessage(true, szAuthenticationMessage);
                 }
-            }
-            break;
-            }
+                break;
 
-            if (iStatus == 1)
-            {
-#ifdef DEBUG
-                printf("Socket authenticated\n");
-#endif
+                case 1: //Success - Socket authenticated
+                case 2: //Success - Socket authenticated but client update needed
+                {
+                    OnAuthenticationMessage(false, "");
 
-                SendPointerRequest();
-                OnAuthenticated();
-            }
-            else
-            {
-#ifdef DEBUG
-                printf("Socket authentication failed\n");
-#endif
+                    switch (iType)
+                    {
+                        case LoginType::GENERIC:
+                        case LoginType::TOKEN:
+                        {
+                            std::string szToken;
+                            uint32_t iSubscriptionEndAt;
+                            int32_t iCredit;
+
+                            pkt >> szToken >> iSubscriptionEndAt >> iCredit;
+
+                            OnSaveToken(szToken, iSubscriptionEndAt, iCredit);
+                            OnAuthenticated(iStatus);
+                        }
+                        break;
+                    }
+                }
+                break;
             }
         }
         break;
 
         case PacketHeader::CONFIGURATION:
         {
-            if (m_iId == -1) return;
-
             uint8_t iType;
 
             pkt.DByte();
@@ -153,56 +135,55 @@ void Service::HandlePacket(Packet& pkt)
 
             switch (iType)
             {
-                case ConfigurationRequestType::LOAD:
+            case ConfigurationRequestType::LOAD:
+            {
+                int iBufferLength;
+
+                pkt >> iBufferLength;
+
+                std::vector<uint8_t> vecBuffer(iBufferLength);
+
+                if (iBufferLength > 0)
                 {
-                    if (m_iId == -1) return;
+                    pkt.read(&vecBuffer[0], iBufferLength);
+                }         
 
-                    std::string szConfiguration;
-                    pkt.readString(szConfiguration);
-
-                    m_iniUserConfiguration = new Ini();
-
-                    if (szConfiguration.size() > 0)
-                    {
-                        m_iniUserConfiguration->Load(szConfiguration);
-                    }                
-
-                    OnConfigurationLoaded();
-                }
-                break;
+                std::string szData(reinterpret_cast<const char*>(vecBuffer.data()), vecBuffer.size());
+                OnConfigurationLoaded(szData);
+            }
+            break;
             }
         }
         break;
 
         case PacketHeader::POINTER:
         {
-            if (m_iId == -1) return;
-
             int iBufferLength;
 
             pkt >> iBufferLength;
 
             std::vector<uint8_t> vecBuffer(iBufferLength);
-            pkt.read(&vecBuffer[0], iBufferLength);
+
+            if (iBufferLength > 0)
+            {
+                pkt.read(&vecBuffer[0], iBufferLength);
+            }       
 
             std::string szData((char*)vecBuffer.data(), vecBuffer.size());
-
-            m_iniPointer = new Ini();
-            m_iniPointer->Load(szData);
-
-            OnLoaded();
+            OnLoaded(szData);
         }
         break;
 
         case PacketHeader::PING:
         {
-            uint32_t iLastPingTime;
-
             pkt.DByte();
-            pkt >> iLastPingTime;
 
-            SendPong();
-            OnPong();
+            uint32_t iSubscriptionEndAt;
+            int32_t iCredit;
+
+            pkt >> iSubscriptionEndAt >> iCredit;
+
+            OnPong(iSubscriptionEndAt, iCredit);
         }
         break;
 
@@ -219,210 +200,378 @@ void Service::HandlePacket(Packet& pkt)
             OnCaptchaResponse(iStatus == 1 ? true : false, szResult);
         }
         break;
+
+        case PacketHeader::INJECTION:
+        {
+            int32_t iAdapterBufferLength;
+
+            pkt >> iAdapterBufferLength;
+
+            std::vector<uint8_t> vecAdapterBuffer(iAdapterBufferLength);
+
+            if (iAdapterBufferLength > 0)
+            {
+                pkt.read(&vecAdapterBuffer[0], iAdapterBufferLength);
+            }      
+
+            OnInjection(vecAdapterBuffer);
+        }
+        break;
+
+        case PacketHeader::UPDATE:
+        {
+            int32_t iUpdateBufferLength, iUpdaterBufferLength;
+
+            pkt >> iUpdateBufferLength;
+
+            std::vector<uint8_t> vecUpdateBuffer(iUpdateBufferLength);
+
+            if (iUpdateBufferLength > 0)
+            {
+                pkt.read(&vecUpdateBuffer[0], iUpdateBufferLength);
+            }          
+
+            pkt >> iUpdaterBufferLength;
+
+            std::vector<uint8_t> vecUpdaterBuffer(iUpdaterBufferLength);
+
+            if (iUpdaterBufferLength > 0)
+            {
+                pkt.read(&vecUpdaterBuffer[0], iUpdaterBufferLength);
+            }        
+
+            std::ofstream updateFile(skCryptDec("Update.zip"), std::ios::binary);
+            std::ofstream updaterFile(skCryptDec("Updater.exe"), std::ios::binary);
+
+            if (!updateFile.is_open() || !updaterFile.is_open())
+            {
+                OnUpdateDownloaded(false);
+                return;
+            }
+
+            updateFile.write(reinterpret_cast<const char*>(vecUpdateBuffer.data()), vecUpdateBuffer.size());
+            updateFile.close();
+
+            updaterFile.write(reinterpret_cast<const char*>(vecUpdaterBuffer.data()), vecUpdaterBuffer.size());
+            updaterFile.close();
+
+            OnUpdateDownloaded(true);
+        }
+        break;
+
+        case PacketHeader::ROUTE:
+        {
+            int32_t iFileCount;
+
+            pkt >> iFileCount;
+
+            for (size_t i = 0; i < (size_t)iFileCount; i++)
+            {
+                int32_t iBufferLength;
+
+                pkt >> iBufferLength;
+
+                std::vector<uint8_t> vecBuffer(iBufferLength);
+
+                if (iBufferLength > 0)
+                {
+                    pkt.read(&vecBuffer[0], iBufferLength);
+                }           
+
+                OnRouteLoaded(vecBuffer);
+            }
+        }
+        break;
+
+        case PacketHeader::PURCHASE:
+        {
+            std::string szPurchaseUrl;
+
+            pkt >> szPurchaseUrl;
+
+            OnPurchase(szPurchaseUrl);
+        }
+        break;
     }
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
-void Service::SendReady()
+void Service::SendReady(std::string szProcessFileName, uint32_t iCRC, HardwareInformation* pHardwareInformation)
 {
     Packet pkt = Packet(PacketHeader::READY);
-    pkt << uint32_t(GetCurrentProcessId());
+
+    pkt.DByte();
+    pkt
+        << uint32_t(GetCurrentProcessId()) 
+        << szProcessFileName
+        << uint32_t(iCRC) 
+        << to_string(pHardwareInformation->System.Name.c_str())
+        << to_string(pHardwareInformation->Registry.ComputerHardwareId.c_str())
+        << to_string(pHardwareInformation->System.OSSerialNumber.c_str());
+
+    std::string szGPUs;
+    for (size_t i = 0; i < pHardwareInformation->GPU.size(); i++)
+    {
+        if (i == 0)
+            szGPUs += to_string(pHardwareInformation->GPU.at(i).Name.c_str());
+        else
+            szGPUs += "||" + to_string(pHardwareInformation->GPU.at(i).Name.c_str());
+    }
+
+    pkt << szGPUs;
 
     Send(pkt);
 }
 
 void Service::SendLogin(std::string szEmail, std::string szPassword)
 {
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendLogin1");
+#endif
+
     Packet pkt = Packet(PacketHeader::LOGIN);
 
     pkt.DByte();
     pkt
         << uint8_t(LoginType::GENERIC)
         << szEmail.c_str()
-        << szPassword.c_str()
-        << to_string(m_hardwareInfo.System.Name)
-        << to_string(m_hardwareInfo.CPU.ProcessorId)
-        << to_string(m_hardwareInfo.SMBIOS.SerialNumber);
-
-    std::string szHddSerial;
-    for (size_t i = 0; i < m_hardwareInfo.Disk.size(); i++)
-    {
-        HardwareInformation::DiskObject& Disk{ m_hardwareInfo.Disk.at(i) };
-
-        if (Disk.IsBootDrive)
-        {
-            if (i == 0)
-                szHddSerial += to_string(Disk.SerialNumber);
-            else
-                szHddSerial += "||" + to_string(Disk.SerialNumber);
-        }
-    }
-
-    pkt
-        << szHddSerial
-        << to_string(m_hardwareInfo.Registry.ComputerHardwareId)
-        << to_string(m_hardwareInfo.System.OSSerialNumber);
-
-    std::string szPartNumber;
-    for (size_t i = 0; i < m_hardwareInfo.PhysicalMemory.size(); i++)
-    {
-        HardwareInformation::PhysicalMemoryObject& Memory { m_hardwareInfo.PhysicalMemory.at(i) };
-
-        if (i == 0)
-            szPartNumber += to_string(Memory.PartNumber);
-        else
-            szPartNumber += "||" + to_string(Memory.PartNumber);
-    }
-
-    pkt
-        << szPartNumber;
-
-    std::string szGPUs;
-    for (size_t i = 0; i < m_hardwareInfo.GPU.size(); i++)
-    {
-        if (i == 0)
-            szGPUs += to_string(m_hardwareInfo.GPU.at(i).Name);
-        else
-            szGPUs += "||" + to_string(m_hardwareInfo.GPU.at(i).Name);
-    }
-
-    pkt << szGPUs;
+        << szPassword.c_str();
 
     Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Service::SendLogin(std::string szToken)
 {
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendLogin2");
+#endif
+
     Packet pkt = Packet(PacketHeader::LOGIN);
 
     pkt.DByte();
     pkt
         << uint8_t(LoginType::TOKEN)
-        << szToken.c_str()
-        << to_string(m_hardwareInfo.System.Name)
-        << to_string(m_hardwareInfo.CPU.ProcessorId)
-        << to_string(m_hardwareInfo.SMBIOS.SerialNumber);
-
-    std::string szHddSerial;
-    for (size_t i = 0; i < m_hardwareInfo.Disk.size(); i++)
-    {
-        HardwareInformation::DiskObject& Disk{ m_hardwareInfo.Disk.at(i) };
-
-        if (Disk.IsBootDrive)
-        {
-            if (i == 0)
-                szHddSerial += to_string(Disk.SerialNumber);
-            else
-                szHddSerial += "||" + to_string(Disk.SerialNumber);
-        }
-    }
-
-    pkt
-        << szHddSerial
-        << to_string(m_hardwareInfo.Registry.ComputerHardwareId)
-        << to_string(m_hardwareInfo.System.OSSerialNumber);
-
-    std::string szPartNumber;
-    for (size_t i = 0; i < m_hardwareInfo.PhysicalMemory.size(); i++)
-    {
-        HardwareInformation::PhysicalMemoryObject& Memory{ m_hardwareInfo.PhysicalMemory.at(i) };
-
-        if (i == 0)
-            szPartNumber += to_string(Memory.PartNumber);
-        else
-            szPartNumber += "||" + to_string(Memory.PartNumber);
-    }
-
-    pkt
-        << szPartNumber;
-
-    std::string szGPUs;
-    for (size_t i = 0; i < m_hardwareInfo.GPU.size(); i++)
-    {
-        if (i == 0)
-            szGPUs += to_string(m_hardwareInfo.GPU.at(i).Name);
-        else
-            szGPUs += "||" + to_string(m_hardwareInfo.GPU.at(i).Name);
-    }
-
-    pkt << szGPUs;
+        << szToken.c_str();
 
     Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
-void Service::SendPointerRequest()
+void Service::SendPointerRequest(PlatformType ePlatformType)
 {
     Packet pkt = Packet(PacketHeader::POINTER);
+
+    pkt.DByte();
     pkt 
-        << uint8_t(AppType::BOT)
-        << uint8_t(m_ePlatformType);
+        << uint8_t(ePlatformType);
 
     Send(pkt);
 }
 
-void Service::SendLoadUserConfiguration(uint8_t iServerId, std::string szCharacterName)
+void Service::SendLoadUserConfiguration(uint8_t iServerId, std::string szCharacterName, PlatformType ePlatformType)
 {
     Packet pkt = Packet(PacketHeader::CONFIGURATION);
 
     pkt.DByte();
     pkt 
         << uint8_t(ConfigurationRequestType::LOAD) 
-        << uint8_t(AppType::BOT) 
-        << uint8_t(m_ePlatformType)
+        << uint8_t(ePlatformType)
         << uint8_t(iServerId)
         << szCharacterName;
 
     Send(pkt);
 }
 
-void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharacterName)
+void Service::SendSaveUserConfiguration(uint8_t iServerId, std::string szCharacterName, std::string szConfigurationData, PlatformType ePlatformType)
 {
     Packet pkt = Packet(PacketHeader::CONFIGURATION);
 
     pkt.DByte();
-    pkt 
-        << uint8_t(ConfigurationRequestType::SAVE) 
-        << uint8_t(AppType::BOT) 
-        << uint8_t(m_ePlatformType)
+    pkt
+        << uint8_t(ConfigurationRequestType::SAVE)
+        << uint8_t(ePlatformType)
         << uint8_t(iServerId)
-        << szCharacterName 
-        << m_iniUserConfiguration->Dump();
+        << szCharacterName
+        << uint32_t(szConfigurationData.size());
 
-    Send(pkt);
+    pkt.append(szConfigurationData);
+
+    Send(pkt, true);
 }
 
-void Service::SendInjectionRequest(uint32_t iProcessId)
+void Service::SendInjectionRequest()
 {
     Packet pkt = Packet(PacketHeader::INJECTION);
 
     pkt.DByte();
     pkt
-        << uint8_t(InjectionRequestType::REQUEST)
-        << uint8_t(PlatformType::USKO)
-        << uint32_t(iProcessId);
+        << uint8_t(PlatformType::USKO);
 
     Send(pkt);
-
-#ifdef DEBUG
-    printf("Service: Injection request sended\n");
-#endif
 }
 
-void Service::SendPong()
+void Service::SendPong(std::string szCharacterName, float fX, float fY, uint8_t iZoneID)
 {
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendPong");
+#endif
+
     Packet pkt = Packet(PacketHeader::PING);
 
     pkt.DByte();
-    pkt << uint32_t(time(0));
+    pkt << szCharacterName
+        << float(fX)
+        << float(fY)
+        << uint8_t(iZoneID);
 
     Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
-void Service::SendCaptcha(std::string szImageBase64)
+void Service::SendCaptcha(std::vector<uint8_t> vecImageBuffer)
 {
     Packet pkt = Packet(PacketHeader::CAPTCHA);
 
     pkt.DByte();
-    pkt << szImageBase64.c_str();
+    pkt.append(vecImageBuffer.data(), vecImageBuffer.size());
+
+    Send(pkt, true);
+}
+
+void Service::SendUpdate()
+{
+    Packet pkt = Packet(PacketHeader::UPDATE);
 
     Send(pkt);
+}
+
+void Service::SendRouteLoadRequest()
+{
+    Packet pkt = Packet(PacketHeader::ROUTE);
+
+    pkt.DByte();
+    pkt << uint8_t(0);
+
+    Send(pkt);
+}
+
+void Service::SendRouteSaveRequest(std::string szName, JSON jData)
+{
+    Packet pkt = Packet(PacketHeader::ROUTE);
+
+    std::string szData = jData.dump();
+
+    pkt.DByte();
+    pkt
+        << uint8_t(1)
+        << szName
+        << uint32_t(szData.size());
+
+    pkt.append(szData);
+
+    Send(pkt, true);
+}
+
+void Service::SendRouteDeleteRequest(std::string szName)
+{
+    Packet pkt = Packet(PacketHeader::ROUTE);
+
+    pkt.DByte();
+    pkt 
+        << uint8_t(2) 
+        << szName;
+
+    Send(pkt);
+}
+
+void Service::SendReport(uint32_t iCode, std::string szPayload)
+{
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendReport");
+#endif
+
+    Packet pkt = Packet(PacketHeader::REPORT);
+
+    pkt.DByte();
+    pkt
+        << uint32_t(iCode)
+        << szPayload;
+
+    Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
+}
+
+void Service::SendScreenshot(std::vector<uint8_t> vecImageBuffer)
+{
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendScreenshot");
+#endif
+
+    Packet pkt = Packet(PacketHeader::SCREENSHOT);
+
+    pkt.DByte();
+    pkt.append(vecImageBuffer.data(), vecImageBuffer.size());
+
+    Send(pkt, true);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
+}
+
+void Service::SendVital(uint32_t iCode, std::string szPayload)
+{
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendVital");
+#endif
+
+    Packet pkt = Packet(PacketHeader::VITAL);
+
+    pkt.DByte();
+    pkt
+        << uint32_t(iCode)
+        << szPayload;
+
+    Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
+}
+
+void Service::SendPurchase(uint8_t iType, int32_t iCredit, uint32_t iDay)
+{
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Service::SendPurchase");
+#endif
+
+    Packet pkt = Packet(PacketHeader::PURCHASE);
+
+    pkt.DByte();
+    pkt
+        << uint8_t(iType)
+        << int32_t(iCredit)
+        << uint32_t(iDay);
+
+    Send(pkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }

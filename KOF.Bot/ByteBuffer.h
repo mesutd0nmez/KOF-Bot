@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cassert>
-#include <vector>
-#include <sstream>
-#include <iomanip>
-
 class ByteBuffer
 {
 public:
@@ -72,11 +67,13 @@ public:
 	ByteBuffer& operator<<(std::string& value) { *this << value.c_str(); return *this; }
 	ByteBuffer& operator<<(const char* str)
 	{
-		uint16_t len = (uint16_t)strlen(str);
+		size_t len = strlen(str);
+
 		if (m_doubleByte)
-			append((uint8_t*)&len, 2);
+			append((uint8_t*)&len, sizeof(uint16_t));
 		else
-			append((uint8_t*)&len, 1);
+			append((uint8_t*)&len, sizeof(uint8_t));
+
 		append((uint8_t*)str, len);
 		return *this;
 	}
@@ -166,6 +163,7 @@ public:
 	}
 
 	uint8_t* contents() { return &_storage[0]; }
+	std::vector<uint8_t> data() { return _storage; }
 	inline size_t size() const { return _storage.size(); }
 
 	// one should never use resize

@@ -43,6 +43,9 @@
     <Filter Include="Source Files\Client">
       <UniqueIdentifier>{a12b818c-6f41-441a-b416-495cad0eeb1f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Security">
+      <UniqueIdentifier>{14152c23-640e-47cc-a223-ec245ee3bf14}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -117,50 +120,47 @@
     <ClInclude Include="SkCrypter.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="Json.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
-    <ClInclude Include="HardwareInformation.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
-    <ClInclude Include="World.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
-    <ClInclude Include="RouteManager.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Injection.h">
-      <Filter>Header Files\Utility</Filter>
-    </ClInclude>
     <ClInclude Include="Password.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Drawing_Hazar.h">
-      <Filter>Source Files\UI</Filter>
+    <ClInclude Include="crc32.h">
+      <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="Drawing_Blank.h">
-      <Filter>Source Files\UI</Filter>
+    <ClInclude Include="AntiDebug.h">
+      <Filter>Header Files\Security</Filter>
     </ClInclude>
-    <ClInclude Include="Drawing_Common.h">
-      <Filter>Source Files\UI</Filter>
+    <ClInclude Include="Injector.h">
+      <Filter>Header Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Compression.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="lzf.h">
+      <Filter>Header Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="HardwareInformation.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Compression_LZF.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="crc32.h">
+    <ClInclude Include="Compression_Snappy.h">
       <Filter>Header Files\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="lzf.h">
-      <Filter>Header Files\Utility</Filter>
+    <ClInclude Include="InteractiveCheck.h">
+      <Filter>Header Files\Security</Filter>
+    </ClInclude>
+    <ClInclude Include="Trap.h">
+      <Filter>Header Files\Security</Filter>
+    </ClInclude>
+    <ClInclude Include="VMProtect.h">
+      <Filter>Header Files\Security</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -194,25 +194,22 @@
     <ClCompile Include="ClientHandler.cpp">
       <Filter>Source Files\Client</Filter>
     </ClCompile>
-    <ClCompile Include="Drawing_Hazar.cpp">
-      <Filter>Source Files\UI</Filter>
+    <ClCompile Include="crc32.cpp">
+      <Filter>Source Files\Utility</Filter>
     </ClCompile>
-    <ClCompile Include="Drawing_Blank.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="Drawing_Common.cpp">
-      <Filter>Source Files\UI</Filter>
+    <ClCompile Include="Injector.cpp">
+      <Filter>Source Files\Utility</Filter>
     </ClCompile>
     <ClCompile Include="Compression.cpp">
+      <Filter>Source Files\Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="lzf.cpp">
       <Filter>Source Files\Utility</Filter>
     </ClCompile>
     <ClCompile Include="Compression_LZF.cpp">
       <Filter>Source Files\Utility</Filter>
     </ClCompile>
-    <ClCompile Include="D:\Backup - 11-17-2023\GitHub\KnightOnline\Server\shared\crc32.cpp">
-      <Filter>Source Files\Utility</Filter>
-    </ClCompile>
-    <ClCompile Include="lzf.cpp">
+    <ClCompile Include="Compression_Snappy.cpp">
       <Filter>Source Files\Utility</Filter>
     </ClCompile>
   </ItemGroup>

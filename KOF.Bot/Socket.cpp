@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Socket.h"
+#include "Compression.h"
 
 Socket::Socket()
 {
@@ -19,10 +20,6 @@ void Socket::Connect(std::string szIP, uint16_t iPort)
     {
         m_tcpSocket.isConnected = true;
 
-        m_Cryption->SetEncryptionKey(skCryptDec("auJouZxXdDolrmQNIaJ0zHY9wCOvbgSdE45ByrNkXBecZELoupFvhwINAVYJUnTq"));
-        GenerateSeed((1881 * 2023) / 2009 << 16);
-        m_Cryption->SetInitialVector(std::to_string(GetSeed()));
-
         OnConnect();
 
         m_tcpSocket.onMessageReceived = [=](uint8_t* iStream, size_t iStreamLength)
@@ -30,12 +27,12 @@ void Socket::Connect(std::string szIP, uint16_t iPort)
             ProcessPacket(iStream, iStreamLength);
         };
 
-        m_tcpSocket.onSocketClosed = [=](int32_t iErrorCode)
+        m_tcpSocket.onSocketClosed = [=]()
         {
             m_tcpSocket.isClosed = true;
             m_tcpSocket.isConnected = false;
 
-            OnClose(iErrorCode);
+            OnClose();
         };
     },
     [=](int32_t iErrorCode)
@@ -62,25 +59,43 @@ void Socket::Close()
 
 void Socket::Send(Packet& pkt, bool bCompress)
 {
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Socket::Send");
+#endif
+
     Packet newPkt = Packet();
 
     newPkt << uint16_t(0xaa55);
 
     Packet encryptionPkt = Packet();
 
-    encryptionPkt
-        << uint8_t(0) //compression disabled
-        << uint32_t(pkt.size()); //packet size
+    if (bCompress 
+         && pkt.size() >= Compression::MinBytes)
+    {
+        encryptionPkt
+            << uint8_t(1) //compression enabled
+            << uint32_t(pkt.size()); //packet size
 
-    encryptionPkt.append(pkt.contents(), pkt.size()); //raw data
+        std::vector<uint8_t> vecOutBuffer = Compression::Compress(pkt.data());
+
+        encryptionPkt.append(vecOutBuffer.data(), vecOutBuffer.size());
+    }
+    else
+    {
+        encryptionPkt
+            << uint8_t(0) //compression disabled
+            << uint32_t(pkt.size()); //packet size
+
+        encryptionPkt.append(pkt.contents(), pkt.size()); //raw data
+    }
 
     std::vector<uint8_t> vecEncryptedPacket;
     size_t iEncryptionPacketLength = m_Cryption->Encryption(encryptionPkt.contents(), encryptionPkt.size(), vecEncryptedPacket);
 
     if (iEncryptionPacketLength == 0)
     {
-#ifdef DEBUG
-        printf("Packet encryption failed\n");
+#ifdef DEBUG_LOG
+        Print("Packet encryption failed");
 #endif
         return;
     }
@@ -90,24 +105,24 @@ void Socket::Send(Packet& pkt, bool bCompress)
     newPkt << uint16_t(0x55aa);
 
     m_tcpSocket.Send(newPkt);
+
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }
 
 void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 {
-    if (iStreamLength < 10)
-    {
-#ifdef DEBUG
-        printf("Process packet failed, packet size need minimum 9\n");
+#ifdef VMPROTECT
+    VMProtectBeginMutation("Socket::ProcessPacket");
 #endif
-        return;
-    }
 
     uint16_t iStreamHeader = *(uint16_t*)&iStream[0];
 
     if (iStreamHeader != 0xaa55)
     {
-#ifdef DEBUG
-        printf("Process packet failed, iStreamHeader != 0xaa55\n");
+#ifdef DEBUG_LOG
+        Print("Process packet failed, iStreamHeader != 0xaa55");
 #endif
         return;
     }
@@ -116,8 +131,8 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 
     if (iStreamFooter != 0x55aa)
     {
-#ifdef DEBUG
-        printf("Process packet failed, iStreamFooter != 0x55aa\n");
+#ifdef DEBUG_LOG
+        Print("Process packet failed, iStreamFooter != 0x55aa");
 #endif
         return;
     }
@@ -128,26 +143,52 @@ void Socket::ProcessPacket(uint8_t* iStream, size_t iStreamLength)
 
     if (iDecryptedPacketLength == 0)
     {
-#ifdef DEBUG
-        printf("Packet decryption failed\n");
+#ifdef DEBUG_LOG
+        Print("Packet decryption failed");
 #endif
         return;
     }
 
     uint8_t iFlag = *(uint8_t*)&vecDecryptedPacket[0];
-    uint32_t iPacketLength = *(uint32_t*)&vecDecryptedPacket[1];
+    uint32_t iPacketOriginalLength = *(uint32_t*)&vecDecryptedPacket[1];
 
-    uint8_t* iPacket;
+    std::vector<uint8_t> vecPacket(vecDecryptedPacket.begin() + 5, vecDecryptedPacket.end());
 
-    iPacket = new uint8_t[iPacketLength];
-    iPacket = (uint8_t*)&vecDecryptedPacket[5];
-
-    Packet pkt = Packet(iPacket[0], iPacketLength);
-
-    if (iPacketLength > 1)
+    if (iFlag == 1)
     {
-        pkt.append(&iPacket[1], iPacketLength - 1);
+        std::vector<uint8_t> vecDecompressedPacket = Compression::Decompress(vecPacket, iPacketOriginalLength);
+
+        if (vecDecompressedPacket.size() > 0)
+        {
+            Packet pkt = Packet(vecDecompressedPacket[0], vecDecompressedPacket.size());
+
+            if (vecDecompressedPacket.size() > 1)
+            {
+                pkt.append(&vecDecompressedPacket[1], vecDecompressedPacket.size() - 1);
+            }
+
+            HandlePacket(pkt);
+        }
+        else
+        {
+#ifdef DEBUG_LOG
+            Print("Decompression failed, packet not handled");
+#endif
+        }
+    }
+    else
+    {
+        Packet pkt = Packet(vecPacket[0], vecPacket.size());
+
+        if (vecPacket.size() > 1)
+        {
+            pkt.append(&vecPacket[1], vecPacket.size() - 1);
+        }
+
+        HandlePacket(pkt);
     }
 
-    HandlePacket(pkt);
+#ifdef VMPROTECT
+    VMProtectEnd();
+#endif
 }

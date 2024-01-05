@@ -2,8 +2,6 @@
 
 #include "ByteBuffer.h"
 #include "PacketHeader.h"
-#include <cstdint>
-#include <string>
 
 class Packet : public ByteBuffer
 {
@@ -12,7 +10,7 @@ public:
 	{
 	}
 
-	inline Packet(uint8_t opcode) : ByteBuffer(4096)
+	inline Packet(uint8_t opcode) : ByteBuffer(1024000)
 	{
 		append(&opcode, 1);
 	}

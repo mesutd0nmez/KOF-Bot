@@ -7,56 +7,52 @@
 #ifndef PCH_H
 #define PCH_H
 
+#include "Define.h"
+
 // add headers that you want to pre-compile here
 #include "framework.h"
-
-#include "Singleton.h"
 #include "SkCrypter.h"
-#include "Define.h"
 #include "Enum.h"
 #include "Struct.h"
-#include "Json.h"
-using JSON = nlohmann::json;
+#include "crc32.h"
 
 #include <imgui.h>
-#include <d3d9.h>
+#include <imgui_impl_dx9.h>
+#include <imgui_impl_win32.h>
 
-#if defined(__linux__) || defined(__APPLE__)
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <netdb.h>
-#elif _WIN32
-#include <winsock2.h>
-#include <Ws2ipdef.h>
-#include <Ws2tcpip.h>
+#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+#include <cryptlib.h>
+#include <sha.h>
+#include <md5.h>
+#include <modes.h>
+#include <osrng.h>
 
-#pragma comment(lib, "Ws2_32.lib")
+#include "json.hpp"
+using JSON = nlohmann::json;
+
+#include <snappy-c.h>
+
+#ifdef VMPROTECT
+#include "VMProtectSDK.h"
 #endif
 
-#include <string>
-#include <functional>
-#include <cerrno>
+#pragma comment(lib, "D3dx9.lib")
+#pragma comment(lib, "D3d9.lib")
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "wbemuuid.lib")
 
-#include <curl/curl.h>
-
-#include "imgui.h"
-#include "imgui_impl_dx9.h"
-#include "imgui_impl_win32.h"
-
-
+#define Print(a, ...) printf("%s: " a "\n", __FUNCTION__, ##__VA_ARGS__)
 
 #define WaitCondition(condition) \
 	while(condition) \
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 #define WaitConditionWithTimeout(condition, timeout_ms) \
 { \
 	auto start_time = std::chrono::steady_clock::now(); \
 	while(condition) \
 	{ \
-		std::this_thread::sleep_for(std::chrono::milliseconds(100)); \
+		std::this_thread::sleep_for(std::chrono::milliseconds(1)); \
 		auto current_time = std::chrono::steady_clock::now(); \
 		auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count(); \
 		if (elapsed_time >= timeout_ms) \
@@ -64,31 +60,56 @@ using JSON = nlohmann::json;
 			break; \
 		} \
 	} \
-} 
+}
 
-typedef LONG(NTAPI* NtSuspendProcess)(IN HANDLE ProcessHandle);
-typedef LONG(NTAPI* NtResumeProcess)(IN HANDLE ProcessHandle);
+typedef enum _SECTION_INHERIT
+{
+	ViewShare = 1,
+	ViewUnmap = 2
 
-extern void SuspendProcess(HANDLE hProcess);
-extern void SuspendProcess(DWORD dwProcessId);
-extern void ResumeProcess(HANDLE hProcess);
-extern void ResumeProcess(DWORD dwProcessId);
+} SECTION_INHERIT;
+
+#pragma comment(lib, "ntdll.lib")
+
+EXTERN_C NTSTATUS NTAPI RtlAdjustPrivilege(ULONG, BOOLEAN, BOOLEAN, BOOLEAN*);
+EXTERN_C NTSTATUS NTAPI NtRaiseHardError(NTSTATUS, ULONG, ULONG, PULONG_PTR, ULONG, PULONG);
+EXTERN_C NTSTATUS NTAPI NtSuspendProcess(HANDLE);
+EXTERN_C NTSTATUS NTAPI NtResumeProcess(HANDLE);
+EXTERN_C NTSTATUS NTAPI NtSetDebugFilterState(DWORD, DWORD, BOOLEAN);
+EXTERN_C NTSTATUS NTAPI ZwCreateSection(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PLARGE_INTEGER, ULONG, ULONG, HANDLE);
+EXTERN_C NTSTATUS NTAPI ZwMapViewOfSection(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, SECTION_INHERIT, ULONG, ULONG);
+EXTERN_C NTSTATUS NTAPI ZwUnmapViewOfSection(HANDLE, PVOID);
 
 extern BOOL StartProcess(std::string strFilePath, std::string strFile, std::string strCommandLine, PROCESS_INFORMATION& processInfo);
 
-extern std::string to_string(wchar_t const* wcstr);
-extern std::string to_string(std::wstring const& wstr);
-
-extern BOOL TerminateMyProcess(DWORD dwProcessId, UINT uExitCode);
-
-extern std::string CurlPost(std::string szUrl, JSON jData);
-
-extern bool Injection(DWORD iTargetProcess, std::string szPath);
-
-extern bool ConsoleCommand(const std::string & input, std::string & out);
-
 extern bool KillProcessesByFileName(const char* fileName);
+extern bool KillProcessesByFileName(const std::vector<const char*>&fileNames);
 
-extern std::string GenerateUniqueString(size_t iLength);
+extern uint8_t HexCharToUint8(char c);
+extern std::vector<uint8_t>FromHexString(const std::string& hexString);
+extern std::string ToHexString(const std::vector<uint8_t>&bytes);
+
+extern DWORD CalculateCRC32(const std::string & filePath);
+
+extern bool IsProcessRunning(const char* fileName);
+
+extern std::string GenerateAlphanumericString(int length);
+
+extern std::string to_string(wchar_t const* wcstr);
+
+extern std::string RemainingTime(long long int seconds);
+
+extern float TimeGet();
+
+extern std::vector<uint8_t> CaptureScreen(int width, int height, int x = 0, int y = 0);
+
+extern void DeleteFilesInPrefetchFolder();
+
+extern void OpenURLInDefaultBrowser(const char* url);
+
+extern bool CheckProxy(const std::string& szProxyIP, uint16_t iProxyPort, const std::string& szUsername, const std::string& szPassword);
+
+extern std::string GetFileName(const std::string& filePath);
+extern bool FileExists(const std::string& filePath);
 
 #endif //PCH_H

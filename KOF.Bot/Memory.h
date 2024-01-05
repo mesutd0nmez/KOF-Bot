@@ -1,15 +1,9 @@
 #pragma once
 
-#include <Windows.h>
-#include <string>
-#include <vector>
-#include <mutex>
-
 #define CopyBytes(Dest,Src) memcpy(Dest, (BYTE*)&Src, sizeof(Src))
 
-class Memory
+namespace Memory
 {
-public:
     inline static BYTE ReadByte(HANDLE hProcess, DWORD dwAddress)
     {
         BYTE nValue = 0;
