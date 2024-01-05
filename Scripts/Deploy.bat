@@ -10,9 +10,7 @@ xcopy /y .\Output\DSAServiceHelper.vmp.exe ..\..\Production
 
 cd ..\..\Production
 del DSAServiceHelper.exe
-python ..\Scripts\sigthief.py -s ..\Scripts\signature.patch -t  DSAServiceHelper.vmp.exe 
-del DSAServiceHelper.vmp.exe 
-ren DSAServiceHelper.vmp.exe_signed	DSAServiceHelper.exe
+ren DSAServiceHelper.vmp.exe DSAServiceHelper.exe
+
 del Update.zip
 powershell Compress-Archive -Path DSAServiceHelper.exe -DestinationPath Update.zip -Force
-echo Created Update.zip

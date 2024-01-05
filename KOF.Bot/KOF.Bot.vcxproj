@@ -286,7 +286,7 @@
       <GenerateMapFile>true</GenerateMapFile>
     </Link>
     <PostBuildEvent>
-      <Command>call "$(SolutionDir)Scripts\VMProtect.bat"</Command>
+      <Command>call "$(SolutionDir)Scripts\Deploy.bat"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
