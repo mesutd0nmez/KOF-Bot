@@ -77,12 +77,15 @@ void Drawing::Draw()
         case Scene::LOGIN:
             vWindowSize = { 285, 170 };
             break;
+
         case Scene::UPDATE:
             vWindowSize = { 285, 70 };
             break;
+
         case Scene::LOADER:
             vWindowSize = { 285, 395 };
             break;
+
         case Scene::UI:
             vWindowSize = { 800, 650 };
             break;
@@ -385,6 +388,9 @@ void Drawing::Draw()
                         {
                             ImGui::BeginChild(skCryptDec("##ProxyConfigurationBoard"), ImVec2(270, 170), true);
                             {
+                                if (bIsGameStarting || bIsGameWaitingReady)
+                                    ImGui::BeginDisabled();
+
                                 ImGui::SetCursorPos(ImVec2(10, 10));
                                 ImGui::Text(skCryptDec("IP"));
                                 ImGui::SameLine();
@@ -441,7 +447,19 @@ void Drawing::Draw()
                                 if (Drawing::Bot->m_bCheckingProxy)
                                     ImGui::BeginDisabled();
 
-                                if (ImGui::Button(skCryptDec("Proxy Test"), ImVec2(255.0f, 0.0f)))
+                                char szLoadingString[100];
+                                snprintf(szLoadingString, sizeof(szLoadingString), "%c", "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
+
+                                std::string szProxyTestButtonText = skCryptDec("Proxy Test");
+
+                                if (Drawing::Bot->m_bCheckingProxy)
+                                {
+                                    szProxyTestButtonText = skCryptDec("Proxy Test Ediliyor");
+                                    szProxyTestButtonText += " ";
+                                    szProxyTestButtonText += szLoadingString;
+                                }
+
+                                if (ImGui::Button(szProxyTestButtonText.c_str(), ImVec2(255.0f, 0.0f)))
                                 {
                                     Drawing::Bot->CheckProxy(
                                         Drawing::Bot->m_szProxyIP,
@@ -451,6 +469,9 @@ void Drawing::Draw()
                                 }
 
                                 if (Drawing::Bot->m_bCheckingProxy)
+                                    ImGui::EndDisabled();
+
+                                if (bIsGameStarting || bIsGameWaitingReady)
                                     ImGui::EndDisabled();
 
                                 ImGui::EndChild();
@@ -463,7 +484,9 @@ void Drawing::Draw()
                     {
                         ImGui::BeginChild(skCryptDec("##ShopBoard"), ImVec2(270, 170), true);
                         {
-                         
+                            if (bIsGameStarting || bIsGameWaitingReady)
+                                ImGui::BeginDisabled();
+
                             ImGui::SetCursorPos(ImVec2(10, 10));
                             ImGui::Text(skCryptDec("Kredi"));
                             ImGui::SameLine();
@@ -554,6 +577,9 @@ void Drawing::Draw()
                             if (fDisableSubscriptionButton)
                                 ImGui::EndDisabled();
 
+                            if (bIsGameStarting || bIsGameWaitingReady)
+                                ImGui::EndDisabled();
+
                             ImGui::EndChild();
                         }
                         ImGui::EndTabItem();
@@ -567,6 +593,9 @@ void Drawing::Draw()
 
                 ImGui::BeginChild(skCryptDec("##LoaderButtonBoard"), ImVec2(270, 120), true);
                 {
+                    if (bIsGameStarting || bIsGameWaitingReady)
+                        ImGui::BeginDisabled();
+
                     if (ImGui::Checkbox(skCryptDec("Oto login"), &Drawing::Bot->m_bAutoLogin))
                     {
                         if (Drawing::Bot->m_bAutoLogin)
@@ -586,6 +615,9 @@ void Drawing::Draw()
 
                     ImGui::Separator();
                     ImGui::Spacing();
+
+                    if (bIsGameStarting || bIsGameWaitingReady)
+                        ImGui::EndDisabled();
 
                     if (bIsGameStarting || bIsGameWaitingReady)
                     {
@@ -710,7 +742,14 @@ void Drawing::Draw()
                     DrawModeController();
                     ImGui::Separator();
 
+                    DrawCommonController();
+                    ImGui::Separator();
+
+#ifdef _DEBUG
+                    ImGui::Spacing();
+                    ImGui::SetCursorPosX(42);
                     ImGui::Text("Average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+#endif
                 }
                 ImGui::EndChild();
 
@@ -884,18 +923,6 @@ void Drawing::DrawMainController()
         }
 
         ImGui::PopStyleColor(1);
-
-        if (ImGui::Button(skCryptDec("Town At"), ImVec2(132.0f, 0.0f)))
-        {
-            m_pClient->SendTownPacket();
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(132.0f, 0.0f)))
-        {
-            TerminateProcess(Drawing::Bot->GetClientProcessHandle(), 0);
-        }
     };
 }
 
@@ -2435,6 +2462,46 @@ void Drawing::SetLegalModeSettings(bool bMode)
     }
 }
 
+void Drawing::DrawCommonController()
+{
+    ImGui::BulletText(skCryptDec("Genel Kontroller"));
+    ImGui::Separator();
+
+    ImGui::Spacing();
+    {
+        if (ImGui::Button(skCryptDec("Town At"), ImVec2(132.0f, 0.0f)))
+        {
+            m_pClient->SendTownPacket();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(skCryptDec("Oyunu Kapat"), ImVec2(132.0f, 0.0f)))
+        {
+            TerminateProcess(Drawing::Bot->GetClientProcessHandle(), 0);
+        }
+    };
+
+    ImGui::Spacing();
+    {
+        if (ImGui::Button(skCryptDec("Ayarlari Sifirla"), ImVec2(132.0f, 0.0f)))
+        {
+            m_pClient->ClearUserConfiguration();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button(skCryptDec("Skill Listesini Sifirla"), ImVec2(132.0f, 0.0f)))
+        {
+            m_pClient->m_vecAttackSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("AttackSkillList"), std::unordered_set<int>());
+            m_pClient->m_vecCharacterSkillList = m_pUserConfiguration->SetInt(skCryptDec("Automation"), skCryptDec("CharacterSkillList"), std::unordered_set<int>());
+
+            m_pClient->LoadSkillData();
+        }
+    };
+}
+
+
 void Drawing::DrawModeController()
 {
     ImGui::BulletText(skCryptDec("Bot Modu Kontrolleri"));
@@ -2469,33 +2536,6 @@ void Drawing::DrawModeController()
         }
 
         ImGui::PopStyleColor(1);
-
-        /*if (m_pClient->m_bSpeedMode)
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-        else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
-
-        if (ImGui::Button(skCryptDec("Hizli Mod"), ImVec2(132.0f, 0.0f)))
-        {
-            m_pClient->m_bSpeedMode = true;
-            SetSpeedModeSettings(m_pClient->m_bSpeedMode);
-        }
-
-        ImGui::PopStyleColor(1);
-        ImGui::SameLine();
-
-        if (!m_pClient->m_bSpeedMode)
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.255f, 0.0f, 1.0f));
-        else
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.0f, 0.0f, 1.0f));
-
-        if (ImGui::Button("Yavas Mod", ImVec2(132.0f, 0.0f)))
-        {
-            m_pClient->m_bSpeedMode = false;
-            SetSpeedModeSettings(m_pClient->m_bSpeedMode);
-        }
-
-        ImGui::PopStyleColor(1);*/
     };
 }
 
@@ -2858,190 +2898,11 @@ void Drawing::DrawRouteListController()
                 }
             }
 
-
             ImGui::EndTable();
         }
     }
+
     ImGui::EndChild();
-
-    //ImGui::Spacing();
-    //{
-    //    uint8_t iZoneID = m_pClient->GetRepresentZone(m_pClient->GetZone());
-
-    //    if (ImGui::Checkbox(skCryptDec("##SupplyRouteCheckbox"), &m_pClient->m_bSupplyRouteStatus))
-    //        m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("SupplyRouteStatus"), m_pClient->m_bSupplyRouteStatus ? 1 : 0);
-
-    //    ImGui::SameLine();
-
-    //    ImGui::Text(skCryptDec("Tedarik"));
-    //    ImGui::SameLine();
-
-    //    ImGui::SetCursorPosX(87);
-    //    ImGui::SetNextItemWidth(332);
-
-    //    if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.SupplyRouteList"), m_pClient->m_szSelectedSupplyRoute.c_str()))
-    //    {
-    //        Bot::RouteList pRouteList;
-
-    //        if (Drawing::Bot->GetRouteList(iZoneID, pRouteList))
-    //        {
-    //            for (auto& e : pRouteList)
-    //            {
-    //                const bool is_selected = (m_pClient->m_szSelectedSupplyRoute == e.first);
-
-    //                if (ImGui::Selectable(e.first.c_str(), is_selected))
-    //                {
-    //                    m_pClient->m_szSelectedSupplyRoute = m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedSupplyRoute"), e.first.c_str());
-    //                }
-
-    //                if (is_selected)
-    //                    ImGui::SetItemDefaultFocus();
-    //            }
-    //        }
-
-    //        ImGui::EndCombo();
-    //    }
-
-    //    ImGui::SameLine();
-
-    //    if (ImGui::Button(m_pClient->m_vecRouteActive.size() == 0 ? skCryptDec("Test") : skCryptDec("Durdur"), ImVec2(53.0f, 0.0f)))
-    //    {
-    //        if (m_pClient->m_vecRouteActive.size() == 0)
-    //        {
-    //            Bot::RouteList pRouteList;
-
-    //            if (Drawing::Bot->GetRouteList(iZoneID, pRouteList))
-    //            {
-    //                auto pRoute = pRouteList.find(m_pClient->m_szSelectedSupplyRoute);
-
-    //                if (pRoute != pRouteList.end())
-    //                {
-    //                    m_pClient->SetRoute(pRoute->second);
-    //                }
-    //            }
-    //        }
-    //        else
-    //        {
-    //            m_pClient->ClearRoute();
-    //        }
-    //    }
-
-    //    if (ImGui::Checkbox(skCryptDec("##DeathRouteCheckbox"), &m_pClient->m_bDeathRouteStatus))
-    //        m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("DeathRouteStatus"), m_pClient->m_bDeathRouteStatus ? 1 : 0);
-
-    //    ImGui::SameLine();
-
-    //    ImGui::Text(skCryptDec("Death"));
-    //    ImGui::SameLine();
-
-    //    ImGui::SetCursorPosX(87);
-    //    ImGui::SetNextItemWidth(332);
-
-    //    if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.DeathRouteList"), m_pClient->m_szSelectedDeathRoute.c_str()))
-    //    {
-    //        Bot::RouteList pRouteList;
-
-    //        if (Drawing::Bot->GetRouteList(iZoneID, pRouteList))
-    //        {
-    //            for (auto& e : pRouteList)
-    //            {
-    //                const bool is_selected = (m_pClient->m_szSelectedDeathRoute == e.first);
-
-    //                if (ImGui::Selectable(e.first.c_str(), is_selected))
-    //                {
-    //                    m_pClient->m_szSelectedDeathRoute = m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedDeathRoute"), e.first.c_str());
-    //                }
-
-    //                if (is_selected)
-    //                    ImGui::SetItemDefaultFocus();
-    //            }
-    //        }
-
-    //        ImGui::EndCombo();
-    //    }
-
-    //    ImGui::SameLine();
-
-    //    if (ImGui::Button(m_pClient->m_vecRouteActive.size() == 0 ? skCryptDec("Test") : skCryptDec("Durdur"), ImVec2(53.0f, 0.0f)))
-    //    {
-    //        if (m_pClient->m_vecRouteActive.size() == 0)
-    //        {
-    //            Bot::RouteList pRouteList;
-
-    //            if (Drawing::Bot->GetRouteList(iZoneID, pRouteList))
-    //            {
-    //                auto pRoute = pRouteList.find(m_pClient->m_szSelectedDeathRoute);
-
-    //                if (pRoute != pRouteList.end())
-    //                {
-    //                    m_pClient->SetRoute(pRoute->second);
-    //                }
-    //            }
-    //        }
-    //        else
-    //        {
-    //            m_pClient->ClearRoute();
-    //        }
-    //    }
-
-    //    if (ImGui::Checkbox(skCryptDec("##LoginRouteCheckbox"), &m_pClient->m_bLoginRouteStatus))
-    //        m_pUserConfiguration->SetInt(skCryptDec("Bot"), skCryptDec("LoginRouteStatus"), m_pClient->m_bLoginRouteStatus ? 1 : 0);
-
-    //    ImGui::SameLine();
-
-    //    ImGui::Text(skCryptDec("Login"));
-    //    ImGui::SameLine();
-
-    //    ImGui::SetCursorPosX(87);
-    //    ImGui::SetNextItemWidth(332);
-
-    //    if (ImGui::BeginCombo(skCryptDec("##PlannedRoute.LoginRouteList"), m_pClient->m_szSelectedLoginRoute.c_str()))
-    //    {
-    //        Bot::RouteList pRouteList;
-
-    //        if (Drawing::Bot->GetRouteList(iZoneID, pRouteList))
-    //        {
-    //            for (auto& e : pRouteList)
-    //            {
-    //                const bool is_selected = (m_pClient->m_szSelectedLoginRoute == e.first);
-
-    //                if (ImGui::Selectable(e.first.c_str(), is_selected))
-    //                {
-    //                    m_pClient->m_szSelectedLoginRoute = m_pUserConfiguration->SetString(skCryptDec("Bot"), skCryptDec("SelectedLoginRoute"), e.first.c_str());
-    //                }
-
-    //                if (is_selected)
-    //                    ImGui::SetItemDefaultFocus();
-    //            }
-    //        }
-
-    //        ImGui::EndCombo();
-    //    }
-
-    //    ImGui::SameLine();
-
-    //    if (ImGui::Button(m_pClient->m_vecRouteActive.size() == 0 ? skCryptDec("Test") : skCryptDec("Durdur"), ImVec2(53.0f, 0.0f)))
-    //    {
-    //        if (m_pClient->m_vecRouteActive.size() == 0)
-    //        {
-    //            Bot::RouteList pRouteList;
-
-    //            if (Drawing::Bot->GetRouteList(iZoneID, pRouteList))
-    //            {
-    //                auto pRoute = pRouteList.find(m_pClient->m_szSelectedLoginRoute);
-
-    //                if (pRoute != pRouteList.end())
-    //                {
-    //                    m_pClient->SetRoute(pRoute->second);
-    //                }
-    //            }
-    //        }
-    //        else
-    //        {
-    //            m_pClient->ClearRoute();
-    //        }
-    //    }
-    //}
 }
 
 void Drawing::DrawMainSettingsArea()

@@ -36,6 +36,7 @@ private:
 	static void DrawSettingsController();
 	static void DrawModeController();
 	static void DrawFlashController();
+	static void DrawCommonController();
 
 	static void DrawRoutePlannerController();
 	static void DrawRouteListController();
