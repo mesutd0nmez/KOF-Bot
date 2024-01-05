@@ -447,13 +447,13 @@ void Drawing::Draw()
                                 if (Drawing::Bot->m_bCheckingProxy)
                                     ImGui::BeginDisabled();
 
-                                char szLoadingString[100];
-                                snprintf(szLoadingString, sizeof(szLoadingString), "%c", "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
-
                                 std::string szProxyTestButtonText = skCryptDec("Proxy Test");
 
                                 if (Drawing::Bot->m_bCheckingProxy)
                                 {
+                                    char szLoadingString[100];
+                                    snprintf(szLoadingString, sizeof(szLoadingString), "%c", "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
+
                                     szProxyTestButtonText = skCryptDec("Proxy Test Ediliyor");
                                     szProxyTestButtonText += " ";
                                     szProxyTestButtonText += szLoadingString;
@@ -519,7 +519,18 @@ void Drawing::Draw()
                             if (Drawing::Bot->m_iCredit <= -1 || m_iNewCredit <= 0 || fDisableCreditButton)
                                 ImGui::BeginDisabled();
 
-                            if (ImGui::Button(skCryptDec("Kredi Satin Al"), ImVec2(255.0f, 0.0f)))
+                            std::string szCreditButtonText = skCryptDec("Kredi Satin Al");
+
+                            if (fDisableCreditButton)
+                            {
+                                char szLoadingString[100];
+                                snprintf(szLoadingString, sizeof(szLoadingString), "%c", "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
+
+                                szCreditButtonText += " ";
+                                szCreditButtonText += szLoadingString;
+                            }
+
+                            if (ImGui::Button(szCreditButtonText.c_str(), ImVec2(255.0f, 0.0f)))
                             {
                                 m_fLastCreditRequestTime = TimeGet();
                                 Drawing::Bot->SendPurchase(0, m_iNewCredit, 0);
@@ -568,7 +579,18 @@ void Drawing::Draw()
                             if (fDisableSubscriptionButton)
                                 ImGui::BeginDisabled();
 
-                            if (ImGui::Button(skCryptDec("Abonelik Suresini Uzat"), ImVec2(255.0f, 0.0f)))
+                            std::string szSubscriptionButtonText = skCryptDec("Abonelik Suresini Uzat");
+
+                            if (fDisableSubscriptionButton)
+                            {
+                                char szLoadingString[100];
+                                snprintf(szLoadingString, sizeof(szLoadingString), "%c", "|/-\\"[(int)(ImGui::GetTime() / 0.05f) & 3]);
+
+                                szSubscriptionButtonText += " ";
+                                szSubscriptionButtonText += szLoadingString;
+                            }
+
+                            if (ImGui::Button(szSubscriptionButtonText.c_str(), ImVec2(255.0f, 0.0f)))
                             {
                                 m_fLastSubscriptionRequestTime = TimeGet();
                                 Drawing::Bot->SendPurchase(1, 0, iSelectedDay);

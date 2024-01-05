@@ -17,7 +17,6 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType)
         case CTRL_C_EVENT:
         case CTRL_BREAK_EVENT:
         {
-#if !defined(ENABLE_MAIN_PERFORMANCE_COUNTER) && !defined(ENABLE_BOT_PERFORMANCE_COUNTER) && !defined(ENABLE_HANDLER_PERFORMANCE_COUNTER)
             if (m_Bot)
             {
                 m_Bot->SendReport(
@@ -39,7 +38,6 @@ BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType)
             NtRaiseHardError(STATUS_ASSERTION_FAILURE, 0, 0, 0, 6, &uResponse);
 #endif
             exit(0);
-#endif
         }
         break;
 #endif
@@ -68,7 +66,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
     VMProtectBeginUltra("wWinMain");
 #endif
 
-#if defined(DEBUG_LOG) || defined(ENABLE_MAIN_PERFORMANCE_COUNTER) || defined(ENABLE_BOT_PERFORMANCE_COUNTER) || defined(ENABLE_HANDLER_PERFORMANCE_COUNTER)
+#if defined(DEBUG_LOG)
     AllocConsole();
     freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
 #endif
@@ -90,7 +88,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
     m_Bot = new Bot(pHardwareInfo);
 
-#if defined(DEBUG_LOG) || defined(ENABLE_MAIN_PERFORMANCE_COUNTER) || defined(ENABLE_BOT_PERFORMANCE_COUNTER) || defined(ENABLE_HANDLER_PERFORMANCE_COUNTER)
+#if defined(DEBUG_LOG)
     fclose(stdout);
     FreeConsole();
 #endif

@@ -18,7 +18,6 @@
 //#define GAME_PLATFORM 3
 
 #ifdef _DEBUG
-#define DEBUG
 #define DEBUG_LOG
 //#define PRINT_PACKET
 #else

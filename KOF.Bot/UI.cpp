@@ -331,7 +331,7 @@ void UI::Render(Bot* pBot)
 
 #ifndef _DEBUG
 #ifdef ENABLE_INTERACTIVE_CHECK
-        if (fCurrentTime > (g_iLastInteractiveCheckTime + (2000.0f / 1000.0f)))
+        if (fCurrentTime > (g_iLastInteractiveCheckTime + (3000.0f / 1000.0f)))
         {
             ReportCode eIsDetected = InteractiveCheck::IsDetected();
 
@@ -360,7 +360,7 @@ void UI::Render(Bot* pBot)
 
 #ifndef _DEBUG
 #ifdef VMPROTECT
-        if (fCurrentTime > (g_iLastVMProtectCheckTime + (3000.0f / 1000.0f)))
+        if (fCurrentTime > (g_iLastVMProtectCheckTime + (5000.0f / 1000.0f)))
         {
             ReportCode eIsDetected = VMProtect::IsDetected();
 
