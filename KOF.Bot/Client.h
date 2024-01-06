@@ -234,9 +234,6 @@ public:
 	void SendPartyCreate(std::string szName);
 	void SendPartyInsert(std::string szName);
 
-public:
-	void PatchObjectCollision(bool bEnable);
-
 protected:
 	float m_fLastGenieStartTime;
 
@@ -302,7 +299,6 @@ protected:
 
 public:
 	void RemoveItem(int32_t iItemSlot);
-	void HidePlayer(bool bHide);
 
 	void VipGetInTest();
 	void VipGetOutTest();

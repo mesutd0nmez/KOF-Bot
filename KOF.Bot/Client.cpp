@@ -537,7 +537,7 @@ Vector3 Client::GetTargetPosition()
 	if(iTargetID == -1)
 		return Vector3(0.0f, 0.0f, 0.0f);
 
-	if (iTargetID >= 5000)
+	/*if (iTargetID >= 5000)
 	{
 		auto it = std::find_if(m_vecNpc.begin(), m_vecNpc.end(),
 			[&](const TNpc& a) { return a.iID == iTargetID; });
@@ -556,6 +556,16 @@ Vector3 Client::GetTargetPosition()
 		{
 			return Vector3(it->fX, it->fZ, it->fY);
 		}
+	}*/
+
+	DWORD iBase = GetEntityBase(iTargetID);
+
+	if (iBase > 0)
+	{
+		return Vector3(
+			m_Bot->ReadFloat(iBase + m_Bot->GetAddress(skCryptDec("KO_OFF_X"))),
+			m_Bot->ReadFloat(iBase + m_Bot->GetAddress(skCryptDec("KO_OFF_Z"))),
+			m_Bot->ReadFloat(iBase + m_Bot->GetAddress(skCryptDec("KO_OFF_Y"))));
 	}
 
 	return Vector3(0.0f, 0.0f, 0.0f);
@@ -2513,30 +2523,6 @@ void Client::SendPartyInsert(std::string szName)
 	SendPacket(pkt);
 }
 
-void Client::PatchObjectCollision(bool bEnable)
-{
-	HANDLE hProcess = m_Bot->GetClientProcessHandle();
-
-	if (bEnable)
-	{
-		BYTE byPatch[] =
-		{
-			0x75
-		};
-
-		WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OBJECT_COLLISION_CHECK")), byPatch, sizeof(byPatch), 0);
-	}
-	else
-	{
-		BYTE byPatch[] =
-		{
-			0x74
-		};
-
-		WriteProcessMemory(hProcess, (LPVOID*)m_Bot->GetAddress(skCryptDec("KO_OBJECT_COLLISION_CHECK")), byPatch, sizeof(byPatch), 0);
-	}
-}
-
 void Client::SendRearrangeInventory()
 {
 	Packet pkt = Packet(WIZ_ITEM_MOVE);
@@ -2818,11 +2804,6 @@ void Client::RemoveItem(int32_t iItemSlot)
 	memcpy(byPatch + 7, &iCallAddress, sizeof(iCallAddress));
 
 	m_Bot->ExecuteRemoteCode(hProcess, byPatch, sizeof(byPatch));
-}
-
-void Client::HidePlayer(bool bHide)
-{
-	m_Bot->WriteByte(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_DLG"))) + m_Bot->GetAddress(skCryptDec("KO_OFF_HIDE")), bHide ? 0 : 1);
 }
 
 void Client::VipGetInTest()
