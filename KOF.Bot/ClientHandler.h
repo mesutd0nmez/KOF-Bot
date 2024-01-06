@@ -231,7 +231,6 @@ public:
 	bool m_bPlayBeepfIfBanNotice;
 
 	bool m_bWallHack;
-	bool m_bLegalWallHack;
 
 	bool m_bArcherCombo;
 

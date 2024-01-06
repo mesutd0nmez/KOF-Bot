@@ -2950,19 +2950,6 @@ void Drawing::DrawMainSettingsArea()
 
         ImGui::SameLine();
 
-        if (ImGui::Checkbox(skCryptDec("##LegalWallHack"), &m_pClient->m_bLegalWallHack))
-        {
-            m_pClient->PatchObjectCollision(m_pClient->m_bLegalWallHack);
-
-            m_pClient->m_bLegalWallHack = m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("LegalWallHack"), m_pClient->m_bLegalWallHack ? 1 : 0);
-        }
-
-        ImGui::SameLine();
-
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::Text(skCryptDec("Wall Hack (Sadece Objeler)"));
-        ImGui::PopStyleColor();
-
         if (ImGui::Checkbox(skCryptDec("##SpeedHack"), &m_pClient->m_bSpeedHack))
         {
             if (m_pClient->m_bSpeedHack)
@@ -2984,8 +2971,6 @@ void Drawing::DrawMainSettingsArea()
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(255.0f, 0.0f, 0.0f, 1.0f));
         ImGui::Text(skCryptDec("Speed Hack (Swift)"));
         ImGui::PopStyleColor();
-
-        ImGui::SameLine();
 
         if (ImGui::Checkbox(skCryptDec("##DisableStunCheckbox"), &m_pClient->m_bDisableStun))
             m_pClient->m_bDisableStun = m_pUserConfiguration->SetInt(skCryptDec("Attack"), skCryptDec("DisableStun"), m_pClient->m_bDisableStun ? 1 : 0);
@@ -3009,6 +2994,8 @@ void Drawing::DrawMainSettingsArea()
         ImGui::Text(skCryptDec("El Dusurmeyi Kaldir"));
         ImGui::PopStyleColor();
 
+        ImGui::SameLine();
+
         if (ImGui::Checkbox(skCryptDec("##DeathEffect"), &m_pClient->m_bDeathEffect))
         {
             m_pClient->PatchDeathEffect(m_pClient->m_bDeathEffect);
@@ -3018,18 +3005,6 @@ void Drawing::DrawMainSettingsArea()
         ImGui::SameLine();
 
         ImGui::Text(skCryptDec("Death Animasyonu Kaldir"));
-
-        ImGui::SameLine();
-
-        if (ImGui::Checkbox(skCryptDec("##HidePlayer"), &m_pClient->m_bHidePlayer))
-        {
-            m_pClient->HidePlayer(m_pClient->m_bHidePlayer);
-            m_pUserConfiguration->SetInt(skCryptDec("Feature"), skCryptDec("HidePlayer"), m_pClient->m_bHidePlayer ? 1 : 0);
-        }
-
-        ImGui::SameLine();
-
-        ImGui::Text(skCryptDec("Oyunculari Gizle"));
     }
 }
 

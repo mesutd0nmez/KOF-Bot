@@ -186,7 +186,6 @@ void ClientHandler::ClearUserConfiguration()
 	m_bPlayBeepfIfBanNotice = false;
 
 	m_bWallHack = false;
-	m_bLegalWallHack = false;
 
 	m_bArcherCombo = true;
 	m_bRouteWarpListLoaded = false;
@@ -213,8 +212,6 @@ void ClientHandler::ClearUserConfiguration()
 	m_iLootType = 0;
 
 	m_bMinPriceLootEnable = false;
-
-	m_bHidePlayer = false;
 
 	m_bLevelDownerEnable = false;
 	m_iLevelDownerNpcId = -1;
@@ -315,7 +312,6 @@ void ClientHandler::InitializeUserConfiguration()
 	m_bSendTownIfBanNotice = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("SendTownIfBanNotice"), m_bSendTownIfBanNotice);
 	m_bPlayBeepfIfBanNotice = GetUserConfiguration()->GetBool(skCryptDec("Settings"), skCryptDec("PlayBeepfIfBanNotice"), m_bPlayBeepfIfBanNotice);
 	m_bWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("WallHack"), m_bWallHack);
-	m_bLegalWallHack = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("LegalWallHack"), m_bLegalWallHack);
 	m_bArcherCombo = GetUserConfiguration()->GetBool(skCryptDec("Attack"), skCryptDec("ArcherCombo"), m_bArcherCombo);
 	m_bAutoRepair = GetUserConfiguration()->GetBool(skCryptDec("Supply"), skCryptDec("AutoRepair"), m_bAutoRepair);
 	m_vecSupplyList = GetUserConfiguration()->GetInt(skCryptDec("Supply"), skCryptDec("Enable"), m_vecSupplyList);
@@ -333,7 +329,6 @@ void ClientHandler::InitializeUserConfiguration()
 	m_vecDeleteItemList = GetUserConfiguration()->GetInt(skCryptDec("Automation"), skCryptDec("DeleteItemList"), m_vecDeleteItemList);
 	m_iLootType = GetUserConfiguration()->GetInt(skCryptDec("AutoLoot"), skCryptDec("LootType"), m_iLootType);
 	m_bMinPriceLootEnable = GetUserConfiguration()->GetBool(skCryptDec("AutoLoot"), skCryptDec("MinPriceLootEnable"), m_bMinPriceLootEnable);
-	m_bHidePlayer = GetUserConfiguration()->GetBool(skCryptDec("Feature"), skCryptDec("HidePlayer"), m_bHidePlayer);
 	m_bLevelDownerEnable = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("Enable"), m_bLevelDownerEnable);
 	m_iLevelDownerNpcId = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("NpcId"), m_iLevelDownerNpcId);
 	m_bLevelDownerLevelLimitEnable = GetUserConfiguration()->GetInt(skCryptDec("LevelDowner"), skCryptDec("LevelLimitEnable"), m_bLevelDownerLevelLimitEnable);
@@ -1469,10 +1464,8 @@ void ClientHandler::RecvProcess(BYTE* byBuffer, DWORD iLength)
 			m_iStartCoin = m_PlayerMySelf.iGold;
 
 			SetAuthority(m_bWallHack ? 0 : 1);
-			PatchObjectCollision(m_bLegalWallHack);
 			PatchDeathEffect(m_bDeathEffect);
 			UpdateSkillSuccessRate(m_bDisableCasting);
-			HidePlayer(m_bHidePlayer);
 
 			if (m_bCharacterSizeEnable)
 			{
@@ -7217,11 +7210,13 @@ void ClientHandler::SupplyProcess()
 						if (pNewItem.iDurability == 0)
 							continue;
 
+
 						new std::thread([=]()
 						{
 							WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 1000);
 
-							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0)
+							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0
+								&& (GetActionState() != PSA_SPELLMAGIC && GetActionState() != PSA_ATTACK))
 								EquipItem(pNewItem.iBase, pWeaponLeftPosition - 14, 6);
 						});
 
@@ -7272,7 +7267,8 @@ void ClientHandler::SupplyProcess()
 						{
 							WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 1000);
 
-							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0)
+							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0 
+								&& (GetActionState() != PSA_SPELLMAGIC && GetActionState() != PSA_ATTACK))
 								EquipItem(pNewItem.iBase, pWeaponRightPosition - 14, 8);
 						});
 
