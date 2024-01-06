@@ -7221,7 +7221,7 @@ void ClientHandler::SupplyProcess()
 							WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 1000);
 
 							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0)
-								EquipItem(pNewItem.iBase, pWeaponLeftPosition, 6);
+								EquipItem(pNewItem.iBase, pWeaponLeftPosition - 14, 6);
 						});
 
 						bNeedRepair = false;
@@ -7272,7 +7272,7 @@ void ClientHandler::SupplyProcess()
 							WaitConditionWithTimeout(m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 1, 1000);
 
 							if (m_Bot->Read4Byte(m_Bot->GetAddress(skCryptDec("KO_PTR_UI_LOCK"))) == 0)
-								EquipItem(pNewItem.iBase, pWeaponRightPosition, 8);
+								EquipItem(pNewItem.iBase, pWeaponRightPosition - 14, 8);
 						});
 
 						bNeedRepair = false;
