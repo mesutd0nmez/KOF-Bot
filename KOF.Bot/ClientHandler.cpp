@@ -5499,7 +5499,8 @@ void ClientHandler::AttackProcess()
 			{
 				UseSkill(pSkillData, GetTarget(), 0, false);
 
-				if (m_bBasicAttack
+				if (m_bBasicAttack 
+					&& !m_bBasicAttackWithPacket
 					&& !pSkillData.IsDeBuff())
 				{
 					BasicAttack();
